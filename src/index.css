@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --brand-red: #D71920;
+    --brand-red-dark: #A80F18;
+    --brand-yellow: #FFC928;
+    --brand-yellow-dark: #E5A900;
+    --brand-bg: #FFFDF8;
+    --brand-surface: #FFFFFF;
+    --text-primary: #202124;
+    --text-secondary: #686868;
+    --state-success: #16834A;
+    --state-warning: #F59E0B;
+    --state-error: #C62828;
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  }
+
+  body {
+    background-color: #FFFDF8;
+    color: #202124;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom scrollbars for data tables and sidebars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(104, 104, 104, 0.2);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(104, 104, 104, 0.4);
+}

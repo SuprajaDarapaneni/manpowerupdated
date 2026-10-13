@@ -1,0 +1,7 @@
+@import "tailwindcss";
+
+:root {
+  --brand-red: #D71920;
+  --brand-yellow: #FFC928;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+}

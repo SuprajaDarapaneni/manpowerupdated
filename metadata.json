@@ -1,0 +1,8 @@
+{
+  "name": "ManPowerLink - Temporary Manpower Marketplace Admin",
+  "description": "Production-grade Temporary Manpower Marketplace administrative web panel and workforce management platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
