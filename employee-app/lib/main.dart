@@ -1,72 +1,483 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'theme/employee_theme.dart';
-import 'providers/worker_providers.dart';
-import 'models/worker_job_model.dart';
 
 void main() {
   runApp(const ProviderScope(child: ManPowerLinkWorkerApp()));
 }
 
-class ManPowerLinkWorkerApp extends StatelessWidget {
-  const ManPowerLinkWorkerApp({super.key});
+// Brand Colors
+class WorkerTheme {
+  static const Color primaryRed = Color(0xFFD71920);
+  static const Color darkRed = Color(0xFFA80F18);
+  static const Color primaryYellow = Color(0xFFFFC928);
+  static const Color darkGold = Color(0xFFE5A900);
+  static const Color backgroundColor = Color(0xFFFFFDF8);
+  static const Color cardColor = Colors.white;
+  static const Color textPrimary = Color(0xFF202124);
+  static const Color textSecondary = Color(0xFF686868);
+  static const Color successGreen = Color(0xFF16834A);
+}
 
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'ManPowerLink Worker',
-      debugShowCheckedModeBanner: false,
-      theme: EmployeeAppTheme.lightTheme,
-      home: const WorkerRootNavigation(),
+// Worker Auth State
+final workerAuthProvider = StateNotifierProvider<WorkerAuthNotifier, WorkerAuthState>((ref) {
+  return WorkerAuthNotifier();
+});
+
+class WorkerAuthState {
+  final bool isAuthenticated;
+  final String? workerName;
+  final String? workerPhone;
+  final String? category;
+  final double rating;
+  final bool isVerified;
+  final double walletBalance;
+
+  const WorkerAuthState({
+    this.isAuthenticated = false,
+    this.workerName,
+    this.workerPhone,
+    this.category,
+    this.rating = 4.9,
+    this.isVerified = true,
+    this.walletBalance = 4200.0,
+  });
+
+  WorkerAuthState copyWith({
+    bool? isAuthenticated,
+    String? workerName,
+    String? workerPhone,
+    String? category,
+    double? rating,
+    bool? isVerified,
+    double? walletBalance,
+  }) {
+    return WorkerAuthState(
+      isAuthenticated: isAuthenticated ?? this.isAuthenticated,
+      workerName: workerName ?? this.workerName,
+      workerPhone: workerPhone ?? this.workerPhone,
+      category: category ?? this.category,
+      rating: rating ?? this.rating,
+      isVerified: isVerified ?? this.isVerified,
+      walletBalance: walletBalance ?? this.walletBalance,
     );
   }
 }
 
-class WorkerRootNavigation extends ConsumerStatefulWidget {
-  const WorkerRootNavigation({super.key});
+class WorkerAuthNotifier extends StateNotifier<WorkerAuthState> {
+  WorkerAuthNotifier() : super(const WorkerAuthState());
 
-  @override
-  ConsumerState<WorkerRootNavigation> createState() => _WorkerRootNavigationState();
+  void signIn(String phone, String password) {
+    state = state.copyWith(
+      isAuthenticated: true,
+      workerName: 'Ramesh Kumar',
+      workerPhone: phone.isNotEmpty ? phone : '+91 98765 43210',
+      category: 'Loading & Unloading',
+      rating: 4.9,
+      isVerified: true,
+      walletBalance: 4200.0,
+    );
+  }
+
+  void signUp(String name, String phone, String category, String password) {
+    state = state.copyWith(
+      isAuthenticated: true,
+      workerName: name,
+      workerPhone: phone,
+      category: category,
+      rating: 5.0,
+      isVerified: false,
+      walletBalance: 0.0,
+    );
+  }
+
+  void signOut() {
+    state = const WorkerAuthState(isAuthenticated: false);
+  }
 }
 
-class _WorkerRootNavigationState extends ConsumerState<WorkerRootNavigation> {
-  int _currentIndex = 0;
+class ManPowerLinkWorkerApp extends ConsumerWidget {
+  const ManPowerLinkWorkerApp({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(workerAuthProvider);
+
+    return MaterialApp(
+      title: 'ManPowerLink Worker',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        scaffoldBackgroundColor: WorkerTheme.backgroundColor,
+        colorScheme: const ColorScheme.light(
+          primary: WorkerTheme.primaryRed,
+          secondary: WorkerTheme.primaryYellow,
+          surface: WorkerTheme.cardColor,
+        ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF1E1F23),
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+      ),
+      home: authState.isAuthenticated
+          ? const WorkerMainShell()
+          : const WorkerSignInScreen(),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 1. WORKER AUTHENTICATION SCREENS (Sign In, Sign Up, Forgot Password)
+// ---------------------------------------------------------------------------
+
+class WorkerSignInScreen extends ConsumerStatefulWidget {
+  const WorkerSignInScreen({super.key});
+
+  @override
+  ConsumerState<WorkerSignInScreen> createState() => _WorkerSignInScreenState();
+}
+
+class _WorkerSignInScreenState extends ConsumerState<WorkerSignInScreen> {
+  final _phoneController = TextEditingController(text: '+91 98765 43210');
+  final _passwordController = TextEditingController(text: 'Worker@2026');
+  bool _obscurePassword = true;
+  bool _isLoading = false;
+  String? _errorMessage;
+
+  void _handleSignIn() {
+    final phone = _phoneController.text.trim();
+    final pwd = _passwordController.text.trim();
+
+    if (phone.isEmpty || pwd.length < 6) {
+      setState(() {
+        _errorMessage = 'Please enter valid phone number and password (min 6 chars).';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) {
+        ref.read(workerAuthProvider.notifier).signIn(phone, pwd);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    final screens = [
-      const WorkerDashboardScreen(),
-      const WorkerActiveJobsScreen(),
-      const WorkerEarningsScreen(),
-      const WorkerProfileScreen(),
-    ];
-
     return Scaffold(
-      body: screens[_currentIndex],
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 20),
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: WorkerTheme.primaryYellow,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'W',
+                      style: TextStyle(color: Color(0xFF202124), fontSize: 28, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Welcome Back',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: WorkerTheme.textPrimary),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Find work opportunities and manage your jobs',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: WorkerTheme.textSecondary),
+              ),
+              const SizedBox(height: 32),
+              if (_errorMessage != null)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.red.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.red.shade200),
+                  ),
+                  child: Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+                ),
+              TextField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: InputDecoration(
+                  labelText: 'Registered Mobile Number',
+                  prefixIcon: const Icon(Icons.phone_android, color: WorkerTheme.primaryRed),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                decoration: InputDecoration(
+                  labelText: 'Password',
+                  prefixIcon: const Icon(Icons.lock_outline, color: WorkerTheme.primaryRed),
+                  suffixIcon: IconButton(
+                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                ),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkerForgotPasswordScreen()));
+                  },
+                  child: const Text('Forgot Password?', style: TextStyle(color: WorkerTheme.primaryRed, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+              ),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _isLoading ? null : _handleSignIn,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: WorkerTheme.primaryRed,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: _isLoading
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Sign In as Worker', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('New worker?', style: TextStyle(color: WorkerTheme.textSecondary, fontSize: 13)),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (_) => const WorkerSignUpScreen()));
+                    },
+                    child: const Text('Create an account', style: TextStyle(color: WorkerTheme.primaryRed, fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class WorkerSignUpScreen extends ConsumerStatefulWidget {
+  const WorkerSignUpScreen({super.key});
+
+  @override
+  ConsumerState<WorkerSignUpScreen> createState() => _WorkerSignUpScreenState();
+}
+
+class _WorkerSignUpScreenState extends ConsumerState<WorkerSignUpScreen> {
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
+  String _selectedCategory = 'Loading & Unloading';
+  bool _termsAccepted = false;
+  String? _errorMessage;
+
+  void _handleRegister() {
+    if (!_termsAccepted) {
+      setState(() => _errorMessage = 'Please accept Worker Terms & Conditions.');
+      return;
+    }
+    if (_passwordController.text != _confirmPasswordController.text) {
+      setState(() => _errorMessage = 'Passwords do not match.');
+      return;
+    }
+    ref.read(workerAuthProvider.notifier).signUp(
+          _nameController.text.trim(),
+          _phoneController.text.trim(),
+          _selectedCategory,
+          _passwordController.text.trim(),
+        );
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Create Worker Account')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          children: [
+            if (_errorMessage != null)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(8)),
+                child: Text(_errorMessage!, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              ),
+            TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Full Name (As on Aadhaar)')),
+            const SizedBox(height: 12),
+            TextField(controller: _phoneController, decoration: const InputDecoration(labelText: 'Mobile Number (+91)')),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _selectedCategory,
+              decoration: const InputDecoration(labelText: 'Primary Work Skill'),
+              items: const [
+                DropdownMenuItem(value: 'Loading & Unloading', child: Text('Loading & Unloading')),
+                DropdownMenuItem(value: 'Food & Catering Services', child: Text('Food & Catering Services')),
+                DropdownMenuItem(value: 'Housekeeping & Cleaning', child: Text('Housekeeping & Cleaning')),
+                DropdownMenuItem(value: 'Warehouse & Packaging', child: Text('Warehouse & Packaging')),
+              ],
+              onChanged: (val) => setState(() => _selectedCategory = val ?? _selectedCategory),
+            ),
+            const SizedBox(height: 12),
+            TextField(controller: _passwordController, obscureText: true, decoration: const InputDecoration(labelText: 'Password')),
+            const SizedBox(height: 12),
+            TextField(controller: _confirmPasswordController, obscureText: true, decoration: const InputDecoration(labelText: 'Confirm Password')),
+            const SizedBox(height: 12),
+            CheckboxListTile(
+              value: _termsAccepted,
+              onChanged: (val) => setState(() => _termsAccepted = val ?? false),
+              title: const Text('I agree to Worker Guidelines, Payout Terms, and Safety Protocols', style: TextStyle(fontSize: 12)),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _handleRegister,
+                style: ElevatedButton.styleFrom(backgroundColor: WorkerTheme.primaryRed, foregroundColor: Colors.white),
+                child: const Text('Create Worker Account'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class WorkerForgotPasswordScreen extends StatelessWidget {
+  const WorkerForgotPasswordScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = TextEditingController();
+    return Scaffold(
+      appBar: AppBar(title: const Text('Worker Password Recovery')),
+      body: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('Enter your registered mobile number to receive a 4-digit SMS OTP challenge.', style: TextStyle(color: WorkerTheme.textSecondary)),
+            const SizedBox(height: 16),
+            TextField(controller: controller, decoration: const InputDecoration(labelText: 'Mobile Number')),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('SMS OTP sent to mobile.')));
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: WorkerTheme.primaryRed, foregroundColor: Colors.white),
+              child: const Text('Send SMS Challenge'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. MAIN AUTHENTICATED SHELL WITH FIXED 5-DESTINATION BOTTOM NAVIGATION
+// ---------------------------------------------------------------------------
+
+class WorkerMainShell extends StatefulWidget {
+  const WorkerMainShell({super.key});
+
+  @override
+  State<WorkerMainShell> createState() => _WorkerMainShellState();
+}
+
+class _WorkerMainShellState extends State<WorkerMainShell> {
+  int _selectedIndex = 0;
+
+  final List<Widget> _screens = const [
+    WorkerHomeTab(),
+    WorkerFindJobsTab(),
+    WorkerMyWorkTab(),
+    WorkerMessagesTab(),
+    WorkerProfileTab(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: _screens,
+      ),
       bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (idx) => setState(() => _currentIndex = idx),
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _selectedIndex = index;
+          });
+        },
         backgroundColor: Colors.white,
-        indicatorColor: const Color(0xFFFFC928),
+        indicatorColor: WorkerTheme.primaryYellow,
         destinations: const [
           NavigationDestination(
-            icon: Icon(Icons.flash_on_outlined),
-            selectedIcon: Icon(Icons.flash_on, color: Color(0xFFD71920)),
-            label: 'Job Feed',
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home, color: WorkerTheme.primaryRed),
+            label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.assignment_outlined),
-            selectedIcon: Icon(Icons.assignment, color: Color(0xFFD71920)),
-            label: 'My Jobs',
+            icon: Icon(Icons.search),
+            selectedIcon: Icon(Icons.search, color: WorkerTheme.primaryRed),
+            label: 'Find Jobs',
           ),
           NavigationDestination(
-            icon: Icon(Icons.account_balance_wallet_outlined),
-            selectedIcon: Icon(Icons.account_balance_wallet, color: Color(0xFFD71920)),
-            label: 'Earnings',
+            icon: Icon(Icons.work_outline),
+            selectedIcon: Icon(Icons.work, color: WorkerTheme.primaryRed),
+            label: 'My Work',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.chat_bubble_outline),
+            selectedIcon: Icon(Icons.chat_bubble, color: WorkerTheme.primaryRed),
+            label: 'Messages',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
-            selectedIcon: Icon(Icons.person, color: Color(0xFFD71920)),
+            selectedIcon: Icon(Icons.person, color: WorkerTheme.primaryRed),
             label: 'Profile',
           ),
         ],
@@ -75,193 +486,87 @@ class _WorkerRootNavigationState extends ConsumerState<WorkerRootNavigation> {
   }
 }
 
-class WorkerDashboardScreen extends ConsumerWidget {
-  const WorkerDashboardScreen({super.key});
+// Tab 1: Home
+class WorkerHomeTab extends StatefulWidget {
+  const WorkerHomeTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final isOnline = ref.watch(workerOnlineStatusProvider);
-    final offersAsync = ref.watch(workerOffersProvider);
+  State<WorkerHomeTab> createState() => _WorkerHomeTabState();
+}
 
+class _WorkerHomeTabState extends State<WorkerHomeTab> {
+  bool _isOnline = true;
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFC928),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: const Text('MPL WORKER', style: TextStyle(color: Color(0xFF1E1F23), fontWeight: FontWeight.bold, fontSize: 11)),
-            ),
-            const SizedBox(width: 8),
-            const Text('Job Radar', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
+        title: const Text('Worker Hub', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
-          Switch(
-            value: isOnline,
-            activeColor: const Color(0xFFFFC928),
-            activeTrackColor: const Color(0xFF16834A),
-            onChanged: (val) {
-              ref.read(workerOnlineStatusProvider.notifier).state = val;
-            },
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: FilterChip(
+              label: Text(_isOnline ? 'ONLINE' : 'OFFLINE', style: TextStyle(color: _isOnline ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 11)),
+              selected: _isOnline,
+              selectedColor: Colors.green,
+              onSelected: (val) => setState(() => _isOnline = val),
+            ),
           ),
-          const SizedBox(width: 8),
         ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Status banner
+            // Earnings Widget
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFF1E1F23),
+                gradient: const LinearGradient(colors: [WorkerTheme.primaryRed, WorkerTheme.darkRed]),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Row(
+              child: const Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 14,
-                    height: 14,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isOnline ? const Color(0xFF16834A) : Colors.grey,
-                      border: Border.all(color: Colors.white, width: 2),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isOnline ? 'Active on Job Radar' : 'Offline - Not receiving jobs',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
-                        Text(
-                          isOnline ? 'Broadcasting location within 15 km search zone' : 'Turn switch on to receive nearby job offers',
-                          style: const TextStyle(color: Colors.white60, fontSize: 12),
-                        ),
-                      ],
-                    ),
+                  Text('Available Wallet Balance', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  SizedBox(height: 6),
+                  Text('₹4,200', style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                  SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('8 shifts completed this week', style: TextStyle(color: Colors.white70, fontSize: 11)),
+                      Text('Instant UPI Payout →', style: TextStyle(color: WorkerTheme.primaryYellow, fontWeight: FontWeight.bold, fontSize: 12)),
+                    ],
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Available Job Broadcasts', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF202124))),
-                TextButton(
-                  onPressed: () => ref.refresh(workerOffersProvider),
-                  child: const Text('Refresh', style: TextStyle(color: Color(0xFFD71920))),
-                ),
-              ],
-            ),
+            const SizedBox(height: 16),
+            const Text("Today's Assigned Shift", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-
-            offersAsync.when(
-              data: (offers) {
-                if (offers.isEmpty) {
-                  return const Center(child: Text('No active job requests in your radius right now.'));
-                }
-                return Column(
-                  children: offers.map((offer) => _buildJobOfferCard(context, ref, offer)).toList(),
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Text('Error loading offers: $err'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildJobOfferCard(BuildContext context, WidgetRef ref, WorkerJobOffer offer) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 14),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: Color(0x15202124)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFD71920).withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(offer.categoryName, style: const TextStyle(color: Color(0xFFD71920), fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-                Text('₹${offer.payoutAmount.toStringAsFixed(0)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF16834A))),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(offer.orderNumber, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF202124))),
-            Text(offer.customerName, style: const TextStyle(color: Color(0xFF686868), fontSize: 13)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.location_on_outlined, size: 16, color: Color(0xFF686868)),
-                const SizedBox(width: 4),
-                Expanded(child: Text(offer.worksiteAddress, style: const TextStyle(fontSize: 12, color: Color(0xFF686868)), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                Text('${offer.distanceKm} km away', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF202124))),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Offer declined.')));
-                    },
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF686868),
-                      side: const BorderSide(color: Color(0xFFCCCCCC)),
+            Card(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: const Padding(
+                padding: EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.between,
+                      children: [
+                        Text('Order #1045', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        Text('₹2,000 / Day', style: TextStyle(color: WorkerTheme.primaryRed, fontWeight: FontWeight.bold, fontSize: 14)),
+                      ],
                     ),
-                    child: const Text('Decline'),
-                  ),
+                    SizedBox(height: 6),
+                    Text('Panambur Container Terminal Dock 4', style: TextStyle(color: WorkerTheme.textSecondary, fontSize: 12)),
+                    SizedBox(height: 8),
+                    Text('Start Shift: Enter Start OTP upon arrival', style: TextStyle(color: WorkerTheme.successGreen, fontSize: 12, fontWeight: FontWeight.w600)),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      final repo = ref.read(workerRepositoryProvider);
-                      await repo.acceptJob(offer.bookingId);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            backgroundColor: Color(0xFF16834A),
-                            content: Text('Job accepted! Proceed to worksite and prepare Start OTP.'),
-                          ),
-                        );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFD71920),
-                      foregroundColor: Colors.white,
-                    ),
-                    child: const Text('Accept Job'),
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -270,67 +575,50 @@ class WorkerDashboardScreen extends ConsumerWidget {
   }
 }
 
-class WorkerActiveJobsScreen extends StatelessWidget {
-  const WorkerActiveJobsScreen({super.key});
+// Tab 2: Find Jobs
+class WorkerFindJobsTab extends StatelessWidget {
+  const WorkerFindJobsTab({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('My Active Work')),
+      appBar: AppBar(title: const Text('Available Job Radar')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Card(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14),
-              side: const BorderSide(color: Color(0xFFFFC928), width: 1.5),
-            ),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  const Row(
+                    mainAxisAlignment: MainAxisAlignment.between,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF16834A).withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text('CONFIRMED / EN ROUTE', style: TextStyle(color: Color(0xFF16834A), fontWeight: FontWeight.bold, fontSize: 11)),
-                      ),
-                      const Text('₹2,200', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      Text('Loading & Unloading', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text('₹2,000 / worker', style: TextStyle(color: WorkerTheme.primaryRed, fontWeight: FontWeight.bold)),
                     ],
                   ),
-                  const SizedBox(height: 10),
-                  const Text('Order #1045 - Loading & Unloading', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                  const Text('Apex Logistics & Warehousing', style: TextStyle(color: Color(0xFF686868), fontSize: 13)),
+                  const SizedBox(height: 6),
+                  const Text('2.4 km away · Panambur Industrial Area', style: TextStyle(color: WorkerTheme.textSecondary, fontSize: 12)),
                   const SizedBox(height: 12),
-                  const Text('Worksite: Gate 4, Industrial Logistics Hub, Bangalore', style: TextStyle(fontSize: 13)),
-                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton.icon(
+                        child: ElevatedButton(
                           onPressed: () {
-                            _showOtpDialog(context, isStart: true);
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Job accepted! Moving to My Work.')));
                           },
-                          icon: const Icon(Icons.pin, size: 18),
-                          label: const Text('Enter Start OTP'),
-                          style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFD71920)),
+                          style: ElevatedButton.styleFrom(backgroundColor: WorkerTheme.primaryRed, foregroundColor: Colors.white),
+                          child: const Text('Accept Shift'),
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: () {
-                            _showOtpDialog(context, isStart: false);
-                          },
-                          icon: const Icon(Icons.check_circle_outline, size: 18),
-                          label: const Text('End Job OTP'),
-                          style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFF1E1F23)),
+                        child: OutlinedButton(
+                          onPressed: () {},
+                          child: const Text('Counter-Bid'),
                         ),
                       ),
                     ],
@@ -343,43 +631,62 @@ class WorkerActiveJobsScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  void _showOtpDialog(BuildContext context, {required bool isStart}) {
-    final controller = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(isStart ? 'Verify Arrival (Start OTP)' : 'Complete Work (End OTP)'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(isStart ? 'Ask customer for 4-digit Start OTP to begin job timer:' : 'Ask customer for 4-digit End OTP to conclude job and trigger payout:'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              maxLength: 4,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'e.g. 4829',
+// Tab 3: My Work
+class WorkerMyWorkTab extends StatefulWidget {
+  const WorkerMyWorkTab({super.key});
+
+  @override
+  State<WorkerMyWorkTab> createState() => _WorkerMyWorkTabState();
+}
+
+class _WorkerMyWorkTabState extends State<WorkerMyWorkTab> {
+  final _otpController = TextEditingController();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('My Work & Attendance')),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Card(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Active Shift: Order #1045', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                  const SizedBox(height: 6),
+                  const Text('Container Unloading at Panambur Dock 4', style: TextStyle(color: WorkerTheme.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 16),
+                  const Text('Step 1: Verify Start OTP from Employer', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _otpController,
+                          maxLength: 4,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(hintText: 'e.g. 5918', counterText: ''),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      ElevatedButton(
+                        onPressed: () {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Start OTP Verified! Shift timer running.')));
+                        },
+                        style: ElevatedButton.styleFrom(backgroundColor: WorkerTheme.primaryRed, foregroundColor: Colors.white),
+                        child: const Text('Verify'),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  backgroundColor: const Color(0xFF16834A),
-                  content: Text(isStart ? 'Start OTP Verified! Attendance recorded.' : 'End OTP Verified! Job marked completed. Payout released.'),
-                ),
-              );
-            },
-            child: const Text('Verify & Submit'),
           ),
         ],
       ),
@@ -387,132 +694,82 @@ class WorkerActiveJobsScreen extends StatelessWidget {
   }
 }
 
-class WorkerEarningsScreen extends StatelessWidget {
-  const WorkerEarningsScreen({super.key});
+// Tab 4: Messages
+class WorkerMessagesTab extends StatelessWidget {
+  const WorkerMessagesTab({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Earnings & Wallet')),
+      appBar: AppBar(title: const Text('Employer Messages')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1E1F23),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Available Balance', style: TextStyle(color: Colors.white70, fontSize: 13)),
-                const SizedBox(height: 6),
-                const Text('₹2,850.00', style: TextStyle(color: Color(0xFFFFC928), fontSize: 32, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 12),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('Total Career Earnings: ₹38,400', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                    ElevatedButton(
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payout requested to bank account.')));
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFD71920),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                      child: const Text('Request Payout', style: TextStyle(fontSize: 12)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+        children: const [
+          ListTile(
+            leading: CircleAvatar(backgroundColor: WorkerTheme.primaryYellow, child: Text('AL', style: TextStyle(color: Colors.black))),
+            title: Text('Apex Logistics (Employer)', style: TextStyle(fontWeight: FontWeight.bold)),
+            subtitle: Text('Please report at Gate 4 with safety gear.', maxLines: 1),
+            trailing: Text('09:12 AM', style: TextStyle(fontSize: 11, color: Colors.grey)),
           ),
-          const SizedBox(height: 24),
-          const Text('Recent Completed Shifts', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          _buildShiftTile('Order #1040', 'Loading Cargo', 'Yesterday', '₹2,200', 'Paid'),
-          _buildShiftTile('Order #1034', 'Warehouse Dispatch', '3 days ago', '1,800', 'Paid'),
-          _buildShiftTile('Order #1029', 'Catering Helper', 'Last week', '₹1,500', 'Paid'),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildShiftTile(String order, String title, String date, String amount, String status) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: const CircleAvatar(
-        backgroundColor: Color(0xFFFFF0ED),
-        child: Icon(Icons.check, color: Color(0xFFD71920), size: 18),
-      ),
-      title: Text('$order • $title', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-      subtitle: Text(date, style: const TextStyle(fontSize: 12, color: Color(0xFF686868))),
-      trailing: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Text(amount, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF16834A))),
-          Text(status, style: const TextStyle(fontSize: 11, color: Color(0xFF686868))),
         ],
       ),
     );
   }
 }
 
-class WorkerProfileScreen extends StatelessWidget {
-  const WorkerProfileScreen({super.key});
+// Tab 5: Profile
+class WorkerProfileTab extends ConsumerWidget {
+  const WorkerProfileTab({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final authState = ref.watch(workerAuthProvider);
+
     return Scaffold(
       appBar: AppBar(title: const Text('Worker Profile')),
-      body: ListView(
+      body: Padding(
         padding: const EdgeInsets.all(16),
-        children: [
-          const Center(
-            child: CircleAvatar(
-              radius: 40,
-              backgroundColor: Color(0xFF1E1F23),
-              child: Text('RK', style: TextStyle(color: Color(0xFFFFC928), fontSize: 24, fontWeight: FontWeight.bold)),
+        child: Column(
+          children: [
+            ListTile(
+              leading: const CircleAvatar(backgroundColor: WorkerTheme.primaryRed, child: Text('RK', style: TextStyle(color: Colors.white))),
+              title: Text(authState.workerName ?? 'Ramesh Kumar', style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text('${authState.category ?? 'Loading & Unloading'} · 4.9 ★'),
             ),
-          ),
-          const SizedBox(height: 12),
-          const Center(
-            child: Text('Ramesh Kumar', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          ),
-          const Center(
-            child: Text('+91 98765 43210 • Verified Worker ★ 4.85', style: TextStyle(color: Color(0xFF686868), fontSize: 13)),
-          ),
-          const SizedBox(height: 24),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.verified_user_outlined, color: Color(0xFF16834A)),
-            title: const Text('Verification & Documents'),
-            subtitle: const Text('Aadhaar & Police Clearance Verified'),
-            trailing: const Icon(Icons.chevron_right),
-          ),
-          ListTile(
-            leading: const Icon(Icons.build_outlined, color: Color(0xFFD71920)),
-            title: const Text('Skills & Categories'),
-            subtitle: const Text('Loading & Unloading, Heavy Cargo'),
-            trailing: const Icon(Icons.chevron_right),
-          ),
-          ListTile(
-            leading: const Icon(Icons.emergency_outlined, color: Color(0xFFC62828)),
-            title: const Text('Emergency SOS & Safety Hotline'),
-            subtitle: const Text('24x7 Safety Assistance'),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  backgroundColor: Color(0xFFC62828),
-                  content: Text('Safety alert triggered! Dispatch team notified.'),
-                ),
-              );
-            },
-          ),
-        ],
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.verified, color: WorkerTheme.successGreen),
+              title: const Text('KYC Aadhaar Verification'),
+              subtitle: const Text('Approved'),
+              trailing: const Icon(Icons.check_circle, color: WorkerTheme.successGreen),
+            ),
+            ListTile(
+              leading: const Icon(Icons.account_balance_wallet_outlined),
+              title: const Text('Payout UPI Account'),
+              subtitle: const Text('ramesh@okhdfcbank'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {},
+            ),
+            ListTile(
+              leading: const Icon(Icons.emergency_outlined, color: Colors.red),
+              title: const Text('Emergency Safety Hotline'),
+              subtitle: const Text('112 / +91 80000 12345'),
+              onTap: () {},
+            ),
+            const Spacer(),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  ref.read(workerAuthProvider.notifier).signOut();
+                },
+                icon: const Icon(Icons.logout, color: Colors.red),
+                label: const Text('Sign Out', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                style: OutlinedButton.styleFrom(side: const BorderSide(color: Colors.red)),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
       ),
     );
   }

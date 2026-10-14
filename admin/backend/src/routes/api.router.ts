@@ -3,7 +3,157 @@ import { authenticateJwt, requireRole, AuthRequest } from '../middleware/auth.mi
 
 export const apiRouter = Router();
 
-// Apply auth to all admin routes
+// --- Public Authentication Endpoints (Customer, Worker, Recovery) ---
+apiRouter.post('/auth/customer/login', (req: Request, res: Response) => {
+  const { phone, email, password } = req.body;
+  if (!password || (!phone && !email)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Please provide valid phone/email and password.',
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'Welcome to ManPowerLink Customer Portal.',
+    data: {
+      token: `mpl_cust_${Date.now()}_token`,
+      user: {
+        id: 'c-1',
+        name: 'Apex Logistics & Warehousing',
+        phone: phone || '+91 99001 55432',
+        email: email || 'apex@logistics.in',
+        role: 'customer',
+        city: 'Mangalore, Karnataka',
+        isVerified: true,
+      },
+    },
+  });
+});
+
+apiRouter.post('/auth/customer/register', (req: Request, res: Response) => {
+  const { name, phone, email, password, city } = req.body;
+  if (!name || !phone || !password) {
+    return res.status(400).json({
+      success: false,
+      message: 'Name, phone, and password are required.',
+    });
+  }
+
+  res.status(201).json({
+    success: true,
+    message: 'Customer account created successfully.',
+    data: {
+      token: `mpl_cust_${Date.now()}_token`,
+      user: {
+        id: `c-${Date.now()}`,
+        name,
+        phone,
+        email: email || '',
+        city: city || 'Mangalore',
+        role: 'customer',
+        isVerified: true,
+      },
+    },
+  });
+});
+
+apiRouter.post('/auth/worker/login', (req: Request, res: Response) => {
+  const { phone, password } = req.body;
+  if (!phone || !password) {
+    return res.status(400).json({
+      success: false,
+      message: 'Mobile number and password are required.',
+    });
+  }
+
+  res.json({
+    success: true,
+    message: 'Worker logged in successfully.',
+    data: {
+      token: `mpl_wrk_${Date.now()}_token`,
+      user: {
+        id: 'w-1',
+        name: 'Ramesh Kumar',
+        phone: phone || '+91 98765 43210',
+        role: 'employee',
+        category: 'Loading & Unloading',
+        rating: 4.9,
+        approvalStatus: 'approved',
+        isVerified: true,
+        walletBalance: 4200,
+        completedJobsCount: 142,
+      },
+    },
+  });
+});
+
+apiRouter.post('/auth/worker/register', (req: Request, res: Response) => {
+  const { name, phone, password, primaryCategory, city } = req.body;
+  if (!name || !phone || !password) {
+    return res.status(400).json({
+      success: false,
+      message: 'Full name, phone, and password are required.',
+    });
+  }
+
+  res.status(201).json({
+    success: true,
+    message: 'Worker application submitted successfully.',
+    data: {
+      token: `mpl_wrk_${Date.now()}_token`,
+      user: {
+        id: `w-${Date.now()}`,
+        name,
+        phone,
+        role: 'employee',
+        category: primaryCategory || 'General Helper',
+        rating: 5.0,
+        approvalStatus: 'pending',
+        isVerified: false,
+        walletBalance: 0,
+      },
+    },
+  });
+});
+
+apiRouter.post('/auth/forgot-password', (req: Request, res: Response) => {
+  const { identity, role } = req.body;
+  if (!identity) {
+    return res.status(400).json({
+      success: false,
+      message: 'Please provide registered email or mobile number.',
+    });
+  }
+  res.json({
+    success: true,
+    message: 'If the account exists, a secure verification challenge has been initiated.',
+    data: { challengeSent: true, expirySeconds: 600 },
+  });
+});
+
+apiRouter.post('/auth/reset-password', (req: Request, res: Response) => {
+  const { otp, newPassword } = req.body;
+  if (!otp || !newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: 'OTP challenge code and new password are required.',
+    });
+  }
+  res.json({
+    success: true,
+    message: 'Password has been reset successfully. Please sign in.',
+  });
+});
+
+apiRouter.post('/auth/logout', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: 'Signed out securely.',
+  });
+});
+
+// Apply JWT authentication to admin routes
 apiRouter.use(authenticateJwt);
 
 // --- 1. Dashboard Metrics API ---
@@ -230,40 +380,7 @@ apiRouter.get('/reports/export-csv', requireRole(['super_admin', 'admin']), (req
   res.send(csvData);
 });
 
-// --- 8. Customer Mobile App Endpoints ---
-apiRouter.post('/auth/customer/login', (req: Request, res: Response) => {
-  const { phone, password } = req.body;
-  res.json({
-    success: true,
-    data: {
-      token: 'jwt_customer_token_sample',
-      user: {
-        id: 'c-1',
-        name: 'Apex Logistics & Warehousing',
-        phone: phone || '+91 99001 55432',
-        role: 'customer',
-      },
-    },
-  });
-});
-
-apiRouter.post('/auth/customer/register', (req: Request, res: Response) => {
-  const { name, phone, email, password } = req.body;
-  res.status(201).json({
-    success: true,
-    data: {
-      token: 'jwt_customer_token_new',
-      user: {
-        id: `c-${Date.now()}`,
-        name: name || 'New Customer',
-        phone,
-        email,
-        role: 'customer',
-      },
-    },
-  });
-});
-
+// --- 8. Bookings & Real-Time Dispatch ---
 apiRouter.post('/bookings', (req: Request, res: Response) => {
   const booking = req.body;
   const newOrderNumber = `Order #${Math.floor(1000 + Math.random() * 9000)}`;
