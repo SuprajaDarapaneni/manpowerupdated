@@ -161,8 +161,8 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onDevToggle, 
             <p className="text-[11px] text-[#686868]">
               Administrator Terminal: <span className="font-mono text-[#202124]">admin@manpowerlink.com</span>
             </p>
-            <div className="flex items-center justify-center gap-2 mt-2 text-[11px] text-[#16834A]">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            <div className="flex items-center justify-center gap-2 mt-2 text-[11px] text-[#D71920]">
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#D71920]" />
               <span>RBAC & Central Backend Synchronization Enabled</span>
             </div>
           </div>

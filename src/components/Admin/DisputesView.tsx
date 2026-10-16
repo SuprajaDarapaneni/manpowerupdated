@@ -53,8 +53,8 @@ export const DisputesView: React.FC<DisputesViewProps> = ({ disputes }) => {
                   <span
                     className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                       disp.status === 'resolved'
-                        ? 'bg-emerald-50 text-[#16834A]'
-                        : 'bg-amber-50 text-amber-700'
+                        ? 'bg-[#FFC928] text-[#202124]'
+                        : 'bg-[#D71920]/10 text-[#D71920]'
                     }`}
                   >
                     {disp.status}
@@ -111,7 +111,7 @@ export const DisputesView: React.FC<DisputesViewProps> = ({ disputes }) => {
               </button>
               <button
                 onClick={() => handleResolve('resolved')}
-                className="px-3 py-1.5 bg-[#16834A] text-white text-xs font-bold rounded-lg"
+                className="px-3 py-1.5 bg-[#FFC928] text-[#202124] hover:bg-[#E5A900] text-xs font-bold rounded-lg cursor-pointer"
               >
                 Mark Resolved
               </button>

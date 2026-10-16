@@ -563,7 +563,7 @@ let appSettingsState = {
         id: 'ann-1',
         title: 'Diwali Festive Demand Surge Bonus',
         message: 'Earn up to 1.5x overtime multiplier on warehouse and catering shifts this week.',
-        audience: 'employee' as const,
+        audience: 'employee' as 'customer' | 'employee' | 'all',
         isActive: true,
         type: 'info' as const,
       },

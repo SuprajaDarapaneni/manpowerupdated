@@ -53,8 +53,8 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ bookings }) => {
       </div>
 
       {downloadSuccess && (
-        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-[#16834A]">
-          <CheckCircle2 className="w-4 h-4" />
+        <div className="p-3 bg-[#FFC928]/20 border border-[#FFC928]/40 rounded-lg flex items-center gap-2 text-xs text-[#A80F18]">
+          <CheckCircle2 className="w-4 h-4 text-[#D71920]" />
           <span>Report CSV exported successfully with authentic backend transactional rows.</span>
         </div>
       )}
@@ -65,7 +65,7 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ bookings }) => {
           <span className="text-xs text-[#686868] font-medium">Lifetime Orders Placed</span>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-[#202124] tabular-nums">583</span>
-            <span className="text-xs font-semibold text-[#16834A]">+12% this month</span>
+            <span className="text-xs font-semibold text-[#D71920]">+12% this month</span>
           </div>
           <p className="text-[11px] text-[#686868] mt-1">Temporary worker shifts booked</p>
         </div>
@@ -74,16 +74,16 @@ export const ReportsView: React.FC<ReportsViewProps> = ({ bookings }) => {
           <span className="text-xs text-[#686868] font-medium">Gross Booking Volume (GMV)</span>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-[#202124] tabular-nums">₹1,25,600</span>
-            <span className="text-xs font-semibold text-[#16834A]">Target 100%</span>
+            <span className="text-xs font-semibold text-[#D71920]">Target 100%</span>
           </div>
           <p className="text-[11px] text-[#686868] mt-1">Total customer payroll committed</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-[#202124]/10 shadow-xs">
-          <span className="text-xs text-[#686868] font-medium">Platform Commission Earned</span>
+          <span className="text-xs text-[#686868] font-medium">Platform Fee Retained</span>
           <div className="mt-2 flex items-baseline gap-2">
             <span className="text-3xl font-extrabold text-[#D71920] tabular-nums">₹12,560</span>
-            <span className="text-xs font-semibold text-[#16834A]">10% avg margin</span>
+            <span className="text-xs font-semibold text-[#A80F18]">10% avg margin</span>
           </div>
           <p className="text-[11px] text-[#686868] mt-1">Platform fee retained in settlement</p>
         </div>

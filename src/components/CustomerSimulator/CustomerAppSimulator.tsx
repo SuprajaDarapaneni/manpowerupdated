@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Home,
   Calendar,
@@ -26,9 +26,32 @@ import {
   ArrowRight,
   ChevronRight,
   Filter,
+  Plus,
+  Minus,
+  Briefcase,
+  DollarSign,
+  Tag,
+  Check,
+  Bell,
+  Volume2,
+  Navigation,
+  Compass,
+  AlertTriangle,
+  Wallet,
+  QrCode,
+  Copy,
+  CalendarDays,
+  CreditCard,
+  Zap,
 } from 'lucide-react';
-import { Booking, ServiceCategory, Worker } from '../../types';
-import { dataService } from '../../services/storage';
+import { Booking, ServiceCategory, Worker, StatusTimelineNode, Customer } from '../../types';
+import {
+  dataService,
+  playNotificationSound,
+  PLATFORM_UPI_ID,
+  PLATFORM_UPI_NAME,
+  getUpiIntentUrl,
+} from '../../services/storage';
 
 interface CustomerAppSimulatorProps {
   categories: ServiceCategory[];
@@ -38,6 +61,60 @@ interface CustomerAppSimulatorProps {
 
 type CustomerTab = 'home' | 'bookings' | 'post-job' | 'messages' | 'profile';
 type CustomerAuthScreen = 'sign-in' | 'sign-up' | 'forgot-password';
+
+export interface ShiftPackage {
+  id: string;
+  title: string;
+  badge: string;
+  approxHours: number;
+  fixedRatePerWorker: number;
+  description: string;
+  popular?: boolean;
+}
+
+const SHIFT_PACKAGES: ShiftPackage[] = [
+  {
+    id: 'full_day',
+    title: 'Full Day Standard Shift',
+    badge: 'Popular',
+    approxHours: 8.5,
+    fixedRatePerWorker: 2200,
+    description: 'Complete full day coverage (~8.5 hrs) with 1-hr meal break included.',
+    popular: true,
+  },
+  {
+    id: 'half_day',
+    title: 'Half Day Express Shift',
+    badge: 'Fast Job',
+    approxHours: 4.5,
+    fixedRatePerWorker: 1300,
+    description: 'Rapid turnaround (~4.5 hrs) for morning sorting, rush deliveries, or half-shift support.',
+  },
+  {
+    id: 'warehouse_unload',
+    title: 'Heavy Container & Cargo Pack',
+    badge: 'Heavy Duty',
+    approxHours: 6.0,
+    fixedRatePerWorker: 1800,
+    description: 'Container destuffing, bulk pallet stacking, and warehouse dock offloading (~6 hrs).',
+  },
+  {
+    id: 'catering_event',
+    title: 'Turnkey Event & Catering Pack',
+    badge: 'Full Event',
+    approxHours: 10.0,
+    fixedRatePerWorker: 2800,
+    description: 'Staging, food prep, guest table service, and post-event cleanup (~10 hrs).',
+  },
+  {
+    id: 'custom_pack',
+    title: 'Custom Turnkey Package',
+    badge: 'Flexible',
+    approxHours: 7.0,
+    fixedRatePerWorker: 2000,
+    description: 'Custom duration package tailored to your exact operational requirements.',
+  },
+];
 
 export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   categories,
@@ -69,26 +146,122 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   const [forgotStep, setForgotStep] = useState<1 | 2>(1);
   const [forgotSuccessMsg, setForgotSuccessMsg] = useState<string | null>(null);
 
-  // Main App 5-Tab Navigation State
+  // Main App 5-Tab Navigation State with History Stack for Back Button
   const [activeTab, setActiveTab] = useState<CustomerTab>('home');
+  const [tabHistory, setTabHistory] = useState<CustomerTab[]>(['home']);
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory>(categories[0]);
   const [activeBookingId, setActiveBookingId] = useState<string>(bookings[0]?.id || '');
   const [bookingFilter, setBookingFilter] = useState<'all' | 'active' | 'completed'>('all');
+  const [selectedBookingForTimeline, setSelectedBookingForTimeline] = useState<Booking | null>(bookings[0] || null);
 
-  // Post Job Form State
-  const [requiredWorkers, setRequiredWorkers] = useState(2);
-  const [offeredAmount, setOfferedAmount] = useState(2000);
+  // Customer Wallet State
+  const [customer, setCustomer] = useState<Customer | undefined>(() => dataService.getCustomer('c-1'));
+  const [walletBalance, setWalletBalance] = useState<number>(() => dataService.getCustomer('c-1')?.walletBalance ?? 12500);
+  const [showAddMoneyModal, setShowAddMoneyModal] = useState(false);
+  const [addMoneyAmount, setAddMoneyAmount] = useState(2500);
+  const [addMoneyUtr, setAddMoneyUtr] = useState('');
+  const [copiedUpi, setCopiedUpi] = useState(false);
+
+  // Post Job Form State: Pricing Model (Hourly vs Full Package)
+  const [pricingModel, setPricingModel] = useState<'hourly' | 'full_package'>('hourly');
+  const [jobTitle, setJobTitle] = useState('Loading and moving boxes');
+  const [requiredWorkers, setRequiredWorkers] = useState(3);
+  const [jobLocation, setJobLocation] = useState('Mangalore Industrial Area, Karnataka');
+
+  // Hourly Basis Specific Fields
+  const [pricePerHourPerHead, setPricePerHourPerHead] = useState(250);
+  const [shiftHours, setShiftHours] = useState(8);
+
+  // Full Package Specific Fields
+  const [selectedPackageId, setSelectedPackageId] = useState<string>('full_day');
+  const [customPackageHours, setCustomPackageHours] = useState(7);
+  const [customPackageRate, setCustomPackageRate] = useState(2000);
+
+  // Date and Time Widget Selection
+  const [dateSelection, setDateSelection] = useState<'today' | 'tomorrow' | 'day_after' | 'custom'>('today');
   const [jobDate, setJobDate] = useState('2026-10-15');
-  const [jobStartTime, setJobStartTime] = useState('09:00 AM');
-  const [jobEndTime, setJobEndTime] = useState('05:00 PM');
-  const [jobAddress, setJobAddress] = useState('Panambur Container Terminal Dock 4');
-  const [jobCity, setJobCity] = useState('Mangalore, Karnataka');
-  const [jobDescription, setJobDescription] = useState('Need heavy cargo unloading team for bulk containers.');
-  const [jobSpecialInstructions, setJobSpecialInstructions] = useState('Safety shoes and reflective vests required.');
-  const [isMorningTiffin, setIsMorningTiffin] = useState(true);
-  const [isLunch, setIsLunch] = useState(true);
-  const [isEveningTea, setIsEveningTea] = useState(true);
-  const [peopleCount, setPeopleCount] = useState(120);
+  const [timeSlotSelection, setTimeSlotSelection] = useState('08:30 AM');
+  const [customTime, setCustomTime] = useState('08:30');
+
+  // Additional Remarks / Notes Field
+  const [remarks, setRemarks] = useState('Requires safety boots and gloves. Entrance via Gate 4 at dock warehouse.');
+
+  // Payment Selection: Wallet Debit vs Direct UPI/PhonePe QR vs Worksite Cash
+  const [paymentSelection, setPaymentSelection] = useState<'wallet' | 'upi_qr' | 'cash'>('wallet');
+  const [showDirectQrPaymentModal, setShowDirectQrPaymentModal] = useState(false);
+  const [directPaymentUtr, setDirectPaymentUtr] = useState('');
+
+  // Custom Category Add Modal State
+  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [customCategoryName, setCustomCategoryName] = useState('');
+  const [customCategoryRate, setCustomCategoryRate] = useState(2000);
+
+  // Confirmation Modal State
+  const [pendingConfirmAction, setPendingConfirmAction] = useState<{
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  // Customer Ask for Payout / Withdrawal State
+  const [showAskPayoutModal, setShowAskPayoutModal] = useState(false);
+  const [askPayoutUpiId, setAskPayoutUpiId] = useState('apex.logistics@icici');
+  const [askPayoutAmount, setAskPayoutAmount] = useState(3000);
+  const [payoutSubmitting, setPayoutSubmitting] = useState(false);
+
+  // Audio / Alert Notification State
+  const [activeAlertToast, setActiveAlertToast] = useState<string | null>(null);
+
+  const triggerAppRingAlert = (message: string) => {
+    playNotificationSound();
+    setActiveAlertToast(message);
+    setTimeout(() => {
+      setActiveAlertToast((curr) => (curr === message ? null : curr));
+    }, 4000);
+  };
+
+  const handleOpenUpiApp = (amount: number, note = 'ManPowerLink Recharge') => {
+    const upiUrl = getUpiIntentUrl(amount, note, PLATFORM_UPI_ID, PLATFORM_UPI_NAME);
+    triggerAppRingAlert(`Opening UPI App (PhonePe / Kotak / GPay) for ${PLATFORM_UPI_ID}...`);
+    try {
+      window.location.href = upiUrl;
+    } catch {
+      // Fallback in web/preview
+    }
+  };
+
+  const handleAskPayoutSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!askPayoutUpiId.trim() || !askPayoutUpiId.includes('@')) {
+      triggerAppRingAlert('Please enter a valid recipient UPI ID (e.g. name@bank)');
+      return;
+    }
+    if (askPayoutAmount <= 0 || askPayoutAmount > walletBalance) {
+      triggerAppRingAlert(`Amount must be between ₹100 and available balance (₹${walletBalance})`);
+      return;
+    }
+
+    setPayoutSubmitting(true);
+    setTimeout(() => {
+      dataService.createPayoutRequest({
+        requesterId: 'c-1',
+        requesterName: 'Apex Logistics & Warehousing',
+        requesterRole: 'customer',
+        requesterPhone: '+91 99001 55432',
+        beneficiaryUpiId: askPayoutUpiId.trim(),
+        amount: askPayoutAmount,
+        adminNote: 'Customer asked for wallet payout to personal UPI',
+      });
+      setPayoutSubmitting(false);
+      setShowAskPayoutModal(false);
+      triggerAppRingAlert(`Payout request for ₹${askPayoutAmount.toLocaleString()} submitted! Admin will accept and credit to ${askPayoutUpiId}.`);
+    }, 400);
+  };
+
+  const activeBooking =
+    bookings.find((b) => b.id === activeBookingId) ||
+    bookings.find((b) => b.status === 'CONFIRMED' || b.status === 'WORK_IN_PROGRESS') ||
+    bookings[0];
 
   // Messaging State
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'customer' | 'worker'; text: string; time: string }>>([
@@ -98,7 +271,95 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   ]);
   const [inputMessage, setInputMessage] = useState('');
 
-  const activeBooking = bookings.find((b) => b.id === activeBookingId) || bookings[0];
+  // Sync wallet balance on data changes
+  useEffect(() => {
+    const unsubscribe = dataService.subscribe(() => {
+      const c = dataService.getCustomer('c-1');
+      if (c) {
+        setCustomer(c);
+        setWalletBalance(c.walletBalance ?? 12500);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  // Intercept back button to navigate in-app instead of closing app/preview
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      if (showAskPayoutModal) {
+        setShowAskPayoutModal(false);
+        return;
+      }
+      if (showAddMoneyModal) {
+        setShowAddMoneyModal(false);
+        return;
+      }
+      if (showDirectQrPaymentModal) {
+        setShowDirectQrPaymentModal(false);
+        return;
+      }
+      if (showAddCategoryModal) {
+        setShowAddCategoryModal(false);
+        return;
+      }
+      if (pendingConfirmAction) {
+        setPendingConfirmAction(null);
+        return;
+      }
+      if (activeTab !== 'home') {
+        e.preventDefault();
+        handleGoBack();
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [showAskPayoutModal, showAddMoneyModal, showDirectQrPaymentModal, showAddCategoryModal, pendingConfirmAction, activeTab, tabHistory]);
+
+  // Navigate to tab with history tracking
+  const navigateToTab = (tab: CustomerTab) => {
+    if (tab === activeTab) return;
+    setTabHistory((prev) => [...prev, tab]);
+    setActiveTab(tab);
+    // Push dummy state to window history so hardware/browser back triggers in-app navigation
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ appTab: tab }, '', window.location.href);
+    }
+  };
+
+  // In-App Back Button Handler (never closes app!)
+  const handleGoBack = () => {
+    if (showAskPayoutModal) {
+      setShowAskPayoutModal(false);
+      return;
+    }
+    if (showAddMoneyModal) {
+      setShowAddMoneyModal(false);
+      return;
+    }
+    if (showDirectQrPaymentModal) {
+      setShowDirectQrPaymentModal(false);
+      return;
+    }
+    if (showAddCategoryModal) {
+      setShowAddCategoryModal(false);
+      return;
+    }
+    if (pendingConfirmAction) {
+      setPendingConfirmAction(null);
+      return;
+    }
+
+    if (tabHistory.length > 1) {
+      const updated = [...tabHistory];
+      updated.pop(); // Remove current
+      const previous = updated[updated.length - 1] || 'home';
+      setTabHistory(updated);
+      setActiveTab(previous);
+    } else {
+      setActiveTab('home');
+      setTabHistory(['home']);
+    }
+  };
 
   // Auth Handlers
   const handleSignIn = (e: React.FormEvent) => {
@@ -111,6 +372,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
         setIsAuthLoading(false);
         setIsAuthenticated(true);
         setActiveTab('home');
+        triggerAppRingAlert('Welcome back! Signed in to ManPowerLink.');
       } else {
         setIsAuthLoading(false);
         setAuthError('Please enter valid customer credentials (min 6 chars password).');
@@ -135,6 +397,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       setIsAuthLoading(false);
       setIsAuthenticated(true);
       setActiveTab('home');
+      triggerAppRingAlert('Employer Account Created successfully!');
     }, 500);
   };
 
@@ -143,6 +406,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     if (forgotStep === 1) {
       setForgotStep(2);
       setForgotSuccessMsg('OTP code sent to your registered contact.');
+      triggerAppRingAlert('Security challenge code dispatched.');
     } else {
       setForgotSuccessMsg('Password reset successfully! Please sign in.');
       setTimeout(() => {
@@ -154,46 +418,175 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setAuthScreen('sign-in');
-    setAuthError(null);
+    setPendingConfirmAction({
+      title: 'Sign Out Confirmation',
+      description: 'Are you sure you want to sign out from your Customer account?',
+      onConfirm: () => {
+        setIsAuthenticated(false);
+        setAuthScreen('sign-in');
+        setAuthError(null);
+        setPendingConfirmAction(null);
+      },
+    });
   };
 
-  const handlePostJobSubmit = (e: React.FormEvent) => {
+  // Custom Category Add Handler
+  const handleCreateCustomCategory = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!customCategoryName.trim()) return;
+
+    const newCat = dataService.addCategory({
+      name: customCategoryName.trim(),
+      slug: customCategoryName.trim().toLowerCase().replace(/\s+/g, '-'),
+      description: `Custom manpower service: ${customCategoryName.trim()}`,
+      icon: 'Briefcase',
+      isActive: true,
+      minPrice: 500,
+      maxPrice: 4000,
+      hourlyRate: Math.round(customCategoryRate / 8),
+      fullDayRate: Number(customCategoryRate),
+      halfDayRate: Math.round(customCategoryRate * 0.6),
+      overtimeMultiplier: 1.5,
+      requiredSkills: [customCategoryName.trim(), 'General On-Demand Assistance'],
+    });
+
+    setSelectedCategory(newCat);
+    setPricePerHourPerHead(newCat.hourlyRate || 250);
+    setShowAddCategoryModal(false);
+    setCustomCategoryName('');
+    triggerAppRingAlert(`New Category "${newCat.name}" added online!`);
+  };
+
+  // Helper calculations for pricing
+  const currentPackage = SHIFT_PACKAGES.find((p) => p.id === selectedPackageId) || SHIFT_PACKAGES[0];
+  const packageApproxHours = selectedPackageId === 'custom_pack' ? customPackageHours : currentPackage.approxHours;
+  const packageRatePerWorker = selectedPackageId === 'custom_pack' ? customPackageRate : currentPackage.fixedRatePerWorker;
+
+  const costPerWorker = pricingModel === 'hourly'
+    ? pricePerHourPerHead * shiftHours
+    : packageRatePerWorker;
+
+  const totalEstimatedCost = costPerWorker * requiredWorkers;
+
+  const scheduledTimeDisplay = timeSlotSelection === 'custom' ? customTime : timeSlotSelection;
+
+  // Add Money to Wallet Handler via Direct PhonePe / UPI QR
+  const handleVerifyAddMoney = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (addMoneyAmount <= 0) return;
+    const utr = addMoneyUtr.trim() || `UPI/${Date.now().toString().slice(-8)}`;
+    const result = dataService.rechargeCustomerWallet('c-1', addMoneyAmount, utr);
+    if (result.success) {
+      setWalletBalance(result.newBalance);
+      setShowAddMoneyModal(false);
+      setAddMoneyUtr('');
+      triggerAppRingAlert(`₹${addMoneyAmount.toLocaleString()} added to your wallet via PhonePe UPI! New balance: ₹${result.newBalance.toLocaleString()}`);
+    }
+  };
+
+  // Direct PhonePe QR Order Payment Handler
+  const handleDirectQrPaymentSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setShowDirectQrPaymentModal(false);
+    executePublishJob(directPaymentUtr || `UPI/QR-${Date.now().toString().slice(-6)}`);
+  };
+
+  // Submit Job with Confirmation
+  const promptPublishJob = () => {
+    if (!jobTitle.trim()) {
+      alert('Please enter a Job Requirement Title.');
+      return;
+    }
+
+    if (paymentSelection === 'wallet') {
+      if (walletBalance < totalEstimatedCost) {
+        setPendingConfirmAction({
+          title: 'Insufficient Wallet Balance',
+          description: `Your wallet balance is ₹${walletBalance.toLocaleString()}, but this booking requires ₹${totalEstimatedCost.toLocaleString()}. Would you like to add money via PhonePe / UPI QR?`,
+          onConfirm: () => {
+            setPendingConfirmAction(null);
+            setAddMoneyAmount(Math.max(1000, totalEstimatedCost - walletBalance));
+            setShowAddMoneyModal(true);
+          },
+        });
+        return;
+      }
+    }
+
+    if (paymentSelection === 'upi_qr') {
+      setShowDirectQrPaymentModal(true);
+      return;
+    }
+
+    setPendingConfirmAction({
+      title: 'Confirm Job Order Broadcast',
+      description: `Broadcast "${jobTitle}" for ${requiredWorkers} workers (${pricingModel === 'hourly' ? `${shiftHours} hrs @ ₹${pricePerHourPerHead}/hr/head` : `${currentPackage.title} ~${packageApproxHours} hrs`}) totaling ₹${totalEstimatedCost.toLocaleString()}?`,
+      onConfirm: () => {
+        setPendingConfirmAction(null);
+        executePublishJob();
+      },
+    });
+  };
+
+  const executePublishJob = (upiRef?: string) => {
+    let walletDebited = false;
+    if (paymentSelection === 'wallet') {
+      const debitRes = dataService.debitCustomerWallet(
+        'c-1',
+        totalEstimatedCost,
+        `Advance debit for Order: ${jobTitle.trim()} (${pricingModel === 'hourly' ? `${shiftHours} hrs` : currentPackage.title})`
+      );
+      if (debitRes.success) {
+        walletDebited = true;
+        setWalletBalance(debitRes.newBalance);
+      } else {
+        alert(debitRes.error || 'Failed to debit wallet.');
+        return;
+      }
+    }
+
     const newBooking = dataService.createBooking({
       customerId: 'c-1',
       customerName: 'Apex Logistics & Warehousing',
       customerPhone: '+91 99001 55432',
+      jobTitle: jobTitle.trim(),
       categoryId: selectedCategory.id,
       categoryName: selectedCategory.name,
       requiredWorkers: Number(requiredWorkers),
-      offeredPricePerWorker: Number(offeredAmount),
-      totalEstimatedAmount: Number(requiredWorkers) * Number(offeredAmount),
+      offeredPricePerWorker: Number(costPerWorker),
+      totalEstimatedAmount: Number(totalEstimatedCost),
       scheduledDate: jobDate,
-      startTime: jobStartTime,
-      endTime: jobEndTime,
-      description: jobDescription,
-      specialInstructions: jobSpecialInstructions,
+      startTime: scheduledTimeDisplay,
+      endTime: '05:30 PM',
+      durationType: pricingModel === 'full_package' ? 'work_basis' : 'hourly',
+      pricingModel,
+      pricePerHourPerHead: pricingModel === 'hourly' ? pricePerHourPerHead : undefined,
+      shiftHours: pricingModel === 'hourly' ? shiftHours : undefined,
+      packageApproxHours: pricingModel === 'full_package' ? packageApproxHours : undefined,
+      packageTitle: pricingModel === 'full_package' ? currentPackage.title : undefined,
+      description: remarks.trim() || 'Temporary manpower required.',
+      specialInstructions: remarks.trim(),
+      remarks: remarks.trim(),
+      paymentMode: paymentSelection === 'wallet' ? 'wallet' : paymentSelection === 'upi_qr' ? 'upi' : 'cash',
+      paymentMethod: paymentSelection === 'wallet' ? 'wallet' : paymentSelection === 'upi_qr' ? 'online' : 'cash',
+      walletDebited,
+      upiTransactionRef: upiRef,
       workLocation: {
-        address: jobAddress,
-        city: jobCity,
+        address: jobLocation,
+        city: 'Mangalore, Karnataka',
         lat: 12.914,
         lng: 74.856,
       },
-      foodDetails: selectedCategory.dynamicFields?.isFoodTiffin
-        ? {
-            morningTiffin: isMorningTiffin,
-            lunch: isLunch,
-            eveningTea: isEveningTea,
-            peopleCount: Number(peopleCount),
-            servingMethod: 'Buffet Counter Management',
-          }
-        : undefined,
     });
 
     setActiveBookingId(newBooking.id);
-    setActiveTab('bookings');
+    setSelectedBookingForTimeline(newBooking);
+    navigateToTab('bookings');
+    triggerAppRingAlert(
+      walletDebited
+        ? `🔔 Order #${newBooking.orderNumber} Booked! ₹${totalEstimatedCost.toLocaleString()} debited from wallet.`
+        : `🔔 Order #${newBooking.orderNumber} Published! Workers notified.`
+    );
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -208,6 +601,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       },
     ]);
     setInputMessage('');
+    triggerAppRingAlert('Message sent to worker.');
   };
 
   return (
@@ -220,13 +614,505 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
         </div>
 
         {/* Screen Canvas */}
-        <div className="flex-1 bg-[#FFFDF8] rounded-[38px] overflow-hidden flex flex-col relative text-[#202124]">
+        <div className="flex-1 bg-[#F8FAFC] rounded-[38px] overflow-hidden flex flex-col relative text-[#202124]">
+          {/* Active Audio / Ring Notification Toast */}
+          {activeAlertToast && (
+            <div className="absolute top-2 left-3 right-3 z-50 bg-[#D71920] text-white px-3.5 py-2.5 rounded-2xl shadow-xl flex items-center gap-2.5 animate-bounce text-xs font-bold">
+              <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                <Volume2 className="w-3.5 h-3.5 text-white animate-pulse" />
+              </div>
+              <span className="flex-1">{activeAlertToast}</span>
+            </div>
+          )}
+
+          {/* Action Confirmation Modal */}
+          {pendingConfirmAction && (
+            <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 shadow-2xl max-w-xs w-full space-y-3.5 border border-slate-200">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
+                  <AlertTriangle className="w-5 h-5 text-[#D71920]" />
+                </div>
+                <div className="text-center">
+                  <h4 className="text-sm font-extrabold text-[#202124]">{pendingConfirmAction.title}</h4>
+                  <p className="text-xs text-[#686868] mt-1 leading-relaxed">
+                    {pendingConfirmAction.description}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setPendingConfirmAction(null)}
+                    className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-[#202124] text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={pendingConfirmAction.onConfirm}
+                    className="py-2.5 px-3 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    Confirm Action
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Custom Category Creator Modal */}
+          {showAddCategoryModal && (
+            <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+              <form onSubmit={handleCreateCustomCategory} className="bg-white rounded-3xl p-5 shadow-2xl max-w-xs w-full space-y-3 border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-[#202124]">Add Custom Category</h4>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCategoryModal(false)}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-xs text-[#686868]">
+                  Define a new labor trade. It will be available online for booking instantly.
+                </p>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#202124] mb-1">Category Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={customCategoryName}
+                    onChange={(e) => setCustomCategoryName(e.target.value)}
+                    placeholder="e.g. Forklift Operator, Welder"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#D71920]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-[#202124] mb-1">Base Daily Wage (₹)</label>
+                  <input
+                    type="number"
+                    step={100}
+                    value={customCategoryRate}
+                    onChange={(e) => setCustomCategoryRate(Number(e.target.value))}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#D71920]"
+                  />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCategoryModal(false)}
+                    className="flex-1 py-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-xl"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-2 text-xs font-bold text-white bg-[#D71920] rounded-xl shadow-xs"
+                  >
+                    Add Category
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Ask for UPI Payout / Credit Modal */}
+          {showAskPayoutModal && (
+            <div className="absolute inset-0 bg-black/70 z-50 flex items-center justify-center p-3">
+              <div className="bg-white rounded-3xl p-4 shadow-2xl max-w-xs w-full space-y-3 border border-slate-200">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#D71920] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                      UPI
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-[#202124]">Ask for UPI Credit / Payout</h4>
+                      <p className="text-[10px] text-slate-500">Withdraw wallet balance to your UPI account</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAskPayoutModal(false)}
+                    className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="bg-amber-50 p-2.5 rounded-2xl border border-amber-200 text-xs space-y-1">
+                  <div className="flex justify-between font-semibold">
+                    <span className="text-slate-600">Available Balance:</span>
+                    <span className="text-[#D71920] font-black">₹{walletBalance.toLocaleString()}</span>
+                  </div>
+                  <p className="text-[10px] text-amber-900 leading-tight">
+                    Submit your personal UPI ID. Once accepted and approved by the admin, the amount will be credited directly to your bank account via UPI.
+                  </p>
+                </div>
+
+                <form onSubmit={handleAskPayoutSubmit} className="space-y-2.5">
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#202124] mb-0.5">
+                      Your Personal UPI ID (To Receive Funds)
+                    </label>
+                    <input
+                      type="text"
+                      value={askPayoutUpiId}
+                      onChange={(e) => setAskPayoutUpiId(e.target.value)}
+                      placeholder="e.g. apex.logistics@icici"
+                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <label className="text-[10px] font-bold text-[#202124]">
+                        Amount to Withdraw
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setAskPayoutAmount(walletBalance)}
+                        className="text-[10px] font-bold text-[#D71920] hover:underline cursor-pointer"
+                      >
+                        All (₹{walletBalance.toLocaleString()})
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+                      {[1000, 2500, Math.min(walletBalance, 5000)].map((amt) => (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setAskPayoutAmount(amt)}
+                          className={`py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer ${
+                            askPayoutAmount === amt
+                              ? 'bg-[#D71920] text-white border-[#D71920] shadow-2xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          ₹{amt.toLocaleString()}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-[#D71920]">₹</span>
+                      <input
+                        type="number"
+                        step={100}
+                        max={walletBalance}
+                        value={askPayoutAmount}
+                        onChange={(e) => setAskPayoutAmount(Number(e.target.value))}
+                        className="w-full pl-7 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAskPayoutModal(false)}
+                      className="flex-1 py-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={payoutSubmitting}
+                      className="flex-1 py-2 text-xs font-bold text-white bg-[#D71920] hover:bg-[#A80F18] rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <span>Submit Request</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Add Money via Direct PhonePe / UPI QR Modal */}
+          {showAddMoneyModal && (
+            <div className="absolute inset-0 bg-black/70 z-50 flex items-center justify-center p-3">
+              <div className="bg-white rounded-3xl p-4 shadow-2xl max-w-xs w-full space-y-3 border border-slate-200 max-h-[92%] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#5f259f] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                      पे
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-[#202124]">PhonePe / UPI Top-Up</h4>
+                      <p className="text-[10px] text-slate-500">Pay to {PLATFORM_UPI_ID} (Zero gateway fee)</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddMoneyModal(false)}
+                    className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Amount Quick Select Pills */}
+                <div>
+                  <label className="block text-[11px] font-bold text-[#202124] mb-1">Select Recharge Amount</label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[1000, 2500, 5000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setAddMoneyAmount(amt)}
+                        className={`py-1.5 text-xs font-extrabold rounded-xl transition-all cursor-pointer ${
+                          addMoneyAmount === amt
+                            ? 'bg-[#5f259f] text-white shadow-xs'
+                            : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        +₹{amt.toLocaleString()}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="relative mt-2">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-[#5f259f]">₹</span>
+                    <input
+                      type="number"
+                      step={100}
+                      value={addMoneyAmount}
+                      onChange={(e) => setAddMoneyAmount(Math.max(100, Number(e.target.value)))}
+                      className="w-full pl-7 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#5f259f]"
+                      placeholder="Custom amount"
+                    />
+                  </div>
+                </div>
+
+                {/* Direct 1-Click Launch UPI App Button */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenUpiApp(addMoneyAmount)}
+                  className="w-full py-2.5 bg-[#5f259f] hover:bg-[#4d1d82] text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 text-[#FFC928]" />
+                  <span>Open PhonePe / UPI App &amp; Pay ₹{addMoneyAmount.toLocaleString()}</span>
+                </button>
+
+                {/* PhonePe QR Code Container matching user image */}
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center space-y-2">
+                  <div className="inline-flex items-center gap-1 bg-[#5f259f] text-white px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    <span>PhonePe</span>
+                    <span className="text-[#FFC928]">★</span>
+                    <span>ACCEPTED HERE</span>
+                  </div>
+
+                  <p className="text-[10px] text-slate-500 font-semibold">
+                    Scan &amp; Pay Using PhonePe App
+                  </p>
+
+                  {/* Scannable PhonePe QR Image Container */}
+                  <div
+                    onClick={() => handleOpenUpiApp(addMoneyAmount)}
+                    className="w-40 h-40 mx-auto bg-white p-2 rounded-2xl border-2 border-[#5f259f] shadow-xs flex items-center justify-center relative cursor-pointer group"
+                    title="Click to launch PhonePe / UPI App"
+                  >
+                    <img
+                      src="/phonepe-qr.svg"
+                      alt="PhonePe QR Code - prnm@kotak"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  <div className="text-center">
+                    <span className="text-xs font-black text-[#202124] block tracking-wide">{PLATFORM_UPI_NAME} .</span>
+                  </div>
+
+                  {/* Clickable UPI ID with 1-click Copy */}
+                  <div className="bg-white p-2 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                    <div className="text-left">
+                      <span className="text-[9px] text-slate-400 block font-bold uppercase">Official UPI ID (Tap to Pay)</span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenUpiApp(addMoneyAmount)}
+                        className="font-mono font-black text-[#5f259f] hover:underline cursor-pointer flex items-center gap-1"
+                      >
+                        <span>{PLATFORM_UPI_ID}</span>
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(PLATFORM_UPI_ID);
+                        setCopiedUpi(true);
+                        setTimeout(() => setCopiedUpi(false), 2000);
+                      }}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg flex items-center gap-1 cursor-pointer"
+                    >
+                      {copiedUpi ? <Check className="w-3 h-3 text-[#16834A]" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Form to submit 12-digit UTR */}
+                <form onSubmit={handleVerifyAddMoney} className="space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#202124] mb-0.5">
+                      12-Digit UPI Ref / UTR Number
+                    </label>
+                    <input
+                      type="text"
+                      value={addMoneyUtr}
+                      onChange={(e) => setAddMoneyUtr(e.target.value)}
+                      placeholder="e.g. 428919028371"
+                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#5f259f]"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMoneyModal(false)}
+                      className="flex-1 py-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2 text-xs font-bold text-white bg-[#5f259f] hover:bg-[#4d1d82] rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Credit ₹{addMoneyAmount.toLocaleString()}</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Direct PhonePe / UPI QR Order Payment Modal */}
+          {showDirectQrPaymentModal && (
+            <div className="absolute inset-0 bg-black/70 z-50 flex items-center justify-center p-3">
+              <div className="bg-white rounded-3xl p-4 shadow-2xl max-w-xs w-full space-y-3 border border-slate-200 max-h-[92%] overflow-y-auto">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#5f259f] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                      पे
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-[#202124]">Pay Order via PhonePe UPI</h4>
+                      <p className="text-[10px] text-slate-500">Pay to {PLATFORM_UPI_ID} ({PLATFORM_UPI_NAME})</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDirectQrPaymentModal(false)}
+                    className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="bg-amber-50 p-2.5 rounded-2xl border border-amber-200 text-center">
+                  <span className="text-[10px] font-bold text-amber-900 block">Total Amount to Pay</span>
+                  <span className="text-lg font-black text-[#D71920]">₹{totalEstimatedCost.toLocaleString()}</span>
+                  <span className="text-[9px] text-slate-600 block">
+                    {requiredWorkers} Workers • {pricingModel === 'hourly' ? `${shiftHours} hrs` : `${currentPackage.title}`}
+                  </span>
+                </div>
+
+                {/* Primary 1-Click Open UPI App Button */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenUpiApp(totalEstimatedCost, `Order #${activeBooking.orderNumber}`)}
+                  className="w-full py-2.5 bg-[#5f259f] hover:bg-[#4d1d82] text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Zap className="w-4 h-4 text-[#FFC928]" />
+                  <span>Open PhonePe / UPI App &amp; Pay ₹{totalEstimatedCost.toLocaleString()}</span>
+                </button>
+
+                {/* Scannable QR code matching user image */}
+                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center space-y-2">
+                  <div className="inline-flex items-center gap-1 bg-[#5f259f] text-white px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
+                    <span>PhonePe</span>
+                    <span className="text-[#FFC928]">★</span>
+                    <span>ACCEPTED HERE</span>
+                  </div>
+
+                  <div
+                    onClick={() => handleOpenUpiApp(totalEstimatedCost, `Order #${activeBooking.orderNumber}`)}
+                    className="w-40 h-40 mx-auto bg-white p-2 rounded-2xl border-2 border-[#5f259f] shadow-xs flex items-center justify-center relative cursor-pointer"
+                    title="Click to open PhonePe / UPI app"
+                  >
+                    <img
+                      src="/phonepe-qr.svg"
+                      alt="PhonePe QR - prnm@kotak"
+                      className="w-full h-full object-contain"
+                    />
+                  </div>
+
+                  <div className="text-center">
+                    <span className="text-xs font-black text-[#202124] block tracking-wide">{PLATFORM_UPI_NAME} .</span>
+                  </div>
+
+                  <div className="bg-white p-2 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                    <div className="text-left">
+                      <span className="text-[9px] text-slate-400 block font-bold">MERCHANT UPI ID (Tap to Pay)</span>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenUpiApp(totalEstimatedCost, `Order #${activeBooking.orderNumber}`)}
+                        className="font-mono font-black text-[#5f259f] hover:underline cursor-pointer"
+                      >
+                        {PLATFORM_UPI_ID}
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(PLATFORM_UPI_ID);
+                        setCopiedUpi(true);
+                        setTimeout(() => setCopiedUpi(false), 2000);
+                      }}
+                      className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg cursor-pointer"
+                    >
+                      {copiedUpi ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+
+                <form onSubmit={handleDirectQrPaymentSubmit} className="space-y-2">
+                  <div>
+                    <label className="block text-[10px] font-bold text-[#202124] mb-0.5">
+                      Enter 12-Digit UPI Transaction UTR
+                    </label>
+                    <input
+                      type="text"
+                      value={directPaymentUtr}
+                      onChange={(e) => setDirectPaymentUtr(e.target.value)}
+                      placeholder="e.g. 428919028371"
+                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowDirectQrPaymentModal(false)}
+                      className="flex-1 py-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="flex-1 py-2 text-xs font-bold text-white bg-[#D71920] hover:bg-[#A80F18] rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Verify &amp; Broadcast Job</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
           {/* ========================================================== */}
-          {/* A. UNAUTHENTICATED AUTHENTICATION SCREENS (Sign In / Up / Forgot) */}
+          {/* A. UNAUTHENTICATED SCREENS (Sign In, Sign Up, Forgot) */}
           {/* ========================================================== */}
           {!isAuthenticated ? (
             <div className="flex-1 flex flex-col bg-[#FFFDF8] overflow-y-auto p-5">
-              {/* Brand Header */}
               <div className="text-center mt-3 mb-5">
                 <div className="w-12 h-12 rounded-2xl bg-[#D71920] text-white flex items-center justify-center font-black text-xl mx-auto shadow-md mb-2">
                   M
@@ -242,7 +1128,6 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 </p>
               </div>
 
-              {/* Error notice */}
               {authError && (
                 <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-[#C62828]">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -250,7 +1135,6 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 </div>
               )}
 
-              {/* 1. Sign In View */}
               {authScreen === 'sign-in' && (
                 <form onSubmit={handleSignIn} className="space-y-3 flex-1 flex flex-col justify-between">
                   <div className="space-y-3">
@@ -265,7 +1149,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                           required
                           value={loginPhoneOrEmail}
                           onChange={(e) => setLoginPhoneOrEmail(e.target.value)}
-                          placeholder="e.g. apex@logistics.in or 9900155432"
+                          placeholder="e.g. apex@logistics.in"
                           className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
                         />
                       </div>
@@ -276,10 +1160,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         <label className="text-[11px] font-bold text-[#202124]">Password</label>
                         <button
                           type="button"
-                          onClick={() => {
-                            setAuthScreen('forgot-password');
-                            setAuthError(null);
-                          }}
+                          onClick={() => setAuthScreen('forgot-password')}
                           className="text-[10px] text-[#D71920] font-semibold hover:underline"
                         >
                           Forgot Password?
@@ -305,36 +1186,13 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between pt-1">
-                      <label className="flex items-center gap-1.5 text-[11px] text-[#686868] cursor-pointer">
-                        <input type="checkbox" defaultChecked className="rounded text-[#D71920]" />
-                        <span>Remember me</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLoginPhoneOrEmail('apex@logistics.in');
-                          setLoginPassword('Customer@2026');
-                        }}
-                        className="text-[11px] text-[#D71920] font-bold hover:underline"
-                      >
-                        Auto-fill Demo
-                      </button>
-                    </div>
-
                     <button
                       type="submit"
                       disabled={isAuthLoading}
                       className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2"
                     >
-                      {isAuthLoading ? (
-                        <span>Signing In...</span>
-                      ) : (
-                        <>
-                          <span>Sign In as Employer</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
+                      <span>Sign In as Employer</span>
+                      <ArrowRight className="w-4 h-4" />
                     </button>
                   </div>
 
@@ -343,23 +1201,16 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       Don't have an account?{' '}
                       <button
                         type="button"
-                        onClick={() => {
-                          setAuthScreen('sign-up');
-                          setAuthError(null);
-                        }}
+                        onClick={() => setAuthScreen('sign-up')}
                         className="font-bold text-[#D71920] hover:underline"
                       >
                         Sign Up
                       </button>
                     </p>
-                    <p className="text-[10px] text-[#686868]/70 mt-3">
-                      By continuing, you agree to ManPowerLink Terms and Privacy Policy.
-                    </p>
                   </div>
                 </form>
               )}
 
-              {/* 2. Sign Up View */}
               {authScreen === 'sign-up' && (
                 <form onSubmit={handleSignUp} className="space-y-2.5 flex-1 flex flex-col justify-between">
                   <div className="space-y-2.5">
@@ -370,21 +1221,18 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         required
                         value={signUpName}
                         onChange={(e) => setSignUpName(e.target.value)}
-                        placeholder="e.g. Apex Logistics"
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
                       />
                     </div>
-
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Mobile Number</label>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Mobile (+91)</label>
                         <input
                           type="tel"
                           required
                           value={signUpPhone}
                           onChange={(e) => setSignUpPhone(e.target.value)}
-                          placeholder="+91 99001 55432"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
                         />
                       </div>
                       <div>
@@ -394,196 +1242,131 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                           required
                           value={signUpCity}
                           onChange={(e) => setSignUpCity(e.target.value)}
-                          placeholder="Mangalore"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
                         />
                       </div>
                     </div>
-
                     <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Email Address</label>
+                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Email</label>
                       <input
                         type="email"
                         required
                         value={signUpEmail}
                         onChange={(e) => setSignUpEmail(e.target.value)}
-                        placeholder="contact@company.in"
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
                       />
                     </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Password</label>
-                        <input
-                          type="password"
-                          required
-                          value={signUpPassword}
-                          onChange={(e) => setSignUpPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Confirm Password</label>
-                        <input
-                          type="password"
-                          required
-                          value={signUpConfirmPassword}
-                          onChange={(e) => setSignUpConfirmPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                    </div>
-
-                    <label className="flex items-start gap-2 pt-1 text-[11px] text-[#686868] cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={termsAccepted}
-                        onChange={(e) => setTermsAccepted(e.target.checked)}
-                        className="mt-0.5 rounded text-[#D71920]"
-                      />
-                      <span>I agree to the ManPowerLink Marketplace Terms and Privacy Policy</span>
-                    </label>
-
                     <button
                       type="submit"
-                      disabled={isAuthLoading}
                       className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer mt-1"
                     >
-                      {isAuthLoading ? 'Creating Account...' : 'Create Employer Account'}
+                      Create Employer Account
                     </button>
                   </div>
-
                   <div className="pt-3 text-center border-t border-slate-100">
-                    <p className="text-xs text-[#686868]">
-                      Already have an account?{' '}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthScreen('sign-in');
-                          setAuthError(null);
-                        }}
-                        className="font-bold text-[#D71920] hover:underline"
-                      >
-                        Sign In
-                      </button>
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setAuthScreen('sign-in')}
+                      className="text-xs font-bold text-[#D71920]"
+                    >
+                      Back to Sign In
+                    </button>
                   </div>
                 </form>
               )}
 
-              {/* 3. Forgot Password View */}
               {authScreen === 'forgot-password' && (
                 <form onSubmit={handleForgotSubmit} className="space-y-3 flex-1 flex flex-col justify-between">
                   <div className="space-y-3">
                     <h3 className="text-sm font-bold text-[#202124]">Reset Your Password</h3>
-                    <p className="text-xs text-[#686868]">
-                      {forgotStep === 1
-                        ? 'Enter your registered email or phone to receive a single-use recovery code.'
-                        : 'Enter the recovery OTP code and your new password.'}
-                    </p>
-
                     {forgotSuccessMsg && (
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-[#16834A] flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <span>{forgotSuccessMsg}</span>
+                      <div className="p-2 bg-[#FFC928]/15 border border-[#FFC928]/40 rounded-xl text-xs text-[#A80F18]">
+                        {forgotSuccessMsg}
                       </div>
                     )}
-
-                    {forgotStep === 1 ? (
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">
-                          Registered Email or Phone
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={forgotInput}
-                          onChange={(e) => setForgotInput(e.target.value)}
-                          placeholder="e.g. apex@logistics.in"
-                          className="w-full px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <div>
-                          <label className="block text-[11px] font-bold text-[#202124] mb-1">OTP Code (4 digits)</label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={4}
-                            value={forgotOtp}
-                            onChange={(e) => setForgotOtp(e.target.value)}
-                            placeholder="e.g. 5421"
-                            className="w-full px-3 py-2 text-center font-mono font-bold text-sm bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-[#202124] mb-1">New Password</label>
-                          <input
-                            type="password"
-                            required
-                            value={forgotNewPassword}
-                            onChange={(e) => setForgotNewPassword(e.target.value)}
-                            placeholder="••••••••••••"
-                            className="w-full px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                          />
-                        </div>
-                      </>
-                    )}
-
+                    <input
+                      type="text"
+                      required
+                      value={forgotInput}
+                      onChange={(e) => setForgotInput(e.target.value)}
+                      placeholder="Registered email or phone"
+                      className="w-full px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl"
+                    />
                     <button
                       type="submit"
-                      className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
+                      className="w-full py-2.5 bg-[#D71920] text-white font-bold text-xs rounded-xl"
                     >
-                      {forgotStep === 1 ? 'Send Recovery OTP' : 'Update Password & Sign In'}
+                      Send Recovery Challenge
                     </button>
                   </div>
-
-                  <div className="pt-4 text-center border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthScreen('sign-in');
-                        setAuthError(null);
-                      }}
-                      className="text-xs font-bold text-[#D71920] hover:underline"
-                    >
-                      ← Back to Sign In
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setAuthScreen('sign-in')}
+                    className="text-xs font-bold text-[#D71920]"
+                  >
+                    Back to Sign In
+                  </button>
                 </form>
               )}
             </div>
           ) : (
             /* ========================================================== */
-            /* B. AUTHENTICATED MAIN APPLICATION WITH FIXED 5-TAB BOTTOM BAR */
+            /* B. AUTHENTICATED APP WITH RICH COLORFUL FORMS & FIXED BAR */
             /* ========================================================== */
             <>
-              {/* Top Navigation Bar */}
-              <div className="h-14 bg-[#D71920] text-white px-4 flex items-center justify-between shrink-0 shadow-sm z-20">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-white text-[#D71920] font-black flex items-center justify-center text-xs shadow-xs">
-                    M
-                  </div>
+              {/* Top Navigation Bar with Audio Chime Indicator and In-App Back Navigation */}
+              <div className="h-14 bg-[#D71920] text-white px-3 flex items-center justify-between shrink-0 shadow-sm z-20">
+                <div className="flex items-center gap-1.5">
+                  {/* Back button when inside sub-screens/tabs so users never close the app */}
+                  {activeTab !== 'home' ? (
+                    <button
+                      type="button"
+                      onClick={handleGoBack}
+                      className="p-1 -ml-0.5 hover:bg-white/20 rounded-xl transition-all cursor-pointer flex items-center gap-0.5 text-white bg-black/15 shadow-2xs"
+                      title="Back to Previous Screen"
+                    >
+                      <ChevronLeft className="w-5 h-5 text-white stroke-[2.5]" />
+                      <span className="text-[11px] font-bold pr-1">Back</span>
+                    </button>
+                  ) : (
+                    <div className="w-7 h-7 rounded-lg bg-white text-[#D71920] font-black flex items-center justify-center text-xs shadow-xs">
+                      M
+                    </div>
+                  )}
                   <div>
-                    <h2 className="font-bold text-xs leading-tight">ManPowerLink</h2>
+                    <h2 className="font-bold text-xs leading-tight">
+                      {activeTab === 'home' && 'ManPowerLink'}
+                      {activeTab === 'post-job' && 'Post Job Order'}
+                      {activeTab === 'bookings' && 'Orders & Live Bids'}
+                      {activeTab === 'messages' && 'Worksite Chat'}
+                      {activeTab === 'profile' && 'Employer Profile'}
+                    </h2>
                     <p className="text-[10px] text-white/80 leading-tight flex items-center gap-1">
-                      <MapPin className="w-2.5 h-2.5" />
-                      <span>Mangalore Port Area</span>
+                      <MapPin className="w-2.5 h-2.5 text-[#FFC928]" />
+                      <span>Mangalore Port Corridor</span>
                     </p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  {/* Employer Wallet Balance Chip */}
                   <button
-                    onClick={() => setActiveTab('post-job')}
-                    className="px-2.5 py-1 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-[10px] font-bold rounded-lg transition-colors cursor-pointer shadow-xs flex items-center gap-1"
+                    type="button"
+                    onClick={() => setShowAddMoneyModal(true)}
+                    className="flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white px-2 py-1 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer shadow-2xs border border-white/20"
+                    title="Add Money via PhonePe QR"
                   >
-                    <PlusCircle className="w-3 h-3 text-[#202124]" />
-                    <span>Post Job</span>
+                    <Wallet className="w-3 h-3 text-[#FFC928]" />
+                    <span>₹{walletBalance.toLocaleString()}</span>
+                    <span className="text-[9px] bg-[#FFC928] text-[#202124] px-1 rounded font-black">+</span>
+                  </button>
+
+                  <button
+                    onClick={() => triggerAppRingAlert('🔔 Audible notification tone tested!')}
+                    title="Test Ringtone"
+                    className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
@@ -605,45 +1388,56 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
 
                     {/* Active Booking Reminder Banner */}
                     {activeBooking && (
-                      <div className="bg-amber-50 border border-[#FFC928]/60 p-3 rounded-2xl flex items-center justify-between">
+                      <div className="bg-linear-to-r from-amber-50 to-orange-50 border border-[#FFC928]/80 p-3.5 rounded-2xl flex items-center justify-between shadow-2xs">
                         <div className="space-y-0.5">
-                          <span className="text-[10px] font-bold text-[#A80F18] uppercase tracking-wider">
-                            Active Booking #{activeBooking.orderNumber}
+                          <span className="text-[10px] font-black text-[#A80F18] uppercase tracking-wider flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-[#D71920] animate-ping" />
+                            {activeBooking.orderNumber} Active
                           </span>
-                          <p className="text-xs font-bold text-[#202124]">{activeBooking.categoryName}</p>
+                          <p className="text-xs font-bold text-[#202124]">{activeBooking.jobTitle || activeBooking.categoryName}</p>
                           <p className="text-[10px] text-[#686868]">
-                            Start OTP: <strong className="font-mono text-[#D71920]">{activeBooking.startOtp}</strong>
+                            Start OTP: <strong className="font-mono text-[#D71920] text-xs">{activeBooking.startOtp}</strong>
                           </p>
                         </div>
                         <button
-                          onClick={() => setActiveTab('bookings')}
+                          onClick={() => {
+                            setSelectedBookingForTimeline(activeBooking);
+                            setActiveTab('bookings');
+                          }}
                           className="px-3 py-1.5 bg-[#D71920] text-white text-[11px] font-bold rounded-xl shadow-xs"
                         >
-                          View
+                          View Status
                         </button>
                       </div>
                     )}
 
-                    {/* Service Categories Grid */}
+                    {/* Service Categories Header + Chips */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">
-                          Service Categories
+                        <h3 className="text-xs font-extrabold text-[#202124] uppercase tracking-wider">
+                          Select Service Category
                         </h3>
-                        <span className="text-[11px] font-semibold text-[#D71920]">View All</span>
+                        <button
+                          onClick={() => setShowAddCategoryModal(true)}
+                          className="text-[11px] font-bold text-[#D71920] hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Add Custom</span>
+                        </button>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
-                        {categories.slice(0, 4).map((cat) => (
+                        {categories.slice(0, 6).map((cat) => (
                           <div
                             key={cat.id}
                             onClick={() => {
                               setSelectedCategory(cat);
+                              setPricePerHourPerHead(cat.hourlyRate || Math.round(cat.fullDayRate / 8) || 250);
                               setActiveTab('post-job');
                             }}
-                            className="p-3 bg-white rounded-2xl border border-[#202124]/10 hover:border-[#D71920] transition-colors cursor-pointer shadow-2xs"
+                            className="p-3 bg-white rounded-2xl border border-slate-200 hover:border-[#D71920] transition-all cursor-pointer shadow-2xs hover:shadow-sm"
                           >
                             <span className="text-xs font-bold text-[#202124] block">{cat.name}</span>
-                            <span className="text-[10px] text-[#16834A] font-semibold mt-1 block">
+                            <span className="text-[10px] text-[#D71920] font-bold mt-1 block">
                               ₹{cat.fullDayRate} / day
                             </span>
                           </div>
@@ -654,10 +1448,10 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     {/* Verified Nearby Workers */}
                     <div>
                       <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">
+                        <h3 className="text-xs font-extrabold text-[#202124] uppercase tracking-wider">
                           Verified Nearby Workers
                         </h3>
-                        <span className="text-[10px] bg-emerald-100 text-[#16834A] px-2 py-0.5 rounded-full font-bold">
+                        <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-full font-bold">
                           194 Available
                         </span>
                       </div>
@@ -665,25 +1459,28 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         {workers.slice(0, 3).map((w) => (
                           <div
                             key={w.id}
-                            className="p-3 bg-white rounded-2xl border border-[#202124]/10 flex items-center justify-between shadow-2xs"
+                            className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between shadow-2xs"
                           >
                             <div className="flex items-center gap-2.5">
                               <img src={w.avatar} alt={w.name} className="w-10 h-10 rounded-full object-cover" />
                               <div>
                                 <div className="flex items-center gap-1.5">
                                   <h4 className="text-xs font-bold text-[#202124]">{w.name}</h4>
-                                  <ShieldCheck className="w-3.5 h-3.5 text-[#16834A]" />
+                                  <ShieldCheck className="w-3.5 h-3.5 text-[#D71920]" />
                                 </div>
-                                <p className="text-[10px] text-[#686868]">{w.category}</p>
+                                <p className="text-[10px] text-[#686868]">{w.skills?.slice(0, 2).join(', ') || 'General Work'}</p>
                                 <div className="flex items-center gap-1 text-[10px] text-[#E5A900] font-bold">
                                   <Star className="w-3 h-3 fill-[#E5A900]" />
-                                  <span>{w.rating} ({w.totalJobsCompleted} jobs)</span>
+                                  <span>{w.rating} ({w.completedJobsCount} jobs)</span>
                                 </div>
                               </div>
                             </div>
                             <button
-                              onClick={() => setActiveTab('post-job')}
-                              className="px-2.5 py-1.5 bg-[#FFFDF8] hover:bg-red-50 text-[#D71920] border border-[#D71920]/30 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                              onClick={() => {
+                                setJobTitle(`Hire ${w.name} for On-Demand Shift`);
+                                setActiveTab('post-job');
+                              }}
+                              className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-[#D71920] border border-[#D71920]/30 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                             >
                               Hire
                             </button>
@@ -694,18 +1491,18 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   </div>
                 )}
 
-                {/* 2. BOOKINGS TAB */}
+                {/* 2. BOOKINGS TAB & STATUS TREE */}
                 {activeTab === 'bookings' && (
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">
-                        My Bookings & Orders
+                      <h3 className="text-xs font-extrabold text-[#202124] uppercase tracking-wider">
+                        My Bookings & Status History
                       </h3>
                       <div className="flex gap-1 text-[10px]">
                         <button
                           onClick={() => setBookingFilter('all')}
                           className={`px-2 py-0.5 rounded-lg font-bold ${
-                            bookingFilter === 'all' ? 'bg-[#D71920] text-white' : 'bg-slate-100 text-[#686868]'
+                            bookingFilter === 'all' ? 'bg-[#D71920] text-white' : 'bg-slate-200 text-[#686868]'
                           }`}
                         >
                           All
@@ -713,7 +1510,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         <button
                           onClick={() => setBookingFilter('active')}
                           className={`px-2 py-0.5 rounded-lg font-bold ${
-                            bookingFilter === 'active' ? 'bg-[#D71920] text-white' : 'bg-slate-100 text-[#686868]'
+                            bookingFilter === 'active' ? 'bg-[#D71920] text-white' : 'bg-slate-200 text-[#686868]'
                           }`}
                         >
                           Active
@@ -721,161 +1518,708 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       </div>
                     </div>
 
-                    {bookings.map((b) => (
-                      <div
-                        key={b.id}
-                        className="p-3.5 bg-white rounded-2xl border border-[#202124]/10 space-y-2.5 shadow-2xs"
-                      >
+                    {/* Booking Selector Chips */}
+                    <div className="flex gap-2 overflow-x-auto pb-1">
+                      {bookings.map((b) => (
+                        <button
+                          key={b.id}
+                          onClick={() => setSelectedBookingForTimeline(b)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                            selectedBookingForTimeline?.id === b.id
+                              ? 'bg-[#202124] text-white shadow-xs'
+                              : 'bg-white border border-slate-200 text-[#686868]'
+                          }`}
+                        >
+                          {b.orderNumber}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Active Selected Booking Card */}
+                    {selectedBookingForTimeline && (
+                      <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="font-extrabold text-xs text-[#202124]">{b.orderNumber}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-amber-100 text-[#A80F18]">
-                            {b.status.replace(/_/g, ' ')}
+                          <div>
+                            <span className="text-xs font-black text-[#D71920]">{selectedBookingForTimeline.orderNumber}</span>
+                            <h4 className="text-sm font-bold text-[#202124] mt-0.5">
+                              {selectedBookingForTimeline.jobTitle || selectedBookingForTimeline.categoryName}
+                            </h4>
+                          </div>
+                          <span className="text-[10px] px-2.5 py-1 rounded-full font-bold bg-amber-100 text-[#A80F18]">
+                            {selectedBookingForTimeline.status.replace(/_/g, ' ')}
                           </span>
                         </div>
-                        <div>
-                          <p className="text-xs font-bold text-[#202124]">{b.categoryName}</p>
-                          <p className="text-[10px] text-[#686868] flex items-center gap-1 mt-0.5">
-                            <MapPin className="w-3 h-3 text-[#D71920]" />
-                            <span>{b.workLocation.address}</span>
-                          </p>
-                        </div>
 
-                        {/* OTP Verification Box */}
-                        <div className="bg-[#FFFDF8] p-2.5 rounded-xl border border-[#202124]/10 flex items-center justify-between text-xs">
+                        {/* OTP Verification Display */}
+                        <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200/80 flex items-center justify-between">
                           <div>
-                            <span className="text-[10px] text-[#686868] block">Start OTP for Workers:</span>
-                            <span className="font-mono font-black text-sm text-[#D71920] tracking-wider">
-                              {b.startOtp}
+                            <span className="text-[10px] text-[#A80F18] font-bold block">Arrival Start OTP (Give to Worker):</span>
+                            <span className="font-mono font-black text-lg text-[#D71920] tracking-widest">
+                              {selectedBookingForTimeline.startOtp}
                             </span>
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-[#686868] block">End OTP:</span>
-                            <span className="font-mono font-bold text-xs text-[#202124]">{b.endOtp}</span>
+                            <span className="text-[10px] text-[#686868] font-semibold block">End OTP:</span>
+                            <span className="font-mono font-bold text-sm text-[#202124]">{selectedBookingForTimeline.endOtp}</span>
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                          <span className="text-[11px] font-bold text-[#202124]">
-                            Workers: {b.acceptedWorkersCount} / {b.requiredWorkers}
+                        {/* Additional Remarks & Special Instructions */}
+                        {(selectedBookingForTimeline.remarks || selectedBookingForTimeline.specialInstructions) && (
+                          <div className="bg-amber-50/80 p-2.5 rounded-2xl border border-amber-200/90 text-xs">
+                            <span className="text-[10px] text-[#A80F18] font-bold flex items-center gap-1">
+                              <FileText className="w-3 h-3 text-[#D71920]" />
+                              <span>Worksite Remarks & Notes:</span>
+                            </span>
+                            <p className="text-[11px] text-[#202124] mt-0.5 leading-snug">
+                              {selectedBookingForTimeline.remarks || selectedBookingForTimeline.specialInstructions}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-100">
+                          <div>
+                            <span className="text-[10px] text-slate-500 block">Shift Timing:</span>
+                            <span className="font-bold text-[#202124]">
+                              {selectedBookingForTimeline.startTime} – {selectedBookingForTimeline.endTime}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-500 block">Pricing / Duration:</span>
+                            <span className="font-bold text-[#D71920]">
+                              {selectedBookingForTimeline.pricingModel === 'full_package'
+                                ? `${selectedBookingForTimeline.packageTitle || 'Turnkey Pack'} (~${selectedBookingForTimeline.packageApproxHours || 8.5}h)`
+                                : `${selectedBookingForTimeline.shiftHours || 8}h @ ₹${selectedBookingForTimeline.pricePerHourPerHead || 250}/hr/head`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+                          <span className="text-[#686868]">Payment Status:</span>
+                          <span className="font-bold text-[#D71920]">
+                            {selectedBookingForTimeline.walletDebited
+                              ? '✓ Debited from Wallet (Paid)'
+                              : selectedBookingForTimeline.upiTransactionRef
+                              ? `✓ Paid via PhonePe QR (${selectedBookingForTimeline.upiTransactionRef})`
+                              : 'Direct Cash / UPI on Worksite'}
                           </span>
-                          <button
-                            onClick={() => setActiveTab('messages')}
-                            className="text-[11px] font-bold text-[#D71920] hover:underline"
-                          >
-                            Chat Workers →
-                          </button>
+                        </div>
+
+                        {/* --- VISUAL TIMELINE / STATUS TREE (Beginning to End) --- */}
+                        <div className="pt-2">
+                          <div className="flex items-center justify-between mb-3">
+                            <h5 className="text-[11px] font-extrabold text-[#202124] uppercase tracking-wider flex items-center gap-1.5">
+                              <Compass className="w-3.5 h-3.5 text-[#D71920]" />
+                              <span>Live Status Tree & Location Audit</span>
+                            </h5>
+                            <span className="text-[9px] bg-[#FFC928]/25 text-[#A80F18] px-2 py-0.5 rounded font-bold">
+                              GPS Verified
+                            </span>
+                          </div>
+
+                          <div className="relative pl-6 space-y-4 border-l-2 border-[#FFC928] ml-2">
+                            {(selectedBookingForTimeline.timelineTree || []).map((node, idx) => (
+                              <div key={node.id || idx} className="relative group">
+                                {/* Node dot */}
+                                <div
+                                  className={`absolute -left-[31px] top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-xs ${
+                                    node.completed
+                                      ? 'bg-[#D71920] text-white'
+                                      : node.current
+                                      ? 'bg-[#FFC928] text-[#202124] ring-4 ring-[#FFC928]/30 animate-pulse'
+                                      : 'bg-slate-200 text-slate-500'
+                                  }`}
+                                >
+                                  {node.completed ? '✓' : idx + 1}
+                                </div>
+
+                                {/* Node content */}
+                                <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80 space-y-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className={`text-xs font-bold ${node.completed ? 'text-[#202124]' : 'text-slate-500'}`}>
+                                      {node.title}
+                                    </span>
+                                    <span className="text-[10px] font-mono text-[#686868]">{node.timestamp}</span>
+                                  </div>
+                                  <p className="text-[11px] text-[#686868] leading-tight">{node.description}</p>
+                                  {node.location && (
+                                    <div className="pt-1 flex items-center gap-1 text-[10px] text-[#D71920] font-semibold">
+                                      <MapPin className="w-3 h-3 text-[#D71920]" />
+                                      <span className="truncate">{node.location.address}</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
 
-                {/* 3. POST A JOB TAB */}
+                {/* 3. POST A JOB TAB (EXACTLY MATCHING USER SCREENSHOTS WITH DECORATED MULTI-COLOR UI) */}
                 {activeTab === 'post-job' && (
-                  <form onSubmit={handlePostJobSubmit} className="space-y-3">
-                    <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">
-                      Post a Temporary Worker Job
-                    </h3>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Service Category</label>
-                      <select
-                        value={selectedCategory.id}
-                        onChange={(e) => {
-                          const cat = categories.find((c) => c.id === e.target.value) || categories[0];
-                          setSelectedCategory(cat);
-                          setOfferedAmount(cat.fullDayRate);
-                        }}
-                        className="w-full px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                      >
-                        {categories.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name} (Base ₹{c.fullDayRate}/day)
-                          </option>
-                        ))}
-                      </select>
+                  <div className="space-y-4">
+                    {/* Header Banner */}
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h2 className="text-base font-extrabold text-[#202124]">Post New Job Order</h2>
+                        <p className="text-[11px] text-[#686868]">On-Demand Workforce Broadcast</p>
+                      </div>
+                      <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2.5 py-1 rounded-full font-bold">
+                        Direct Cash / UPI
+                      </span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Workers Needed</label>
-                        <input
-                          type="number"
-                          min={1}
-                          max={20}
-                          value={requiredWorkers}
-                          onChange={(e) => setRequiredWorkers(Number(e.target.value))}
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
-                        />
+                    {/* Step indicator bar */}
+                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="w-3/4 h-full bg-[#D71920] rounded-full" />
+                    </div>
+
+                    {/* Section 1: Select Service Category Chips */}
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-[#202124]">Select Service Category</label>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddCategoryModal(true)}
+                          className="text-[11px] font-bold text-[#D71920] hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <Plus className="w-3 h-3" />
+                          <span>Add Custom</span>
+                        </button>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Pay / Worker (₹)</label>
-                        <input
-                          type="number"
-                          step={50}
-                          value={offeredAmount}
-                          onChange={(e) => setOfferedAmount(Number(e.target.value))}
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl font-bold text-[#D71920]"
-                        />
+
+                      {/* Selectable category chips */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {categories.map((cat) => {
+                          const isSelected = selectedCategory.id === cat.id;
+                          return (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedCategory(cat);
+                                setPricePerHourPerHead(cat.hourlyRate || Math.round(cat.fullDayRate / 8) || 250);
+                              }}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                                isSelected
+                                  ? 'bg-[#D71920] text-white shadow-xs font-bold'
+                                  : 'bg-slate-50 border border-slate-200 text-[#202124] hover:bg-slate-100'
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5" />}
+                              <span>{cat.name}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Worksite Address</label>
+                    {/* Section 2: Job Requirement Title (Framed with distinct border as in screenshot) */}
+                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#D71920] shadow-xs space-y-1">
+                      <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                        <Briefcase className="w-3.5 h-3.5 text-[#D71920]" />
+                        <span>Job Requirement Title *</span>
+                      </label>
                       <input
                         type="text"
-                        value={jobAddress}
-                        onChange={(e) => setJobAddress(e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
+                        required
+                        value={jobTitle}
+                        onChange={(e) => setJobTitle(e.target.value)}
+                        placeholder="e.g. Loading and moving boxes"
+                        className="w-full py-1.5 text-xs bg-transparent focus:outline-none font-semibold text-[#202124]"
                       />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Shift Date</label>
-                        <input
-                          type="date"
-                          value={jobDate}
-                          onChange={(e) => setJobDate(e.target.value)}
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Reporting Time</label>
-                        <input
-                          type="text"
-                          value={jobStartTime}
-                          onChange={(e) => setJobStartTime(e.target.value)}
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Job Description</label>
-                      <textarea
-                        rows={2}
-                        value={jobDescription}
-                        onChange={(e) => setJobDescription(e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
-                      />
-                    </div>
-
-                    <div className="bg-red-50 p-3 rounded-2xl border border-red-100 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="text-[10px] text-[#686868] block">Total Estimated Cost:</span>
-                        <span className="text-base font-extrabold text-[#D71920]">
-                          ₹{(requiredWorkers * offeredAmount).toLocaleString()}
+                    {/* Section 3: Pricing Model Choice (Hourly vs Full Package) */}
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-[#202124]">Choose Pricing & Duration Model</label>
+                        <span className="text-[10px] font-bold text-[#D71920] bg-red-50 px-2 py-0.5 rounded-md">
+                          {pricingModel === 'hourly' ? 'Hourly Basis' : 'Turnkey Package'}
                         </span>
                       </div>
-                      <button
-                        type="submit"
-                        className="px-4 py-2 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-                      >
-                        Broadcast Job
-                      </button>
+
+                      <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
+                        <button
+                          type="button"
+                          onClick={() => setPricingModel('hourly')}
+                          className={`py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                            pricingModel === 'hourly'
+                              ? 'bg-[#D71920] text-white shadow-xs'
+                              : 'text-slate-600 hover:text-[#202124]'
+                          }`}
+                        >
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Hourly Basis</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPricingModel('full_package')}
+                          className={`py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                            pricingModel === 'full_package'
+                              ? 'bg-[#FFC928] text-[#202124] shadow-xs'
+                              : 'text-slate-600 hover:text-[#202124]'
+                          }`}
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>★ Full Package</span>
+                        </button>
+                      </div>
+
+                      {/* --- A. HOURLY BASIS SPECIFIC FIELDS --- */}
+                      {pricingModel === 'hourly' && (
+                        <div className="space-y-3 pt-1">
+                          {/* Separate field: Price / Hour / Head */}
+                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-bold text-[#202124] flex items-center gap-1">
+                                <DollarSign className="w-3.5 h-3.5 text-[#D71920]" />
+                                <span>Hourly Basis Price (₹ / Hour / Head) *</span>
+                              </label>
+                              <span className="text-[10px] text-slate-500 font-semibold">per worker</span>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-sm text-[#D71920]">₹</span>
+                              <input
+                                type="number"
+                                step={10}
+                                min={50}
+                                value={pricePerHourPerHead}
+                                onChange={(e) => setPricePerHourPerHead(Math.max(50, Number(e.target.value)))}
+                                className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
+                                placeholder="250"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Stepper: Shift Duration in Hours */}
+                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex items-center justify-between">
+                            <div>
+                              <span className="text-xs font-bold text-[#202124] block">Shift Duration</span>
+                              <span className="text-[10px] text-slate-500">Working hours required</span>
+                            </div>
+                            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-slate-200">
+                              <button
+                                type="button"
+                                onClick={() => setShiftHours(Math.max(1, shiftHours - 1))}
+                                className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <span className="text-xs font-black text-[#202124] min-w-12 text-center">
+                                {shiftHours} hrs
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setShiftHours(shiftHours + 1)}
+                                className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Formula calculation badge */}
+                          <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-[11px] text-[#A80F18] flex items-center justify-between font-bold">
+                            <span>Cost per worker:</span>
+                            <span className="font-mono">
+                              ₹{pricePerHourPerHead}/hr/head × {shiftHours} hrs = ₹{(pricePerHourPerHead * shiftHours).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* --- B. FULL PACKAGE SPECIFIC FIELDS --- */}
+                      {pricingModel === 'full_package' && (
+                        <div className="space-y-2.5 pt-1">
+                          <label className="text-[11px] font-bold text-[#202124] block">
+                            Select Turnkey Shift Package (Approx. Time & Fixed Rate)
+                          </label>
+                          <div className="space-y-2">
+                            {SHIFT_PACKAGES.map((pkg) => {
+                              const isPkgSelected = selectedPackageId === pkg.id;
+                              return (
+                                <div
+                                  key={pkg.id}
+                                  onClick={() => setSelectedPackageId(pkg.id)}
+                                  className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                                    isPkgSelected
+                                      ? 'bg-amber-50/80 border-[#D71920] shadow-xs'
+                                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between mb-1">
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
+                                        isPkgSelected ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
+                                      }`}>
+                                        {isPkgSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                      </span>
+                                      <h4 className="text-xs font-bold text-[#202124]">{pkg.title}</h4>
+                                    </div>
+                                    <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-md font-extrabold">
+                                      {pkg.badge}
+                                    </span>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 mb-2 pl-5 leading-tight">{pkg.description}</p>
+                                  
+                                  {/* Approx time taking & Fixed rate display */}
+                                  <div className="flex items-center justify-between text-xs font-bold pl-5 pt-1 border-t border-slate-200/60">
+                                    <span className="text-[#A80F18] flex items-center gap-1 text-[11px]">
+                                      <Clock className="w-3.5 h-3.5 text-[#D71920]" />
+                                      <span>Approx Time: ~{pkg.approxHours} Hours</span>
+                                    </span>
+                                    <span className="text-[#202124] font-black">
+                                      ₹{pkg.fixedRatePerWorker.toLocaleString()} / worker
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* If Custom Turnkey Package is selected, allow adjusting hours and rate */}
+                          {selectedPackageId === 'custom_pack' && (
+                            <div className="p-3 bg-white rounded-2xl border border-amber-300 space-y-2 mt-2">
+                              <span className="text-[11px] font-bold text-[#A80F18] block">Custom Package Details</span>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Approx. Work Time (Hrs)</label>
+                                  <input
+                                    type="number"
+                                    step={0.5}
+                                    value={customPackageHours}
+                                    onChange={(e) => setCustomPackageHours(Number(e.target.value))}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Package Rate (₹ / head)</label>
+                                  <input
+                                    type="number"
+                                    step={100}
+                                    value={customPackageRate}
+                                    onChange={(e) => setCustomPackageRate(Number(e.target.value))}
+                                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#D71920]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  </form>
+
+                    {/* Section 4: Workers Needed with [-] 3 [+] stepper */}
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs flex items-center justify-between">
+                      <div>
+                        <label className="text-xs font-bold text-[#202124] block">Workers Needed (Heads)</label>
+                        <span className="text-[11px] text-[#686868]">Total workforce count required</span>
+                      </div>
+                      <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
+                        <button
+                          type="button"
+                          onClick={() => setRequiredWorkers(Math.max(1, requiredWorkers - 1))}
+                          className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-slate-100 cursor-pointer shadow-2xs font-bold"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-sm font-black text-[#202124] min-w-5 text-center">
+                          {requiredWorkers}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setRequiredWorkers(requiredWorkers + 1)}
+                          className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-slate-100 cursor-pointer shadow-2xs font-bold"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Section 5: Interactive Date & Time Widget Selection */}
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-3">
+                      <div>
+                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5 mb-2">
+                          <CalendarDays className="w-4 h-4 text-[#D71920]" />
+                          <span>Select Shift Date</span>
+                        </label>
+                        {/* Date selection quick pills */}
+                        <div className="grid grid-cols-4 gap-1.5">
+                          {[
+                            { key: 'today', label: 'Today', date: '2026-10-15', sub: '15 Oct' },
+                            { key: 'tomorrow', label: 'Tomorrow', date: '2026-10-16', sub: '16 Oct' },
+                            { key: 'day_after', label: 'Day After', date: '2026-10-17', sub: '17 Oct' },
+                            { key: 'custom', label: 'Custom', date: jobDate, sub: 'Calendar' },
+                          ].map((d) => (
+                            <button
+                              key={d.key}
+                              type="button"
+                              onClick={() => {
+                                setDateSelection(d.key as any);
+                                if (d.key !== 'custom') setJobDate(d.date);
+                              }}
+                              className={`py-2 px-1 rounded-xl text-center transition-all cursor-pointer ${
+                                dateSelection === d.key
+                                  ? 'bg-[#D71920] text-white shadow-xs'
+                                  : 'bg-slate-50 border border-slate-200 text-[#202124] hover:bg-slate-100'
+                              }`}
+                            >
+                              <span className="text-[11px] font-extrabold block leading-tight">{d.label}</span>
+                              <span className={`text-[9px] block ${dateSelection === d.key ? 'text-white/80' : 'text-slate-500'}`}>
+                                {d.sub}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Custom Date Input when selected */}
+                        {dateSelection === 'custom' && (
+                          <div className="mt-2">
+                            <input
+                              type="date"
+                              value={jobDate}
+                              onChange={(e) => setJobDate(e.target.value)}
+                              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Time Slot Selection Widget */}
+                      <div>
+                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5 mb-2">
+                          <Clock className="w-4 h-4 text-[#D71920]" />
+                          <span>Select Shift Start Time Slot</span>
+                        </label>
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {[
+                            '07:00 AM',
+                            '08:30 AM',
+                            '11:00 AM',
+                            '01:30 PM',
+                            '05:30 PM',
+                            '08:00 PM',
+                          ].map((slot) => {
+                            const isSlotActive = timeSlotSelection === slot;
+                            return (
+                              <button
+                                key={slot}
+                                type="button"
+                                onClick={() => setTimeSlotSelection(slot)}
+                                className={`py-1.5 px-2 rounded-xl text-center text-xs font-extrabold transition-all cursor-pointer ${
+                                  isSlotActive
+                                    ? 'bg-[#FFC928] text-[#202124] shadow-xs'
+                                    : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
+                                }`}
+                              >
+                                {slot}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Scheduled Time Banner */}
+                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                        <span className="text-slate-600 font-semibold">Scheduled Shift:</span>
+                        <span className="font-bold text-[#D71920]">
+                          📅 {jobDate} • ⏰ {scheduledTimeDisplay}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Section 6: Job Site Location */}
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-1.5">
+                      <label className="text-xs font-bold text-[#202124] block">Job Site Location</label>
+                      <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
+                        <MapPin className="w-4 h-4 text-[#D71920] shrink-0" />
+                        <input
+                          type="text"
+                          value={jobLocation}
+                          onChange={(e) => setJobLocation(e.target.value)}
+                          placeholder="Worksite location & gate"
+                          className="w-full text-xs bg-transparent focus:outline-none font-medium text-[#202124]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Section 7: Required Remarks / Special Notes Field */}
+                    <div className="bg-white p-3.5 rounded-3xl border-2 border-amber-300 shadow-2xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-[#D71920]" />
+                          <span>Additional Remarks / Worksite Notes *</span>
+                        </label>
+                        <span className="text-[10px] font-bold text-[#A80F18] bg-[#FFC928]/30 px-2 py-0.5 rounded">
+                          Required
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500">
+                        Specific guidelines, safety equipment required, supervisor contact, gate access, or dietary/handling demands.
+                      </p>
+                      <textarea
+                        rows={3}
+                        required
+                        value={remarks}
+                        onChange={(e) => setRemarks(e.target.value)}
+                        placeholder="e.g. Safety boots required. Report to Gate 4 at dock warehouse. Supervisor phone: +91 99001 55432."
+                        className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none font-medium text-[#202124] focus:border-[#D71920]"
+                      />
+                    </div>
+
+                    {/* Section 8: Payment Mode (Wallet Debit vs PhonePe QR vs Cash) */}
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1">
+                          <CreditCard className="w-4 h-4 text-[#D71920]" />
+                          <span>Payment Method & Debit Options</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddMoneyModal(true)}
+                          className="text-[10px] font-bold text-[#5f259f] hover:underline flex items-center gap-0.5 cursor-pointer"
+                        >
+                          <QrCode className="w-3 h-3" />
+                          <span>+ Add Money (PhonePe QR)</span>
+                        </button>
+                      </div>
+
+                      <div className="space-y-2">
+                        {/* Option 1: Prepaid Wallet Debit */}
+                        <div
+                          onClick={() => setPaymentSelection('wallet')}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                            paymentSelection === 'wallet'
+                              ? 'bg-amber-50/80 border-[#D71920] shadow-xs'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                paymentSelection === 'wallet' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
+                              }`}>
+                                {paymentSelection === 'wallet' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                              </span>
+                              <div>
+                                <span className="text-xs font-bold text-[#202124] block">Instant Wallet Debit</span>
+                                <span className="text-[10px] text-slate-500">
+                                  Available Balance: <strong className="text-[#16834A]">₹{walletBalance.toLocaleString()}</strong>
+                                </span>
+                              </div>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                              walletBalance >= totalEstimatedCost
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {walletBalance >= totalEstimatedCost ? 'Balance Sufficient' : 'Needs Top-Up'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Option 2: Direct PhonePe / UPI QR (No 3rd party integration) */}
+                        <div
+                          onClick={() => setPaymentSelection('upi_qr')}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                            paymentSelection === 'upi_qr'
+                              ? 'bg-amber-50/80 border-[#D71920] shadow-xs'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                paymentSelection === 'upi_qr' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
+                              }`}>
+                                {paymentSelection === 'upi_qr' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                              </span>
+                              <div>
+                                <span className="text-xs font-bold text-[#202124] block">Direct PhonePe / UPI QR</span>
+                                <span className="text-[10px] text-slate-500">Scan QR directly without 3rd-party gateway</span>
+                              </div>
+                            </div>
+                            <span className="text-[10px] bg-[#5f259f] text-white px-2 py-0.5 rounded-md font-bold">
+                              Zero Fee
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Option 3: Cash / UPI at Worksite */}
+                        <div
+                          onClick={() => setPaymentSelection('cash')}
+                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                            paymentSelection === 'cash'
+                              ? 'bg-amber-50/80 border-[#D71920] shadow-xs'
+                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                              paymentSelection === 'cash' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
+                            }`}>
+                              {paymentSelection === 'cash' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </span>
+                            <div>
+                              <span className="text-xs font-bold text-[#202124] block">Direct Cash on Worksite</span>
+                              <span className="text-[10px] text-slate-500">Pay workers in person upon shift completion</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Total Summary Pill */}
+                    <div className="bg-[#FFC928]/20 p-3.5 rounded-2xl border border-[#FFC928]/60 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-600 font-semibold block">Total Estimated Cost:</span>
+                        <span className="text-lg font-black text-[#D71920]">
+                          ₹{totalEstimatedCost.toLocaleString()}
+                        </span>
+                        <span className="text-[10px] text-slate-600 block">
+                          {paymentSelection === 'wallet' && 'Instant debit from employer wallet balance'}
+                          {paymentSelection === 'upi_qr' && 'Pay direct via PhonePe / UPI QR'}
+                          {paymentSelection === 'cash' && 'Pay directly to workers on shift end'}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-extrabold text-[#A80F18] bg-[#FFC928]/50 px-2.5 py-1 rounded-xl block">
+                          {requiredWorkers} Workers × ₹{costPerWorker.toLocaleString()}
+                        </span>
+                        <span className="text-[9px] text-slate-500 mt-1 block">
+                          {pricingModel === 'hourly' ? `${shiftHours} Hours` : `Turnkey ~${packageApproxHours}h`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Publish / Book Button */}
+                    <button
+                      type="button"
+                      onClick={promptPublishJob}
+                      className="w-full py-3 bg-[#D71920] hover:bg-[#A80F18] text-white font-extrabold text-xs rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      {paymentSelection === 'wallet' ? (
+                        <>
+                          <Wallet className="w-4 h-4 text-[#FFC928]" />
+                          <span>Debit ₹{totalEstimatedCost.toLocaleString()} & Broadcast Job</span>
+                        </>
+                      ) : paymentSelection === 'upi_qr' ? (
+                        <>
+                          <QrCode className="w-4 h-4 text-white" />
+                          <span>Pay ₹{totalEstimatedCost.toLocaleString()} via PhonePe QR & Broadcast</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-4 h-4 text-white" />
+                          <span>Publish Job & Notify Workers</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
                 )}
 
                 {/* 4. MESSAGES TAB */}
@@ -888,7 +2232,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         </div>
                         <div>
                           <h4 className="text-xs font-bold text-[#202124]">Ramesh Kumar</h4>
-                          <span className="text-[10px] text-[#16834A] flex items-center gap-1 font-semibold">
+                          <span className="text-[10px] text-[#D71920] flex items-center gap-1 font-semibold">
                             ● Accepted Worker (Order #1045)
                           </span>
                         </div>
@@ -944,57 +2288,92 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 {/* 5. PROFILE TAB */}
                 {activeTab === 'profile' && (
                   <div className="space-y-3">
-                    <div className="bg-white p-3.5 rounded-2xl border border-[#202124]/10 flex items-center gap-3 shadow-2xs">
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 flex items-center gap-3 shadow-2xs">
                       <div className="w-12 h-12 rounded-2xl bg-[#D71920] text-white flex items-center justify-center font-bold text-lg shadow-xs">
                         AL
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-[#202124]">Apex Logistics & Warehousing</h4>
                         <p className="text-[11px] text-[#686868]">apex@logistics.in</p>
-                        <span className="text-[10px] bg-emerald-100 text-[#16834A] px-2 py-0.5 rounded font-bold">
-                          Verified Employer Account
+                        <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded font-bold">
+                          Verified Employer
                         </span>
                       </div>
                     </div>
 
+                    {/* Employer Prepaid Wallet Card */}
+                    <div className="bg-linear-to-r from-[#1E1F23] to-[#2D3039] p-4 rounded-3xl text-white shadow-md space-y-3 border border-white/10">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-semibold text-white/70 flex items-center gap-1.5">
+                          <Wallet className="w-4 h-4 text-[#FFC928]" />
+                          <span>Prepaid Employer Wallet</span>
+                        </span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                          Active
+                        </span>
+                      </div>
+                      <div className="flex items-baseline justify-between">
+                        <div>
+                          <span className="text-2xl font-black text-[#FFC928]">₹{walletBalance.toLocaleString()}</span>
+                          <span className="text-[10px] text-white/50 block">Available for instant order debits</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddMoneyModal(true)}
+                          className="px-3 py-1.5 bg-[#5f259f] hover:bg-[#4d1d82] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          <span>+ Add Money</span>
+                        </button>
+                      </div>
+
+                      {/* Recent transactions list */}
+                      <div className="pt-2 border-t border-white/10 space-y-1.5">
+                        <span className="text-[10px] font-bold text-white/70 block uppercase tracking-wider">
+                          Recent Wallet Activity
+                        </span>
+                        {(customer?.walletTransactions || [
+                          {
+                            id: 'ctx-1',
+                            type: 'credit',
+                            amount: 15000,
+                            description: 'Wallet Top-up via PhonePe UPI QR',
+                            timestamp: '14 Oct 2026, 04:30 PM',
+                          },
+                        ]).slice(0, 3).map((tx) => (
+                          <div key={tx.id} className="flex items-center justify-between text-[11px] py-1 border-b border-white/5 last:border-0">
+                            <div>
+                              <span className="font-semibold text-white/90 block leading-tight">{tx.description}</span>
+                              <span className="text-[9px] text-white/50 font-mono">{tx.timestamp}</span>
+                            </div>
+                            <span className={`font-mono font-bold ${tx.type === 'credit' ? 'text-emerald-400' : 'text-[#FFC928]'}`}>
+                              {tx.type === 'credit' ? '+' : '-'}₹{tx.amount.toLocaleString()}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     <div className="space-y-1.5">
-                      <div className="p-3 bg-white rounded-xl border border-[#202124]/10 flex items-center justify-between text-xs">
+                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
                         <span className="text-[#686868]">Registered Mobile:</span>
                         <span className="font-bold text-[#202124]">+91 99001 55432</span>
                       </div>
-                      <div className="p-3 bg-white rounded-xl border border-[#202124]/10 flex items-center justify-between text-xs">
-                        <span className="text-[#686868]">Default Worksite:</span>
-                        <span className="font-bold text-[#202124]">Panambur Dock 4, Mangalore</span>
+                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
+                        <span className="text-[#686868]">Worksite Location:</span>
+                        <span className="font-bold text-[#202124]">Panambur Industrial Area</span>
                       </div>
-                      <div className="p-3 bg-white rounded-xl border border-[#202124]/10 flex items-center justify-between text-xs">
-                        <span className="text-[#686868]">GST Invoicing:</span>
-                        <span className="font-bold text-[#16834A]">29AAAAA0000A1Z5</span>
-                      </div>
-                    </div>
-
-                    {/* Legal & Support links */}
-                    <div className="bg-white rounded-2xl border border-[#202124]/10 divide-y divide-slate-100 text-xs">
-                      <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50">
-                        <div className="flex items-center gap-2 text-[#202124]">
-                          <FileText className="w-4 h-4 text-[#D71920]" />
-                          <span>Terms & Conditions</span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[#686868]" />
-                      </div>
-                      <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50">
-                        <div className="flex items-center gap-2 text-[#202124]">
-                          <HelpCircle className="w-4 h-4 text-[#D71920]" />
-                          <span>Contact Support & SOS</span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[#686868]" />
+                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
+                        <span className="text-[#686868]">Payment Debit Support:</span>
+                        <span className="font-bold text-[#D71920]">Prepaid Wallet / Direct PhonePe QR</span>
                       </div>
                     </div>
 
-                    {/* Logout Button */}
+                    {/* Logout Button with Confirmation */}
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-[#C62828] border border-red-200 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-[#D71920] border border-red-200 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Sign Out from Customer App</span>
@@ -1004,10 +2383,10 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
               </div>
 
               {/* ========================================================== */}
-              {/* FIXED 5-TAB BOTTOM NAVIGATION BAR (ALWAYS VISIBLE!) */}
+              {/* FIXED 5-TAB BOTTOM NAVIGATION BAR (RED AND YELLOW PALETTE) */}
               {/* ========================================================== */}
-              <div className="h-16 bg-white border-t border-[#202124]/10 px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
-                {/* 1. Home */}
+              <div className="h-16 bg-white border-t border-slate-200 px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
+                {/* 1. Explore / Home */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('home')}
@@ -1017,26 +2396,11 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 >
                   <Home className={`w-5 h-5 ${activeTab === 'home' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
                   <span className={`text-[10px] mt-0.5 ${activeTab === 'home' ? 'font-bold' : 'font-medium'}`}>
-                    Home
+                    Explore
                   </span>
                 </button>
 
-                {/* 2. Bookings */}
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('bookings')}
-                  className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors cursor-pointer relative ${
-                    activeTab === 'bookings' ? 'text-[#D71920]' : 'text-[#686868] hover:text-[#202124]'
-                  }`}
-                >
-                  <Calendar className={`w-5 h-5 ${activeTab === 'bookings' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
-                  <span className={`text-[10px] mt-0.5 ${activeTab === 'bookings' ? 'font-bold' : 'font-medium'}`}>
-                    Bookings
-                  </span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#D71920] absolute top-1 right-5" />
-                </button>
-
-                {/* 3. Post Job (Prominent Highlight) */}
+                {/* 2. Post Job (Prominent button as shown in screenshot) */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('post-job')}
@@ -1047,14 +2411,28 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                       activeTab === 'post-job'
-                        ? 'bg-[#D71920] text-white shadow-sm'
+                        ? 'bg-[#D71920] text-white shadow-xs'
                         : 'bg-[#FFC928] text-[#202124]'
                     }`}
                   >
-                    <PlusCircle className="w-5 h-5" />
+                    <Plus className="w-4 h-4" />
                   </div>
                   <span className={`text-[10px] mt-0.5 ${activeTab === 'post-job' ? 'font-bold text-[#D71920]' : 'font-semibold'}`}>
                     Post Job
+                  </span>
+                </button>
+
+                {/* 3. Bids / Live Bookings */}
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('bookings')}
+                  className={`flex flex-col items-center justify-center flex-1 py-1 transition-colors cursor-pointer relative ${
+                    activeTab === 'bookings' ? 'text-[#D71920]' : 'text-[#686868] hover:text-[#202124]'
+                  }`}
+                >
+                  <Tag className={`w-5 h-5 ${activeTab === 'bookings' ? 'stroke-[2.5]' : 'stroke-[1.8]'}`} />
+                  <span className={`text-[10px] mt-0.5 ${activeTab === 'bookings' ? 'font-bold' : 'font-medium'}`}>
+                    Bids & Status
                   </span>
                 </button>
 
@@ -1070,9 +2448,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   <span className={`text-[10px] mt-0.5 ${activeTab === 'messages' ? 'font-bold' : 'font-medium'}`}>
                     Messages
                   </span>
-                  <span className="px-1 text-[8px] font-bold rounded-full bg-[#16834A] text-white absolute top-0.5 right-4">
-                    2
-                  </span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#D71920] absolute top-1 right-5" />
                 </button>
 
                 {/* 5. Profile */}

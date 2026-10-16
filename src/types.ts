@@ -81,6 +81,15 @@ export interface Worker {
   approvalDecisionNote?: string;
   completedJobsCount: number;
   totalEarnings: number;
+  walletBalance: number;
+  walletTransactions?: {
+    id: string;
+    type: 'recharge' | 'fee_deduction';
+    amount: number;
+    description: string;
+    timestamp: string;
+  }[];
+  category?: string;
   badge?: string;
   idProofType?: string;
   idProofNumber?: string;
@@ -100,6 +109,30 @@ export interface Customer {
   };
   totalBookings: number;
   status: 'active' | 'restricted' | 'suspended';
+  walletBalance?: number;
+  walletTransactions?: {
+    id: string;
+    type: 'credit' | 'debit';
+    amount: number;
+    description: string;
+    timestamp: string;
+    utrRef?: string;
+  }[];
+}
+
+export interface UpiPayoutRequest {
+  id: string;
+  requesterId: string;
+  requesterName: string;
+  requesterRole: 'employee' | 'customer';
+  requesterPhone: string;
+  beneficiaryUpiId: string;
+  amount: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  requestedAt: string;
+  acceptedAt?: string;
+  utrNumber?: string;
+  adminNote?: string;
 }
 
 export interface WorkerBid {
@@ -158,6 +191,14 @@ export interface Booking {
   durationType: DurationType;
   description: string;
   specialInstructions?: string;
+  remarks?: string;
+  pricingModel?: 'hourly' | 'full_package';
+  pricePerHourPerHead?: number;
+  shiftHours?: number;
+  packageApproxHours?: number;
+  packageTitle?: string;
+  upiTransactionRef?: string;
+  walletDebited?: boolean;
   priceRevisions?: {
     revisedAt: string;
     previousPrice: number;
@@ -174,10 +215,29 @@ export interface Booking {
   status: BookingStatus;
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
+  paymentMode?: 'cash' | 'upi' | 'wallet';
   startOtp: string;
   endOtp: string;
+  jobTitle?: string;
+  timelineTree?: StatusTimelineNode[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StatusTimelineNode {
+  id: string;
+  stageKey: string;
+  title: string;
+  description: string;
+  timestamp: string;
+  location?: {
+    address: string;
+    lat?: number;
+    lng?: number;
+  };
+  actor: string;
+  completed: boolean;
+  current?: boolean;
 }
 
 export interface CommissionSettings {
@@ -419,4 +479,73 @@ export interface SettingsAuditRecord {
   newValue: string;
   timestamp: string;
   ipAddress: string;
+}
+
+// Payment Controls Configuration (Client Feedback #1)
+export interface PaymentMethodSetting {
+  id: 'cash' | 'upi_intent' | 'upi_qr' | 'online_gateway' | 'manual_admin';
+  name: string;
+  description: string;
+  isEnabled: boolean;
+  disabledReason?: string;
+  requiresAdminConfirmation?: boolean;
+  icon?: string;
+}
+
+export interface PaymentControlSettings {
+  methods: PaymentMethodSetting[];
+  payeeUpiId: string; // e.g. 'prnm@kotak'
+  payeeName: string;  // e.g. 'PRAVEEN'
+  qrCodeUrl: string;
+  allowCashAtWorksite: boolean;
+  minRechargeAmount: number;
+  maxRechargeAmount: number;
+  lastUpdatedBy: string;
+  lastUpdatedAt: string;
+}
+
+// System & Mobile Notifications (Client Feedback #3 & #4)
+export interface AppNotification {
+  id: string;
+  recipientId: string;
+  recipientRole: 'customer' | 'employee' | 'admin';
+  title: string;
+  message: string;
+  eventType:
+    | 'BOOKING_CREATED'
+    | 'MATCHING_STARTED'
+    | 'BID_RECEIVED'
+    | 'BID_ACCEPTED'
+    | 'CAPACITY_REACHED'
+    | 'WORKER_ARRIVED'
+    | 'START_OTP_VERIFIED'
+    | 'WORK_STARTED'
+    | 'END_OTP_VERIFIED'
+    | 'WORK_COMPLETED'
+    | 'PAYMENT_RECEIVED'
+    | 'PAYMENT_FAILED'
+    | 'PAYOUT_REQUESTED'
+    | 'PAYOUT_CREDITED'
+    | 'PAYOUT_REJECTED'
+    | 'BOOKING_CANCELLED'
+    | 'PRICE_REVISED'
+    | 'DISPUTE_OPENED'
+    | 'DISPUTE_RESOLVED';
+  bookingId?: string;
+  orderNumber?: string;
+  read: boolean;
+  timestamp: string;
+  soundType: 'chime' | 'urgent_ring' | 'silent';
+  actionUrl?: string;
+}
+
+// GPS Attendance Location Stamp (Client Feedback #5)
+export interface GpsLocationStamp {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number;
+  capturedAt: string;
+  address?: string;
+  isGeofenceValid?: boolean;
+  provider: 'gps' | 'network' | 'manual_fallback';
 }

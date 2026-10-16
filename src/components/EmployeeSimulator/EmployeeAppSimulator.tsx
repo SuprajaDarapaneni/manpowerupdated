@@ -27,9 +27,15 @@ import {
   Eye,
   EyeOff,
   Navigation,
+  Compass,
+  CreditCard,
+  Plus,
+  Volume2,
+  AlertTriangle,
+  Wallet,
 } from 'lucide-react';
-import { Booking, Worker } from '../../types';
-import { dataService } from '../../services/storage';
+import { Booking, Worker, StatusTimelineNode } from '../../types';
+import { dataService, playNotificationSound } from '../../services/storage';
 
 interface EmployeeAppSimulatorProps {
   workers: Worker[];
@@ -52,6 +58,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     totalJobsCompleted: 142,
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80',
     approvalStatus: 'approved',
+    walletBalance: 4200,
   };
 
   // Auth State
@@ -63,31 +70,36 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
-  // Worker Sign Up Form State
-  const [signUpName, setSignUpName] = useState('Suresh Nair');
-  const [signUpPhone, setSignUpPhone] = useState('+91 98450 11223');
-  const [signUpCategory, setSignUpCategory] = useState('Loading & Unloading');
-  const [signUpCity, setSignUpCity] = useState('Mangalore, Karnataka');
-  const [signUpPassword, setSignUpPassword] = useState('Worker@2026');
-  const [signUpConfirmPassword, setSignUpConfirmPassword] = useState('Worker@2026');
-  const [workerTermsAccepted, setWorkerTermsAccepted] = useState(true);
-
-  // Forgot Password State
-  const [forgotInput, setForgotInput] = useState('+91 98765 43210');
-  const [forgotOtp, setForgotOtp] = useState('');
-  const [forgotNewPassword, setForgotNewPassword] = useState('');
-  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
-  const [forgotSuccessMsg, setForgotSuccessMsg] = useState<string | null>(null);
-
   // Main 5-Tab Navigation State
   const [activeTab, setActiveTab] = useState<EmployeeTab>('home');
   const [isOnline, setIsOnline] = useState(true);
+
+  // Wallet State
+  const [walletBalance, setWalletBalance] = useState<number>(currentWorker.walletBalance || 4200);
+  const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [rechargeAmount, setRechargeAmount] = useState(1000);
 
   // Job Action States
   const [selectedBookingId, setSelectedBookingId] = useState<string>(bookings[0]?.id || '');
   const [bidAmount, setBidAmount] = useState(2000);
   const [bidNote, setBidNote] = useState('Available with safety helmet and boots.');
-  const [bidSubmittedMessage, setBidSubmittedMessage] = useState<string | null>(null);
+
+  // Confirmation Modal State (prevents accidental clicks!)
+  const [pendingConfirmAction, setPendingConfirmAction] = useState<{
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  } | null>(null);
+
+  // Audio / Alert Notification State
+  const [activeAlertToast, setActiveAlertToast] = useState<string | null>(null);
+
+  // Live Location Simulation
+  const [currentGpsLocation, setCurrentGpsLocation] = useState({
+    address: 'Panambur Container Terminal Dock 4, Mangalore',
+    lat: 12.945,
+    lng: 74.815,
+  });
 
   // OTP inputs for attendance check-in/out
   const [startOtpInput, setStartOtpInput] = useState('');
@@ -98,11 +110,19 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'worker' | 'customer'; text: string; time: string }>>([
     { sender: 'customer', text: 'Ramesh, please report at Dock 4 Container Bay at 9:00 AM.', time: '09:12 AM' },
     { sender: 'worker', text: 'Understood sir. I have my safety gear ready and will verify Start OTP on arrival.', time: '09:14 AM' },
-    { sender: 'customer', text: 'Start OTP will be 5918. Enter upon supervisor inspection.', time: '09:15 AM' },
+    { sender: 'customer', text: 'Start OTP will be 4829. Enter upon supervisor inspection.', time: '09:15 AM' },
   ]);
   const [inputMessage, setInputMessage] = useState('');
 
   const selectedBooking = bookings.find((b) => b.id === selectedBookingId) || bookings[0];
+
+  const triggerAppRingAlert = (message: string) => {
+    playNotificationSound();
+    setActiveAlertToast(message);
+    setTimeout(() => {
+      setActiveAlertToast(null);
+    }, 4500);
+  };
 
   // Auth Handlers
   const handleSignIn = (e: React.FormEvent) => {
@@ -115,6 +135,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
         setIsAuthLoading(false);
         setIsAuthenticated(true);
         setActiveTab('home');
+        triggerAppRingAlert('Worker account logged in. Radar online!');
       } else {
         setIsAuthLoading(false);
         setAuthError('Please enter valid worker phone & password (min 6 characters).');
@@ -122,82 +143,104 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     }, 400);
   };
 
-  const handleSignUp = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    if (!workerTermsAccepted) {
-      setAuthError('You must accept the Worker Marketplace Terms & Conditions.');
-      return;
-    }
-    if (signUpPassword !== signUpConfirmPassword) {
-      setAuthError('Passwords do not match.');
-      return;
-    }
-
-    setIsAuthLoading(true);
-    setTimeout(() => {
-      setIsAuthLoading(false);
-      setIsAuthenticated(true);
-      setActiveTab('home');
-    }, 500);
-  };
-
-  const handleForgotSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (forgotStep === 1) {
-      setForgotStep(2);
-      setForgotSuccessMsg('SMS challenge sent with 4-digit reset code.');
-    } else {
-      setForgotSuccessMsg('Password updated! Please sign in with your new password.');
-      setTimeout(() => {
-        setAuthScreen('sign-in');
-        setForgotStep(1);
-        setForgotSuccessMsg(null);
-      }, 1200);
-    }
-  };
-
   const handleLogout = () => {
-    setIsAuthenticated(false);
-    setAuthScreen('sign-in');
-    setAuthError(null);
+    setPendingConfirmAction({
+      title: 'Sign Out Confirmation',
+      description: 'Are you sure you want to sign out from the Worker App?',
+      onConfirm: () => {
+        setIsAuthenticated(false);
+        setAuthScreen('sign-in');
+        setAuthError(null);
+        setPendingConfirmAction(null);
+      },
+    });
   };
 
-  // Job Flow Handlers
-  const handleBidSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedBooking) return;
-    dataService.submitBid(selectedBooking.id, currentWorker.id, Number(bidAmount), bidNote);
-    setBidSubmittedMessage('Counter-bid submitted to employer! Waiting for confirmation.');
-    setTimeout(() => {
-      setBidSubmittedMessage(null);
-      setActiveTab('my-work');
-    }, 1500);
+  // Wallet Recharge Handler
+  const handleExecuteRecharge = (amount: number) => {
+    const res = dataService.rechargeWorkerWallet(currentWorker.id, amount, 'Instant UPI');
+    setWalletBalance(res.newBalance);
+    setShowRechargeModal(false);
+    triggerAppRingAlert(`Wallet Recharged! +₹${amount}. New balance: ₹${res.newBalance}`);
   };
 
-  const handleDirectAccept = () => {
-    if (!selectedBooking) return;
-    dataService.directAcceptJob(selectedBooking.id, currentWorker.id);
-    setActiveTab('my-work');
-  };
-
-  const handleVerifyStartOtp = () => {
-    if (!selectedBooking) return;
-    const res = dataService.verifyStartOtp(selectedBooking.id, currentWorker.id, startOtpInput);
-    setOtpMessage(res.message);
-    if (res.success) {
-      setStartOtpInput('');
+  // Status Actions with Confirmation Dialogs
+  const promptAcceptJob = (booking: Booking) => {
+    if (walletBalance < 100) {
+      alert('Insufficient wallet balance! Please recharge at least ₹100 to accept job requests.');
+      setShowRechargeModal(true);
+      return;
     }
+
+    setPendingConfirmAction({
+      title: 'Confirm Shift Acceptance',
+      description: `Accept ${booking.orderNumber} (${booking.jobTitle || booking.categoryName}) for ₹${booking.offeredPricePerWorker}? You will collect cash directly from customer at worksite.`,
+      onConfirm: () => {
+        dataService.directAcceptJob(booking.id, currentWorker.id);
+        setSelectedBookingId(booking.id);
+        setPendingConfirmAction(null);
+        setActiveTab('my-work');
+        triggerAppRingAlert(`Shift Accepted! Order #${booking.orderNumber} confirmed.`);
+      },
+    });
   };
 
-  const handleVerifyEndOtp = () => {
-    if (!selectedBooking) return;
-    const res = dataService.verifyEndOtp(selectedBooking.id, currentWorker.id, endOtpInput);
-    setOtpMessage(res.message);
-    if (res.success) {
-      setEndOtpInput('');
-      setActiveTab('home');
+  const promptVerifyStartOtp = () => {
+    if (!startOtpInput.trim()) {
+      alert('Please enter the 4-digit Start OTP from customer.');
+      return;
     }
+
+    setPendingConfirmAction({
+      title: 'Confirm Work Attendance Check-in',
+      description: `Verify Start OTP (${startOtpInput}) at ${currentGpsLocation.address}? Your shift timer and live GPS attendance will be activated.`,
+      onConfirm: () => {
+        setPendingConfirmAction(null);
+        const res = dataService.verifyStartOtp(
+          selectedBooking.id,
+          currentWorker.id,
+          startOtpInput,
+          currentGpsLocation.address
+        );
+        setOtpMessage(res.message);
+        if (res.success) {
+          setStartOtpInput('');
+          triggerAppRingAlert('Shift Started! Attendance recorded via Start OTP.');
+        }
+      },
+    });
+  };
+
+  const promptVerifyEndOtp = () => {
+    if (!endOtpInput.trim()) {
+      alert('Please enter the 4-digit End OTP from customer.');
+      return;
+    }
+
+    const wage = selectedBooking.offeredPricePerWorker || 2000;
+    const fee = Math.round(wage * 0.1);
+
+    setPendingConfirmAction({
+      title: 'Confirm Work Completion & Cash Pay',
+      description: `Confirm end of shift? You will collect ₹${wage} in Cash or UPI from employer. Platform fee of ₹${fee} will be deducted from your prepaid wallet.`,
+      onConfirm: () => {
+        setPendingConfirmAction(null);
+        const res = dataService.verifyEndOtp(
+          selectedBooking.id,
+          currentWorker.id,
+          endOtpInput,
+          currentGpsLocation.address
+        );
+        setOtpMessage(res.message);
+        if (res.success) {
+          setEndOtpInput('');
+          if (res.remainingWallet !== undefined) {
+            setWalletBalance(res.remainingWallet);
+          }
+          triggerAppRingAlert(`Shift Complete! Collected ₹${wage} cash. Platform fee deducted.`);
+        }
+      },
+    });
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -212,25 +255,110 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
       },
     ]);
     setInputMessage('');
+    triggerAppRingAlert('Message dispatched to employer.');
   };
 
   return (
     <div className="flex flex-col items-center">
       {/* Mobile Device Frame */}
       <div className="w-[380px] h-[760px] bg-[#1E1F23] rounded-[48px] p-3 shadow-2xl border-4 border-[#202124]/40 flex flex-col relative overflow-hidden select-none">
-        {/* Notch / Dynamic Island */}
+        {/* Notch */}
         <div className="w-36 h-4 bg-black rounded-full mx-auto mb-2 shrink-0 flex items-center justify-center">
           <div className="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-700" />
         </div>
 
         {/* Screen Canvas */}
-        <div className="flex-1 bg-[#FFFDF8] rounded-[38px] overflow-hidden flex flex-col relative text-[#202124]">
+        <div className="flex-1 bg-[#F8FAFC] rounded-[38px] overflow-hidden flex flex-col relative text-[#202124]">
+          {/* Active Audio / Ring Notification Toast */}
+          {activeAlertToast && (
+            <div className="absolute top-2 left-3 right-3 z-50 bg-[#D71920] text-white px-3.5 py-2.5 rounded-2xl shadow-xl flex items-center gap-2.5 animate-bounce text-xs font-bold">
+              <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                <Volume2 className="w-3.5 h-3.5 text-white animate-pulse" />
+              </div>
+              <span className="flex-1">{activeAlertToast}</span>
+            </div>
+          )}
+
+          {/* Action Confirmation Modal (Prevents accidental button clicks) */}
+          {pendingConfirmAction && (
+            <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 shadow-2xl max-w-xs w-full space-y-3.5 border border-slate-200">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto">
+                  <AlertTriangle className="w-5 h-5 text-[#D71920]" />
+                </div>
+                <div className="text-center">
+                  <h4 className="text-sm font-extrabold text-[#202124]">{pendingConfirmAction.title}</h4>
+                  <p className="text-xs text-[#686868] mt-1 leading-relaxed">
+                    {pendingConfirmAction.description}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setPendingConfirmAction(null)}
+                    className="py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-[#202124] text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={pendingConfirmAction.onConfirm}
+                    className="py-2.5 px-3 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                  >
+                    Confirm
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Prepaid Wallet Recharge Modal */}
+          {showRechargeModal && (
+            <div className="absolute inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 shadow-2xl max-w-xs w-full space-y-3 border border-slate-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <Wallet className="w-4 h-4 text-[#D71920]" />
+                    <h4 className="text-sm font-bold text-[#202124]">Recharge Prepaid Wallet</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowRechargeModal(false)}
+                    className="text-xs text-slate-400 hover:text-slate-600"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <p className="text-xs text-[#686868]">
+                  Recharge to receive & accept jobs. Platform fees are deducted automatically from this wallet balance.
+                </p>
+
+                <div className="grid grid-cols-3 gap-2 py-1">
+                  {[500, 1000, 2000].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => handleExecuteRecharge(amt)}
+                      className="py-2.5 px-2 bg-[#FFC928]/20 hover:bg-[#FFC928]/30 text-[#202124] border border-[#FFC928]/50 rounded-xl text-xs font-black transition-all cursor-pointer text-center"
+                    >
+                      +₹{amt}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-[#686868]">
+                  <span>Payment Gateway:</span>
+                  <span className="font-bold text-[#202124]">UPI / GPay / NetBanking</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ========================================================== */}
-          {/* A. UNAUTHENTICATED AUTHENTICATION SCREENS (Sign In / Up / Forgot) */}
+          {/* A. UNAUTHENTICATED SCREENS */}
           {/* ========================================================== */}
           {!isAuthenticated ? (
             <div className="flex-1 flex flex-col bg-[#FFFDF8] overflow-y-auto p-5">
-              {/* Brand Header */}
               <div className="text-center mt-3 mb-5">
                 <div className="w-12 h-12 rounded-2xl bg-[#FFC928] text-[#202124] flex items-center justify-center font-black text-xl mx-auto shadow-md mb-2">
                   W
@@ -246,7 +374,6 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 </p>
               </div>
 
-              {/* Error notice */}
               {authError && (
                 <div className="mb-3 p-2.5 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-xs text-[#C62828]">
                   <AlertCircle className="w-4 h-4 shrink-0" />
@@ -254,348 +381,108 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 </div>
               )}
 
-              {/* 1. Worker Sign In View */}
-              {authScreen === 'sign-in' && (
-                <form onSubmit={handleSignIn} className="space-y-3 flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">
-                        Registered Mobile Number
-                      </label>
-                      <div className="relative">
-                        <Phone className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type="tel"
-                          required
-                          value={loginPhone}
-                          onChange={(e) => setLoginPhone(e.target.value)}
-                          placeholder="e.g. +91 98765 43210"
-                          className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-[11px] font-bold text-[#202124]">Password</label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAuthScreen('forgot-password');
-                            setAuthError(null);
-                          }}
-                          className="text-[10px] text-[#D71920] font-semibold hover:underline"
-                        >
-                          Forgot Password?
-                        </button>
-                      </div>
-                      <div className="relative">
-                        <Lock className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
-                        <input
-                          type={showPassword ? 'text' : 'password'}
-                          required
-                          value={loginPassword}
-                          onChange={(e) => setLoginPassword(e.target.value)}
-                          placeholder="••••••••••••"
-                          className="w-full pl-9 pr-9 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#686868]"
-                        >
-                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1">
-                      <label className="flex items-center gap-1.5 text-[11px] text-[#686868] cursor-pointer">
-                        <input type="checkbox" defaultChecked className="rounded text-[#D71920]" />
-                        <span>Keep me signed in</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setLoginPhone('+91 98765 43210');
-                          setLoginPassword('Worker@2026');
-                        }}
-                        className="text-[11px] text-[#D71920] font-bold hover:underline"
-                      >
-                        Auto-fill Ramesh
-                      </button>
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={isAuthLoading}
-                      className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2"
-                    >
-                      {isAuthLoading ? (
-                        <span>Logging in...</span>
-                      ) : (
-                        <>
-                          <span>Sign In as Worker</span>
-                          <ArrowRight className="w-4 h-4" />
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="pt-4 text-center border-t border-slate-100">
-                    <p className="text-xs text-[#686868]">
-                      New worker?{' '}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthScreen('sign-up');
-                          setAuthError(null);
-                        }}
-                        className="font-bold text-[#D71920] hover:underline"
-                      >
-                        Create an account
-                      </button>
-                    </p>
-                    <p className="text-[10px] text-[#686868]/70 mt-3">
-                      By continuing, you agree to ManPowerLink Worker Code of Conduct and Safety Guidelines.
-                    </p>
-                  </div>
-                </form>
-              )}
-
-              {/* 2. Worker Sign Up View */}
-              {authScreen === 'sign-up' && (
-                <form onSubmit={handleSignUp} className="space-y-2.5 flex-1 flex flex-col justify-between">
-                  <div className="space-y-2.5">
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Full Name (As per Aadhaar)</label>
-                      <input
-                        type="text"
-                        required
-                        value={signUpName}
-                        onChange={(e) => setSignUpName(e.target.value)}
-                        placeholder="e.g. Suresh Nair"
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Mobile Number</label>
-                        <input
-                          type="tel"
-                          required
-                          value={signUpPhone}
-                          onChange={(e) => setSignUpPhone(e.target.value)}
-                          placeholder="+91 98450 11223"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">City / District</label>
-                        <input
-                          type="text"
-                          required
-                          value={signUpCity}
-                          onChange={(e) => setSignUpCity(e.target.value)}
-                          placeholder="Mangalore"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Primary Work Category</label>
-                      <select
-                        value={signUpCategory}
-                        onChange={(e) => setSignUpCategory(e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                      >
-                        <option value="Loading & Unloading">Loading & Unloading</option>
-                        <option value="Food & Catering Services">Food & Catering Services</option>
-                        <option value="Housekeeping & Cleaning">Housekeeping & Cleaning</option>
-                        <option value="Warehouse & Packaging">Warehouse & Packaging</option>
-                        <option value="Construction & Masonry">Construction & Masonry</option>
-                      </select>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Password</label>
-                        <input
-                          type="password"
-                          required
-                          value={signUpPassword}
-                          onChange={(e) => setSignUpPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Confirm Password</label>
-                        <input
-                          type="password"
-                          required
-                          value={signUpConfirmPassword}
-                          onChange={(e) => setSignUpConfirmPassword(e.target.value)}
-                          placeholder="••••••••"
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                    </div>
-
-                    <label className="flex items-start gap-2 pt-1 text-[11px] text-[#686868] cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={workerTermsAccepted}
-                        onChange={(e) => setWorkerTermsAccepted(e.target.checked)}
-                        className="mt-0.5 rounded text-[#D71920]"
-                      />
-                      <span>I agree to Worker Terms, Direct Wage Payout Rules, and Safety Protocols</span>
+              <form onSubmit={handleSignIn} className="space-y-3 flex-1 flex flex-col justify-between">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#202124] mb-1">
+                      Registered Mobile Number
                     </label>
-
-                    <button
-                      type="submit"
-                      disabled={isAuthLoading}
-                      className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer mt-1"
-                    >
-                      {isAuthLoading ? 'Registering...' : 'Create Worker Account'}
-                    </button>
+                    <div className="relative">
+                      <Phone className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="tel"
+                        required
+                        value={loginPhone}
+                        onChange={(e) => setLoginPhone(e.target.value)}
+                        placeholder="+91 98765 43210"
+                        className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                      />
+                    </div>
                   </div>
 
-                  <div className="pt-3 text-center border-t border-slate-100">
-                    <p className="text-xs text-[#686868]">
-                      Already registered?{' '}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAuthScreen('sign-in');
-                          setAuthError(null);
-                        }}
-                        className="font-bold text-[#D71920] hover:underline"
-                      >
-                        Sign In
-                      </button>
-                    </p>
-                  </div>
-                </form>
-              )}
-
-              {/* 3. Worker Forgot Password View */}
-              {authScreen === 'forgot-password' && (
-                <form onSubmit={handleForgotSubmit} className="space-y-3 flex-1 flex flex-col justify-between">
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-bold text-[#202124]">Recover Worker Account</h3>
-                    <p className="text-xs text-[#686868]">
-                      {forgotStep === 1
-                        ? 'Enter your registered mobile number to receive a 4-digit SMS OTP challenge.'
-                        : 'Enter the SMS code and choose a new password.'}
-                    </p>
-
-                    {forgotSuccessMsg && (
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-[#16834A] flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <span>{forgotSuccessMsg}</span>
-                      </div>
-                    )}
-
-                    {forgotStep === 1 ? (
-                      <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">
-                          Mobile Number
-                        </label>
-                        <input
-                          type="tel"
-                          required
-                          value={forgotInput}
-                          onChange={(e) => setForgotInput(e.target.value)}
-                          placeholder="e.g. +91 98765 43210"
-                          className="w-full px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <div>
-                          <label className="block text-[11px] font-bold text-[#202124] mb-1">SMS OTP Code</label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={4}
-                            value={forgotOtp}
-                            onChange={(e) => setForgotOtp(e.target.value)}
-                            placeholder="e.g. 7824"
-                            className="w-full px-3 py-2 text-center font-mono font-bold text-sm bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-[#202124] mb-1">New Password</label>
-                          <input
-                            type="password"
-                            required
-                            value={forgotNewPassword}
-                            onChange={(e) => setForgotNewPassword(e.target.value)}
-                            placeholder="••••••••••••"
-                            className="w-full px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    <button
-                      type="submit"
-                      className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer"
-                    >
-                      {forgotStep === 1 ? 'Send SMS Challenge' : 'Confirm & Sign In'}
-                    </button>
+                  <div>
+                    <label className="block text-[11px] font-bold text-[#202124] mb-1">Password</label>
+                    <div className="relative">
+                      <Lock className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        required
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                        placeholder="••••••••••••"
+                        className="w-full pl-9 pr-9 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                      />
+                    </div>
                   </div>
 
-                  <div className="pt-4 text-center border-t border-slate-100">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAuthScreen('sign-in');
-                        setAuthError(null);
-                      }}
-                      className="text-xs font-bold text-[#D71920] hover:underline"
-                    >
-                      ← Back to Worker Sign In
-                    </button>
-                  </div>
-                </form>
-              )}
+                  <button
+                    type="submit"
+                    className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2"
+                  >
+                    <span>Sign In as Worker</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="pt-4 text-center border-t border-slate-100">
+                  <p className="text-xs text-[#686868]">
+                    New worker? <span className="font-bold text-[#D71920]">Sign Up via Admin</span>
+                  </p>
+                </div>
+              </form>
             </div>
           ) : (
             /* ========================================================== */
-            /* B. AUTHENTICATED EMPLOYEE APPLICATION WITH FIXED 5-TAB BAR */
+            /* B. AUTHENTICATED APP WITH PREPAID WALLET & STATUS CONFIRMATIONS */
             /* ========================================================== */
             <>
-              {/* Top Bar with Online/Offline Switch */}
-              <div className="h-14 bg-[#1E1F23] text-white px-4 flex items-center justify-between shrink-0 shadow-sm border-b border-[#FFC928]/30 z-20">
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg bg-[#FFC928] text-[#202124] font-black flex items-center justify-center text-xs shadow-xs">
-                    W
-                  </div>
+              {/* Top Bar with Online Switch & GPS Ping */}
+              <div className="h-14 bg-[#1E1F23] text-white px-3 flex items-center justify-between shrink-0 shadow-sm border-b border-[#FFC928]/30 z-20">
+                <div className="flex items-center gap-1.5">
+                  {/* In-app Back button so clicking Back returns to home instead of closing app */}
+                  {activeTab !== 'home' ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('home')}
+                      className="p-1 -ml-1 hover:bg-white/10 rounded-xl transition-all cursor-pointer flex items-center gap-0.5 text-[#FFC928] bg-black/40 shadow-2xs border border-[#FFC928]/20"
+                      title="Back to Worker Home"
+                    >
+                      <ChevronLeft className="w-5 h-5 text-[#FFC928] stroke-[2.5]" />
+                      <span className="text-[11px] font-bold pr-1">Back</span>
+                    </button>
+                  ) : (
+                    <div className="w-7 h-7 rounded-lg bg-[#FFC928] text-[#202124] font-black flex items-center justify-center text-xs shadow-xs">
+                      W
+                    </div>
+                  )}
                   <div>
-                    <h2 className="font-bold text-xs leading-tight">ManPowerLink Worker</h2>
+                    <h2 className="font-bold text-xs leading-tight">
+                      {activeTab === 'home' && 'ManPowerLink Worker'}
+                      {activeTab === 'find-jobs' && 'Explore Available Shifts'}
+                      {activeTab === 'my-work' && 'My Active Work & OTP'}
+                      {activeTab === 'messages' && 'Employer Messages'}
+                      {activeTab === 'profile' && 'Worker Profile & Wallet'}
+                    </h2>
                     <p className="text-[10px] text-white/70 leading-tight">
                       {currentWorker.name} ({currentWorker.category})
                     </p>
                   </div>
                 </div>
 
-                {/* Availability Toggle */}
-                <button
-                  type="button"
-                  onClick={() => setIsOnline(!isOnline)}
-                  className={`px-2.5 py-1 text-[10px] font-bold rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
-                    isOnline
-                      ? 'bg-emerald-500 text-white'
-                      : 'bg-white/10 text-white/60 hover:text-white'
-                  }`}
-                >
-                  <Power className="w-3 h-3" />
-                  <span>{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsOnline(!isOnline)}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
+                      isOnline
+                        ? 'bg-[#FFC928] text-[#202124]'
+                        : 'bg-white/10 text-white/60 hover:text-white'
+                    }`}
+                  >
+                    <Power className="w-3 h-3" />
+                    <span>{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Scrollable Screen Content Body */}
@@ -603,60 +490,66 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 {/* 1. HOME TAB */}
                 {activeTab === 'home' && (
                   <div className="space-y-4">
-                    {/* Worker Earnings Summary Card */}
-                    <div className="bg-linear-to-r from-[#D71920] to-[#A80F18] p-4 rounded-3xl text-white shadow-md space-y-3">
+                    {/* Worker Prepaid Wallet Card */}
+                    <div className="bg-linear-to-r from-[#1E1F23] to-[#2D3039] p-4 rounded-3xl text-white shadow-md space-y-3 border border-white/10">
                       <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-white/80">Available Wallet Balance</span>
-                        <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-full font-bold">
-                          Daily Payout Ready
+                        <span className="text-[11px] font-semibold text-white/70 flex items-center gap-1.5">
+                          <Wallet className="w-4 h-4 text-[#FFC928]" />
+                          <span>Prepaid Wallet Balance</span>
+                        </span>
+                        <span className="text-[10px] bg-[#FFC928]/20 text-[#FFC928] border border-[#FFC928]/40 px-2 py-0.5 rounded-full font-bold">
+                          {walletBalance >= 100 ? 'Active to Receive Jobs' : 'Low Balance'}
                         </span>
                       </div>
                       <div className="flex items-baseline justify-between">
-                        <span className="text-3xl font-black">₹4,200</span>
-                        <span className="text-xs text-white/90 font-medium">8 jobs this week</span>
+                        <span className="text-3xl font-black text-white">₹{walletBalance.toLocaleString()}</span>
+                        <button
+                          type="button"
+                          onClick={() => setShowRechargeModal(true)}
+                          className="px-3 py-1.5 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer"
+                        >
+                          + Recharge Wallet
+                        </button>
                       </div>
-                      <div className="pt-2 border-t border-white/20 flex items-center justify-between text-xs">
-                        <span className="text-white/80">UPI: ramesh@okhdfcbank</span>
-                        <span className="text-[#FFC928] font-bold">Withdraw →</span>
-                      </div>
+                      <p className="text-[10px] text-white/60 leading-tight">
+                        Cash wages are paid directly to you by the customer. Platform fee (₹200) is deducted from this wallet upon job completion.
+                      </p>
                     </div>
 
-                    {/* Today's Shift Status Card */}
-                    <div className="bg-white p-3.5 rounded-2xl border border-[#202124]/10 shadow-2xs space-y-2.5">
+                    {/* Today's Assigned Shift Card */}
+                    <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xs space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-[#16834A] bg-emerald-50 px-2 py-0.5 rounded-md">
-                          TODAY'S ASSIGNED SHIFT
+                        <span className="text-[10px] font-bold text-[#A80F18] bg-[#FFC928]/25 px-2.5 py-1 rounded-md">
+                          TODAY'S CONFIRMED SHIFT
                         </span>
-                        <span className="text-[11px] font-bold text-[#202124]">Order #1045</span>
+                        <span className="text-xs font-black text-[#202124]">{selectedBooking?.orderNumber}</span>
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-[#202124]">Container Unloading & Heavy Cargo</h4>
+                        <h4 className="text-xs font-bold text-[#202124]">{selectedBooking?.jobTitle || selectedBooking?.categoryName}</h4>
                         <p className="text-[11px] text-[#686868] mt-0.5 flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-[#D71920]" />
-                          <span>Panambur Container Terminal Dock 4</span>
+                          <span>{selectedBooking?.workLocation?.address}</span>
                         </p>
                       </div>
                       <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                        <span className="font-extrabold text-[#D71920]">₹2,000 / Day</span>
+                        <span className="font-black text-[#D71920]">₹{selectedBooking?.offeredPricePerWorker} / Day (Cash)</span>
                         <button
                           onClick={() => setActiveTab('my-work')}
-                          className="px-3 py-1 bg-[#D71920] text-white text-[11px] font-bold rounded-xl shadow-xs"
+                          className="px-3 py-1.5 bg-[#D71920] text-white text-[11px] font-bold rounded-xl shadow-xs"
                         >
-                          Enter Start OTP →
+                          Attendance & OTP →
                         </button>
                       </div>
                     </div>
 
-                    {/* Quick Safety Verification Status */}
-                    <div className="bg-amber-50 border border-amber-200 p-3 rounded-2xl flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-[#FFC928] text-[#202124] flex items-center justify-center font-bold shrink-0">
-                        <ShieldCheck className="w-5 h-5 text-[#A80F18]" />
+                    {/* Live GPS Stamp Status */}
+                    <div className="bg-[#FFC928]/15 border border-[#FFC928]/40 p-3 rounded-2xl flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-[#D71920] text-white flex items-center justify-center shrink-0">
+                        <Navigation className="w-4 h-4" />
                       </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-[#202124]">Verified Worker Badge Active</h4>
-                        <p className="text-[10px] text-[#686868]">
-                          KYC Aadhaar approved. Eligible for immediate auto-match shifts.
-                        </p>
+                      <div className="text-xs">
+                        <h5 className="font-bold text-[#202124]">Current Worksite Location Tagged</h5>
+                        <p className="text-[10px] text-[#686868] mt-0.5">{currentGpsLocation.address}</p>
                       </div>
                     </div>
                   </div>
@@ -666,62 +559,74 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 {activeTab === 'find-jobs' && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">
+                      <h3 className="text-xs font-extrabold text-[#202124] uppercase tracking-wider">
                         Available Job Radar ({bookings.length} nearby)
                       </h3>
-                      <span className="text-[10px] font-semibold text-[#16834A] bg-emerald-50 px-2 py-0.5 rounded-md">
+                      <span className="text-[10px] font-bold text-[#A80F18] bg-[#FFC928]/25 px-2 py-0.5 rounded-md">
                         Radius: 15 km
                       </span>
                     </div>
 
-                    {bidSubmittedMessage && (
-                      <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-[#16834A] flex items-center gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        <span>{bidSubmittedMessage}</span>
-                      </div>
-                    )}
-
                     {bookings.map((b) => (
                       <div
                         key={b.id}
-                        className="p-3.5 bg-white rounded-2xl border border-[#202124]/10 space-y-2.5 shadow-2xs"
+                        className="p-3.5 bg-white rounded-3xl border border-slate-200 space-y-2.5 shadow-2xs"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-xs text-[#202124]">{b.orderNumber}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-[#FFC928]/40 text-[#A80F18]">
+                          <span className="text-[10px] px-2.5 py-0.5 rounded-md font-bold bg-[#FFC928]/40 text-[#A80F18]">
                             {b.durationType.replace('_', ' ').toUpperCase()}
                           </span>
                         </div>
 
                         <div>
-                          <h4 className="text-xs font-bold text-[#202124]">{b.categoryName}</h4>
+                          <h4 className="text-xs font-bold text-[#202124]">{b.jobTitle || b.categoryName}</h4>
                           <p className="text-[10px] text-[#686868] mt-0.5 flex items-center gap-1">
                             <MapPin className="w-3 h-3 text-[#D71920]" />
                             <span>{b.workLocation.address}</span>
                           </p>
                         </div>
 
-                        <div className="flex items-center justify-between text-xs bg-[#FFFDF8] p-2 rounded-xl">
+                        {/* Employer Remarks & Worksite Instructions */}
+                        {(b.remarks || b.specialInstructions) && (
+                          <div className="bg-amber-50/80 p-2.5 rounded-2xl border border-amber-200/90 text-xs">
+                            <span className="text-[10px] text-[#A80F18] font-bold flex items-center gap-1">
+                              <FileText className="w-3 h-3 text-[#D71920]" />
+                              <span>Employer Remarks / Special Notes:</span>
+                            </span>
+                            <p className="text-[10px] text-slate-700 mt-0.5 leading-snug">
+                              {b.remarks || b.specialInstructions}
+                            </p>
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-between text-xs bg-slate-50 p-2.5 rounded-2xl border border-slate-100">
                           <div>
-                            <span className="text-[10px] text-[#686868] block">Employer Wage Offer:</span>
-                            <span className="text-sm font-extrabold text-[#D71920]">
+                            <span className="text-[10px] text-slate-500 font-semibold block">
+                              {b.pricingModel === 'full_package' ? 'Turnkey Shift Package:' : 'Shift Wage (on site):'}
+                            </span>
+                            <span className="text-sm font-black text-[#D71920]">
                               ₹{b.offeredPricePerWorker} / worker
                             </span>
+                            <span className="text-[9px] text-slate-500 block">
+                              {b.pricingModel === 'full_package' ? `★ ~${b.packageApproxHours || 8.5} hrs work duration` : `${b.shiftHours || 8} hrs @ ₹${b.pricePerHourPerHead || 250}/hr/head`}
+                            </span>
                           </div>
-                          <span className="text-[10px] text-[#16834A] font-semibold bg-emerald-50 px-2 py-1 rounded-md">
-                            Positions: {b.acceptedWorkersCount}/{b.requiredWorkers}
-                          </span>
+                          <div className="text-right">
+                            <span className="text-[10px] text-slate-500 font-semibold block">Platform Fee:</span>
+                            <span className="text-xs font-bold text-[#D71920]">₹200 from wallet</span>
+                            <span className="text-[9px] text-emerald-700 font-bold block">
+                              {b.walletDebited ? 'Paid via Customer Wallet' : 'Collect Cash on Site'}
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Actions: Accept or Counter-Bid */}
-                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                        {/* Actions with Confirmation */}
+                        <div className="grid grid-cols-2 gap-2 pt-1">
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedBookingId(b.id);
-                              handleDirectAccept();
-                            }}
-                            className="py-2 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                            onClick={() => promptAcceptJob(b)}
+                            className="py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                           >
                             Accept Shift
                           </button>
@@ -731,7 +636,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                               setSelectedBookingId(b.id);
                               setActiveTab('my-work');
                             }}
-                            className="py-2 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                            className="py-2.5 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
                           >
                             Counter-Bid
                           </button>
@@ -741,40 +646,43 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </div>
                 )}
 
-                {/* 3. MY WORK TAB */}
+                {/* 3. MY WORK TAB & ATTENDANCE TREE */}
                 {activeTab === 'my-work' && (
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">
-                      Active Shift & Attendance Verification
+                  <div className="space-y-4">
+                    <h3 className="text-xs font-extrabold text-[#202124] uppercase tracking-wider">
+                      Active Shift Attendance & Cash Settlement
                     </h3>
 
-                    {/* Active Job Details */}
-                    <div className="bg-white p-4 rounded-2xl border border-[#202124]/10 shadow-2xs space-y-3">
+                    {/* Active Job Card */}
+                    <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm space-y-3">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-black text-[#202124]">{selectedBooking?.orderNumber}</span>
-                        <span className="text-[10px] bg-emerald-100 text-[#16834A] px-2 py-0.5 rounded font-bold">
+                        <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded font-bold">
                           ASSIGNED TO YOU
                         </span>
                       </div>
 
-                      <p className="text-xs font-semibold text-[#202124]">{selectedBooking?.categoryName}</p>
-                      <p className="text-[10px] text-[#686868]">{selectedBooking?.workLocation.address}</p>
+                      <p className="text-xs font-bold text-[#202124]">{selectedBooking?.jobTitle || selectedBooking?.categoryName}</p>
+                      <p className="text-[10px] text-[#686868] flex items-center gap-1">
+                        <MapPin className="w-3 h-3 text-[#D71920]" />
+                        <span>{selectedBooking?.workLocation?.address}</span>
+                      </p>
 
                       {otpMessage && (
-                        <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-[#16834A] flex items-center gap-1.5 font-semibold">
-                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <div className="p-2.5 bg-[#FFC928]/20 border border-[#FFC928]/40 rounded-xl text-xs text-[#A80F18] flex items-center gap-1.5 font-bold">
+                          <CheckCircle2 className="w-4 h-4 shrink-0 text-[#D71920]" />
                           <span>{otpMessage}</span>
                         </div>
                       )}
 
-                      {/* Step 1: Start OTP Input */}
-                      <div className="bg-[#FFFDF8] p-3 rounded-xl border border-[#202124]/15 space-y-2">
+                      {/* Step 1: Start OTP with Confirmation */}
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-[#202124]">Step 1: Check-in via Start OTP</span>
-                          <span className="text-[10px] text-[#D71920] font-semibold">Customer OTP: 5918</span>
+                          <span className="text-[10px] text-[#D71920] font-bold">Customer OTP: 4829</span>
                         </div>
                         <p className="text-[10px] text-[#686868]">
-                          Ask the worksite manager for their 4-digit verification code:
+                          Ask the worksite manager for their 4-digit code:
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -782,27 +690,27 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                             maxLength={4}
                             value={startOtpInput}
                             onChange={(e) => setStartOtpInput(e.target.value)}
-                            placeholder="e.g. 5918"
-                            className="flex-1 px-3 py-1.5 text-center font-mono font-bold text-sm bg-white border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920]"
+                            placeholder="e.g. 4829"
+                            className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-slate-200 rounded-xl"
                           />
                           <button
                             type="button"
-                            onClick={handleVerifyStartOtp}
-                            className="px-3.5 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                            onClick={promptVerifyStartOtp}
+                            className="px-3.5 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
                           >
                             Verify & Start
                           </button>
                         </div>
                       </div>
 
-                      {/* Step 2: End OTP Input */}
-                      <div className="bg-[#FFFDF8] p-3 rounded-xl border border-[#202124]/15 space-y-2">
+                      {/* Step 2: End OTP with Cash collection & Platform Fee deduction */}
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#202124]">Step 2: Finish Shift via End OTP</span>
-                          <span className="text-[10px] text-[#16834A] font-semibold">Unlock Wage Pay</span>
+                          <span className="text-xs font-bold text-[#202124]">Step 2: Collect Cash & End OTP</span>
+                          <span className="text-[10px] text-[#D71920] font-bold">Code: 9154</span>
                         </div>
                         <p className="text-[10px] text-[#686868]">
-                          Enter completion code provided by employer upon shift end:
+                          Collect full wage in cash from customer, then enter End OTP:
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -810,38 +718,51 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                             maxLength={4}
                             value={endOtpInput}
                             onChange={(e) => setEndOtpInput(e.target.value)}
-                            placeholder="e.g. 8329"
-                            className="flex-1 px-3 py-1.5 text-center font-mono font-bold text-sm bg-white border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920]"
+                            placeholder="e.g. 9154"
+                            className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-slate-200 rounded-xl"
                           />
                           <button
                             type="button"
-                            onClick={handleVerifyEndOtp}
-                            className="px-3.5 py-1.5 bg-[#16834A] hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                            onClick={promptVerifyEndOtp}
+                            className="px-3.5 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
                           >
                             Complete
                           </button>
                         </div>
                       </div>
 
-                      {/* Counter-Bid Section */}
-                      <form onSubmit={handleBidSubmit} className="pt-2 border-t border-slate-100 space-y-2">
-                        <span className="text-xs font-bold text-[#202124] block">Submit Proposed Counter-Wage</span>
-                        <div className="flex gap-2">
-                          <input
-                            type="number"
-                            step={50}
-                            value={bidAmount}
-                            onChange={(e) => setBidAmount(Number(e.target.value))}
-                            className="w-28 px-2 py-1 text-xs font-bold text-[#D71920] bg-white border border-[#202124]/15 rounded-lg"
-                          />
-                          <button
-                            type="submit"
-                            className="flex-1 py-1.5 bg-[#FFC928] text-[#202124] text-xs font-bold rounded-lg hover:bg-[#E5A900] cursor-pointer"
-                          >
-                            Send Bid to Employer
-                          </button>
+                      {/* Status Tree Display */}
+                      <div className="pt-2">
+                        <h5 className="text-[11px] font-extrabold text-[#202124] uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                          <Compass className="w-3.5 h-3.5 text-[#D71920]" />
+                          <span>Shift Lifecycle & Location Track</span>
+                        </h5>
+
+                        <div className="relative pl-6 space-y-3.5 border-l-2 border-[#FFC928] ml-2">
+                          {(selectedBooking.timelineTree || []).map((node, idx) => (
+                            <div key={node.id || idx} className="relative">
+                              <div
+                                className={`absolute -left-[31px] top-0.5 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-xs ${
+                                  node.completed
+                                    ? 'bg-[#D71920] text-white'
+                                    : node.current
+                                    ? 'bg-[#FFC928] text-[#202124] ring-4 ring-[#FFC928]/30 animate-pulse'
+                                    : 'bg-slate-200 text-slate-500'
+                                }`}
+                              >
+                                {node.completed ? '✓' : idx + 1}
+                              </div>
+                              <div className="bg-slate-50 p-2 rounded-xl border border-slate-200/80 space-y-0.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-[#202124]">{node.title}</span>
+                                  <span className="text-[9px] font-mono text-[#686868]">{node.timestamp}</span>
+                                </div>
+                                <p className="text-[10px] text-[#686868]">{node.description}</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      </form>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -856,14 +777,13 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                         </div>
                         <div>
                           <h4 className="text-xs font-bold text-[#202124]">Apex Logistics (Employer)</h4>
-                          <span className="text-[10px] text-[#16834A] flex items-center gap-1 font-semibold">
+                          <span className="text-[10px] text-[#D71920] flex items-center gap-1 font-semibold">
                             ● Order #1045 Active
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Chat Bubble Stream */}
                     <div className="space-y-2 flex-1 overflow-y-auto">
                       {chatMessages.map((msg, idx) => (
                         <div
@@ -890,7 +810,6 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                       ))}
                     </div>
 
-                    {/* Chat Input */}
                     <form onSubmit={handleSendMessage} className="flex gap-1.5 pt-1">
                       <input
                         type="text"
@@ -912,7 +831,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 {/* 5. PROFILE TAB */}
                 {activeTab === 'profile' && (
                   <div className="space-y-3">
-                    <div className="bg-white p-3.5 rounded-2xl border border-[#202124]/10 flex items-center gap-3 shadow-2xs">
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 flex items-center gap-3 shadow-2xs">
                       <img
                         src={currentWorker.avatar}
                         alt={currentWorker.name}
@@ -921,59 +840,40 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                       <div>
                         <div className="flex items-center gap-1.5">
                           <h4 className="text-xs font-bold text-[#202124]">{currentWorker.name}</h4>
-                          <ShieldCheck className="w-4 h-4 text-[#16834A]" />
+                          <ShieldCheck className="w-4 h-4 text-[#D71920]" />
                         </div>
                         <p className="text-[11px] text-[#686868]">{currentWorker.phone}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[10px] bg-emerald-100 text-[#16834A] px-2 py-0.5 rounded font-bold">
-                            KYC Approved
+                          <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded font-bold">
+                            KYC Verified
                           </span>
-                          <span className="text-[10px] font-bold text-[#E5A900] flex items-center gap-0.5">
-                            <Star className="w-3 h-3 fill-[#E5A900]" />
-                            {currentWorker.rating} ({currentWorker.totalJobsCompleted} jobs)
+                          <span className="text-[10px] font-bold text-[#A80F18] flex items-center gap-0.5">
+                            <Star className="w-3 h-3 fill-[#FFC928]" />
+                            {currentWorker.rating}
                           </span>
                         </div>
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <div className="p-3 bg-white rounded-xl border border-[#202124]/10 flex items-center justify-between text-xs">
-                        <span className="text-[#686868]">Skill Category:</span>
-                        <span className="font-bold text-[#202124]">{currentWorker.category}</span>
+                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
+                        <span className="text-[#686868]">Prepaid Wallet:</span>
+                        <span className="font-black text-[#D71920]">₹{walletBalance}</span>
                       </div>
-                      <div className="p-3 bg-white rounded-xl border border-[#202124]/10 flex items-center justify-between text-xs">
-                        <span className="text-[#686868]">Payout UPI ID:</span>
-                        <span className="font-bold text-[#16834A]">ramesh@okhdfcbank</span>
+                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
+                        <span className="text-[#686868]">Wage Payment Mode:</span>
+                        <span className="font-bold text-[#202124]">Direct Cash / Personal UPI</span>
                       </div>
-                      <div className="p-3 bg-white rounded-xl border border-[#202124]/10 flex items-center justify-between text-xs">
-                        <span className="text-[#686868]">Emergency SOS Contact:</span>
-                        <span className="font-bold text-[#D71920]">112 / +91 80000 12345</span>
-                      </div>
-                    </div>
-
-                    {/* Legal & Safety Docs */}
-                    <div className="bg-white rounded-2xl border border-[#202124]/10 divide-y divide-slate-100 text-xs">
-                      <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50">
-                        <div className="flex items-center gap-2 text-[#202124]">
-                          <FileText className="w-4 h-4 text-[#D71920]" />
-                          <span>Worker Marketplace Agreement</span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[#686868]" />
-                      </div>
-                      <div className="p-3 flex items-center justify-between cursor-pointer hover:bg-slate-50">
-                        <div className="flex items-center gap-2 text-[#202124]">
-                          <Shield className="w-4 h-4 text-[#16834A]" />
-                          <span>Safety & Insurance Protection</span>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-[#686868]" />
+                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
+                        <span className="text-[#686868]">Platform Fee Rule:</span>
+                        <span className="font-semibold text-slate-700">₹200 debited from wallet</span>
                       </div>
                     </div>
 
-                    {/* Sign Out Button */}
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-[#C62828] border border-red-200 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-[#C62828] border border-red-200 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Sign Out from Worker App</span>
@@ -982,11 +882,8 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 )}
               </div>
 
-              {/* ========================================================== */}
-              {/* FIXED 5-TAB BOTTOM NAVIGATION BAR (ALWAYS VISIBLE!) */}
-              {/* ========================================================== */}
-              <div className="h-16 bg-white border-t border-[#202124]/10 px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
-                {/* 1. Home */}
+              {/* FIXED 5-TAB BOTTOM BAR */}
+              <div className="h-16 bg-white border-t border-slate-200 px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
                 <button
                   type="button"
                   onClick={() => setActiveTab('home')}
@@ -1000,7 +897,6 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </span>
                 </button>
 
-                {/* 2. Find Jobs */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('find-jobs')}
@@ -1012,12 +908,8 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   <span className={`text-[10px] mt-0.5 ${activeTab === 'find-jobs' ? 'font-bold' : 'font-medium'}`}>
                     Find Jobs
                   </span>
-                  <span className="px-1 text-[8px] font-bold rounded-full bg-[#FFC928] text-[#202124] absolute top-0.5 right-4">
-                    3
-                  </span>
                 </button>
 
-                {/* 3. My Work (Active Shifts) */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('my-work')}
@@ -1028,7 +920,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
                       activeTab === 'my-work'
-                        ? 'bg-[#D71920] text-white shadow-sm'
+                        ? 'bg-[#D71920] text-white shadow-xs'
                         : 'bg-[#FFC928] text-[#202124]'
                     }`}
                   >
@@ -1039,7 +931,6 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </span>
                 </button>
 
-                {/* 4. Messages */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('messages')}
@@ -1051,10 +942,8 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   <span className={`text-[10px] mt-0.5 ${activeTab === 'messages' ? 'font-bold' : 'font-medium'}`}>
                     Messages
                   </span>
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#16834A] absolute top-1 right-5" />
                 </button>
 
-                {/* 5. Profile */}
                 <button
                   type="button"
                   onClick={() => setActiveTab('profile')}

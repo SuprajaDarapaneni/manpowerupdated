@@ -86,10 +86,10 @@ export const SafetyPrivacyView: React.FC<SafetyPrivacyViewProps> = ({ incidents 
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         inc.severity === 'critical'
-                          ? 'bg-red-100 text-red-800'
+                          ? 'bg-red-100 text-[#D71920]'
                           : inc.severity === 'high'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-blue-100 text-blue-800'
+                          ? 'bg-[#FFC928] text-[#202124]'
+                          : 'bg-[#FFC928]/30 text-[#A80F18]'
                       }`}
                     >
                       {inc.severity}
@@ -109,8 +109,8 @@ export const SafetyPrivacyView: React.FC<SafetyPrivacyViewProps> = ({ incidents 
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         inc.status === 'resolved'
-                          ? 'bg-emerald-50 text-[#16834A]'
-                          : 'bg-amber-50 text-amber-700'
+                          ? 'bg-[#FFC928] text-[#202124]'
+                          : 'bg-[#D71920]/10 text-[#D71920]'
                       }`}
                     >
                       {inc.status}
@@ -146,7 +146,7 @@ export const SafetyPrivacyView: React.FC<SafetyPrivacyViewProps> = ({ incidents 
             <div className="p-4 rounded-xl bg-[#FFFDF8] border border-[#202124]/10 space-y-2">
               <span className="font-bold text-[#202124] block">Worker Aadhaar & KYC</span>
               <p className="text-[#686868]">Encrypted at rest with AES-256. Retained for 5 years after registration pursuant to labor records rules.</p>
-              <span className="text-[10px] font-semibold text-[#16834A] bg-emerald-50 px-2 py-0.5 rounded block w-fit">
+              <span className="text-[10px] font-semibold text-[#A80F18] bg-[#FFC928]/30 px-2 py-0.5 rounded block w-fit">
                 Active Encryption
               </span>
             </div>
@@ -154,7 +154,7 @@ export const SafetyPrivacyView: React.FC<SafetyPrivacyViewProps> = ({ incidents 
             <div className="p-4 rounded-xl bg-[#FFFDF8] border border-[#202124]/10 space-y-2">
               <span className="font-bold text-[#202124] block">GPS Geolocation Logs</span>
               <p className="text-[#686868]">Worker location captured only during active travel and shift duration. Automatically purged after 90 days.</p>
-              <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded block w-fit">
+              <span className="text-[10px] font-semibold text-[#202124] bg-[#FFC928] px-2 py-0.5 rounded block w-fit">
                 90-Day Auto Purge
               </span>
             </div>
@@ -222,7 +222,7 @@ export const SafetyPrivacyView: React.FC<SafetyPrivacyViewProps> = ({ incidents 
               <button
                 type="button"
                 onClick={handleResolveIncident}
-                className="px-4 py-1.5 bg-[#16834A] text-white text-xs font-bold rounded-lg cursor-pointer"
+                className="px-4 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-lg cursor-pointer"
               >
                 Mark Resolved & Log Audit
               </button>

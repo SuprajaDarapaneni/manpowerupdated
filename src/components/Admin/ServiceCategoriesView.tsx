@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Check, X, Shield, Utensils, Package, Sparkles, Users, Hammer, Truck } from 'lucide-react';
+import { Plus, Edit2, Check, X, Shield, Utensils, Package, Sparkles, Users, Hammer, Truck, Trash2 } from 'lucide-react';
 import { ServiceCategory } from '../../types';
 import { dataService } from '../../services/storage';
 
@@ -106,6 +106,15 @@ export const ServiceCategoriesView: React.FC<ServiceCategoriesViewProps> = ({ ca
     });
   };
 
+  const handleDeleteCategory = (catId: string, catName: string) => {
+    if (confirm(`Are you sure you want to delete the "${catName}" category? This will remove it from customer booking options.`)) {
+      dataService.deleteCategory(catId);
+      if (editingCategory?.id === catId) {
+        setEditingCategory(null);
+      }
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -193,7 +202,7 @@ export const ServiceCategoriesView: React.FC<ServiceCategoriesViewProps> = ({ ca
                   <button
                     onClick={() => handleToggleActive(cat)}
                     className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                      cat.isActive ? 'bg-[#16834A]' : 'bg-gray-300'
+                      cat.isActive ? 'bg-[#D71920]' : 'bg-gray-300'
                     }`}
                   >
                     <span
@@ -210,6 +219,13 @@ export const ServiceCategoriesView: React.FC<ServiceCategoriesViewProps> = ({ ca
                   title="Edit Category Pricing & Rules"
                 >
                   <Edit2 className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDeleteCategory(cat.id, cat.name)}
+                  className="p-2 text-[#686868] hover:text-[#D71920] hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                  title="Delete Category"
+                >
+                  <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -399,23 +415,37 @@ export const ServiceCategoriesView: React.FC<ServiceCategoriesViewProps> = ({ ca
               </div>
 
               {/* Buttons */}
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#202124]/10">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditingCategory(null);
-                    setIsCreating(false);
-                  }}
-                  className="px-4 py-2 text-xs font-semibold text-[#686868] hover:text-[#202124] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
-                >
-                  Save Category Configuration
-                </button>
+              <div className="flex items-center justify-between pt-4 border-t border-[#202124]/10">
+                <div>
+                  {editingCategory && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCategory(editingCategory.id, editingCategory.name)}
+                      className="px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete Category</span>
+                    </button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingCategory(null);
+                      setIsCreating(false);
+                    }}
+                    className="px-4 py-2 text-xs font-semibold text-[#686868] hover:text-[#202124] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-lg shadow-xs cursor-pointer"
+                  >
+                    Save Category Configuration
+                  </button>
+                </div>
               </div>
             </form>
           </div>

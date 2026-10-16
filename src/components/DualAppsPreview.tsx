@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { CustomerAppSimulator } from './CustomerSimulator/CustomerAppSimulator';
 import { EmployeeAppSimulator } from './EmployeeSimulator/EmployeeAppSimulator';
 import { Booking, ServiceCategory, Worker } from '../types';
-import { Smartphone, HardHat, RefreshCw, Zap, CheckCircle2, ArrowRight } from 'lucide-react';
+import { Smartphone, HardHat, RefreshCw, Zap, CheckCircle2, ArrowRight, ChevronLeft } from 'lucide-react';
 import { dataService } from '../services/storage';
 
 interface DualAppsPreviewProps {
@@ -34,6 +34,13 @@ export const DualAppsPreview: React.FC<DualAppsPreviewProps> = ({
       <div className="bg-white p-5 rounded-2xl border border-[#202124]/10 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
+            <button
+              onClick={onOpenAdmin}
+              className="px-2.5 py-1 text-xs font-bold bg-slate-100 hover:bg-slate-200 text-[#202124] rounded-lg flex items-center gap-1 transition-colors cursor-pointer mr-1"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Back to Admin</span>
+            </button>
             <span className="px-2 py-0.5 text-[11px] font-bold bg-[#FFC928]/30 text-[#A80F18] rounded-md">
               Mobile Apps Preview
             </span>
@@ -61,7 +68,7 @@ export const DualAppsPreview: React.FC<DualAppsPreviewProps> = ({
             <button
               onClick={() => setActiveTab('customer')}
               className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${
-                activeTab === 'customer' ? 'bg-[#16834A] text-white shadow-xs' : 'text-[#686868] hover:text-[#202124]'
+                activeTab === 'customer' ? 'bg-[#FFC928] text-[#202124] shadow-xs' : 'text-[#686868] hover:text-[#202124]'
               }`}
             >
               Customer App Only

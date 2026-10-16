@@ -614,7 +614,14 @@ export const LegalDocumentSchema = new Schema<ILegalDocument>(
     lastUpdatedDate: { type: String, default: '2026-10-13' },
     author: { type: String, default: 'Legal Dept.' },
     requiresExplicitConsent: { type: Boolean, default: true },
-    publishedHistory: { type: [Schema.Types.Mixed], default: [] },
+    publishedHistory: [
+      {
+        version: { type: String, required: true },
+        publishedAt: { type: String, required: true },
+        publishedBy: { type: String, required: true },
+        changeSummary: { type: String, required: true },
+      },
+    ],
   },
   { timestamps: true }
 );

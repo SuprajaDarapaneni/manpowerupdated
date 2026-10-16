@@ -76,8 +76,8 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
           {/* Left 2 Cols: Form matching PDF screen 4 */}
           <div className="lg:col-span-2 bg-white rounded-2xl border border-[#202124]/10 p-6 shadow-xs">
             {savedSuccess && (
-              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-[#16834A]">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
+              <div className="mb-4 p-3 bg-[#FFC928]/20 border border-[#FFC928]/40 rounded-lg flex items-center gap-2 text-xs text-[#A80F18]">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-[#D71920]" />
                 <span>Commission rules updated successfully and applied to all incoming orders.</span>
               </div>
             )}
@@ -202,28 +202,28 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
 
           {/* Right Col: Concept Explanation Card */}
           <div className="space-y-4">
-            <div className="bg-emerald-50/60 border border-emerald-200 rounded-2xl p-5">
-              <h3 className="text-xs font-bold text-emerald-950 uppercase tracking-wider mb-2">
+            <div className="bg-[#FFC928]/15 border border-[#FFC928]/40 rounded-2xl p-5">
+              <h3 className="text-xs font-bold text-[#A80F18] uppercase tracking-wider mb-2">
                 Commission Model
               </h3>
-              <p className="text-xs text-emerald-900 leading-relaxed">
+              <p className="text-xs text-[#202124] leading-relaxed">
                 Admin can set commission in two ways:
               </p>
-              <div className="mt-3 space-y-2 text-xs text-emerald-900">
-                <div className="p-2.5 bg-white/80 rounded-lg border border-emerald-200">
-                  <span className="font-bold">1. Percentage Based:</span>
-                  <p className="text-[11px] text-emerald-800 mt-0.5">
+              <div className="mt-3 space-y-2 text-xs text-[#202124]">
+                <div className="p-2.5 bg-white/80 rounded-lg border border-[#FFC928]/30">
+                  <span className="font-bold text-[#D71920]">1. Percentage Based:</span>
+                  <p className="text-[11px] text-[#686868] mt-0.5">
                     Example: 10% of total booking value. Great for larger full-day manpower jobs.
                   </p>
                 </div>
-                <div className="p-2.5 bg-white/80 rounded-lg border border-emerald-200">
-                  <span className="font-bold">2. Fixed Amount:</span>
-                  <p className="text-[11px] text-emerald-800 mt-0.5">
+                <div className="p-2.5 bg-white/80 rounded-lg border border-[#FFC928]/30">
+                  <span className="font-bold text-[#D71920]">2. Fixed Amount:</span>
+                  <p className="text-[11px] text-[#686868] mt-0.5">
                     Example: ₹50 per order. Predictable fee structure for short-duration tasks.
                   </p>
                 </div>
               </div>
-              <p className="text-[11px] text-emerald-800 mt-3 italic">
+              <p className="text-[11px] text-[#A80F18] mt-3 italic">
                 "More Work, More Opportunities, Better Community" — ManPowerLink
               </p>
             </div>
@@ -253,9 +253,9 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
                   <td className="py-3 px-4 capitalize">
                     <span className="flex items-center gap-1.5">
                       {b.paymentMethod === 'cash' ? (
-                        <Banknote className="w-4 h-4 text-emerald-600" />
+                        <Banknote className="w-4 h-4 text-[#D71920]" />
                       ) : (
-                        <CreditCard className="w-4 h-4 text-blue-600" />
+                        <CreditCard className="w-4 h-4 text-[#D71920]" />
                       )}
                       {b.paymentMethod}
                     </span>
@@ -270,10 +270,10 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
                         b.paymentStatus === 'successful'
-                          ? 'bg-emerald-50 text-[#16834A]'
+                          ? 'bg-[#FFC928] text-[#202124]'
                           : b.paymentStatus === 'initiated'
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'bg-amber-50 text-amber-700'
+                          ? 'bg-[#FFC928]/30 text-[#A80F18]'
+                          : 'bg-[#D71920]/10 text-[#D71920]'
                       }`}
                     >
                       {b.paymentStatus}
@@ -300,7 +300,7 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
                 <span className="text-[11px] text-[#686868]">2 workers · Completed · Full settlement reconciled</span>
               </div>
               <div className="text-right">
-                <span className="font-bold text-[#16834A] block tabular-nums">₹2,700 Disbursed</span>
+                <span className="font-bold text-[#D71920] block tabular-nums">₹2,700 Disbursed</span>
                 <span className="text-[10px] text-[#686868]">Platform Fee: ₹300</span>
               </div>
             </div>
@@ -311,7 +311,7 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
                 <span className="text-[11px] text-[#686868]">1 worker (Anil Poojary) · Cash collected on site</span>
               </div>
               <div className="text-right">
-                <span className="font-bold text-[#16834A] block tabular-nums">₹810 Net Pay</span>
+                <span className="font-bold text-[#D71920] block tabular-nums">₹810 Net Pay</span>
                 <span className="text-[10px] text-[#686868]">Platform Fee: ₹90 (Adjusted via wallet)</span>
               </div>
             </div>

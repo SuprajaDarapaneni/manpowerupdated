@@ -66,7 +66,7 @@ export const HandoverCenter: React.FC<HandoverCenterProps> = ({
             onClick={onEnableClientDeliveryMode}
             className={`px-4 py-2 text-xs font-bold rounded-xl shadow-xs transition-colors shrink-0 flex items-center gap-2 cursor-pointer ${
               isClientDeliveryMode
-                ? 'bg-[#16834A] text-white hover:bg-[#126639]'
+                ? 'bg-[#FFC928] text-[#202124] hover:bg-[#E5A900]'
                 : 'bg-[#D71920] text-white hover:bg-[#A80F18]'
             }`}
           >
@@ -81,11 +81,11 @@ export const HandoverCenter: React.FC<HandoverCenterProps> = ({
       </div>
 
       {downloadSuccess && (
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3 text-xs text-[#16834A]">
-          <CheckCircle2 className="w-5 h-5 shrink-0" />
+        <div className="p-4 bg-[#FFC928]/15 border border-[#FFC928]/40 rounded-xl flex items-center gap-3 text-xs text-[#A80F18]">
+          <CheckCircle2 className="w-5 h-5 shrink-0 text-[#D71920]" />
           <div>
             <p className="font-bold">Package Generated Successfully!</p>
-            <p className="text-[11px] text-emerald-800">
+            <p className="text-[11px] text-[#202124]">
               Downloaded <span className="font-mono">{downloadSuccess}</span> with full directory hierarchy and dependency manifests.
             </p>
           </div>
@@ -107,20 +107,20 @@ export const HandoverCenter: React.FC<HandoverCenterProps> = ({
             <p className="text-[11px] text-[#686868]">
               Located in <code className="font-mono text-[#D71920]">/admin/</code> with <code className="font-mono">frontend/</code> (React) and <code className="font-mono">backend/</code> (Node + Express + MongoDB).
             </p>
-            <span className="inline-block text-[10px] font-semibold text-[#16834A] bg-emerald-50 px-2 py-0.5 rounded">
+            <span className="inline-block text-[10px] font-semibold text-[#D71920] bg-[#D71920]/10 px-2 py-0.5 rounded">
               Central REST API v1
             </span>
           </div>
 
           <div className="p-4 rounded-xl bg-[#FFFDF8] border border-[#202124]/10 space-y-2">
             <div className="flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-[#16834A]" />
+              <Smartphone className="w-4 h-4 text-[#FFC928]" />
               <h3 className="text-xs font-bold text-[#202124]">2. Customer Mobile App</h3>
             </div>
             <p className="text-[11px] text-[#686868]">
               Located in <code className="font-mono text-[#D71920]">/customer-app/</code>. Standalone Flutter + Dart project with Riverpod, Dio & Google Maps.
             </p>
-            <span className="inline-block text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+            <span className="inline-block text-[10px] font-semibold text-[#A80F18] bg-[#FFC928]/20 px-2 py-0.5 rounded">
               Independent Android / iOS App
             </span>
           </div>

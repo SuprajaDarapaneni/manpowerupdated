@@ -211,13 +211,13 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
         <div
           className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
             statusMessage.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              ? 'bg-[#FFC928]/20 border-[#FFC928]/40 text-[#A80F18]'
               : statusMessage.type === 'error'
-              ? 'bg-red-50 border-red-200 text-red-800'
-              : 'bg-blue-50 border-blue-200 text-blue-800'
+              ? 'bg-red-50 border-red-200 text-[#D71920]'
+              : 'bg-[#FFC928]/15 border-[#FFC928]/30 text-[#202124]'
           }`}
         >
-          {statusMessage.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <Info className="w-4 h-4 shrink-0" />}
+          {statusMessage.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0 text-[#D71920]" /> : <Info className="w-4 h-4 shrink-0 text-[#D71920]" />}
           <span>{statusMessage.text}</span>
         </div>
       )}
@@ -319,7 +319,7 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                         <div className="h-4 w-20 bg-white/20 rounded-full mx-auto" />
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold" style={{ color: branding.secondaryColor }}>{branding.appName} WORKER</span>
-                          <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full">Radar Active</span>
+                          <span className="text-[10px] bg-[#FFC928]/20 text-[#FFC928] border border-[#FFC928]/40 px-2 py-0.5 rounded-full font-bold">Radar Active</span>
                         </div>
                         <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-xs">
                           <span className="text-white/60">Shift Offer:</span> ₹2,200 (Full Day)
@@ -646,8 +646,8 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                             <span
                               className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
                                 doc.status === 'published'
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-amber-100 text-amber-800'
+                                  ? 'bg-[#FFC928] text-[#202124]'
+                                  : 'bg-[#D71920]/10 text-[#D71920]'
                               }`}
                             >
                               {doc.status.toUpperCase()}
@@ -894,7 +894,7 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                         className="w-5 h-5 accent-[#D71920] cursor-pointer"
                       />
                     </div>
-                    <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full inline-block">
+                    <span className="text-[10px] text-[#A80F18] bg-[#FFC928]/30 px-2 py-0.5 rounded-full font-bold inline-block">
                       Independently Configurable
                     </span>
                   </div>
@@ -913,7 +913,7 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                         className="w-5 h-5 accent-[#D71920] cursor-pointer"
                       />
                     </div>
-                    <span className="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full inline-block">
+                    <span className="text-[10px] text-[#A80F18] bg-[#FFC928]/30 px-2 py-0.5 rounded-full font-bold inline-block">
                       Independently Configurable
                     </span>
                   </div>
@@ -1100,7 +1100,7 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                         <span className="font-bold text-[#202124]">{ann.title}</span>
                         <p className="text-[#686868]">{ann.message}</p>
                       </div>
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-md font-bold text-[10px] uppercase">{ann.audience}</span>
+                      <span className="px-2 py-0.5 bg-[#FFC928]/30 text-[#A80F18] rounded-md font-bold text-[10px] uppercase">{ann.audience}</span>
                     </div>
                   ))}
                 </div>
@@ -1114,7 +1114,7 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                 <div className="p-4 bg-white rounded-xl border border-[#202124]/10 space-y-3 text-xs">
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-[#686868]">Role-Based Access Control (RBAC):</span>
-                    <span className="font-bold text-emerald-700">Super Admin, Admin, Operations, Finance</span>
+                    <span className="font-bold text-[#D71920]">Super Admin, Admin, Operations, Finance</span>
                   </div>
                   <div className="flex justify-between py-1 border-b border-slate-100">
                     <span className="text-[#686868]">Administrative Session TTL:</span>

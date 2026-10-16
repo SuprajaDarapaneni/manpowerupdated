@@ -11,10 +11,6 @@ import {
   BarChart3,
   ShieldCheck,
   Settings,
-  Smartphone,
-  HardHat,
-  Columns,
-  Archive,
   ShieldAlert,
   UserCog,
 } from 'lucide-react';
@@ -44,11 +40,7 @@ export type AdminTab =
   | 'settings-location'
   | 'settings-maintenance'
   | 'settings-security'
-  | 'settings-audit'
-  | 'preview-customer'
-  | 'preview-employee'
-  | 'preview-dual'
-  | 'preview-handover';
+  | 'settings-audit';
 
 interface AdminSidebarProps {
   activeTab: AdminTab;
@@ -56,7 +48,7 @@ interface AdminSidebarProps {
   pendingWorkersCount: number;
   openDisputesCount: number;
   openSafetyCount: number;
-  isClientDeliveryMode: boolean;
+  isClientDeliveryMode?: boolean;
 }
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({
@@ -65,7 +57,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   pendingWorkersCount,
   openDisputesCount,
   openSafetyCount,
-  isClientDeliveryMode,
 }) => {
   const opsNavItems = [
     { id: 'dashboard' as AdminTab, label: 'Dashboard', icon: LayoutDashboard },
@@ -98,33 +89,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { id: 'settings' as AdminTab, label: 'Platform Settings', icon: Settings },
   ];
 
-  const appPreviewItems = [
-    {
-      id: 'preview-customer' as AdminTab,
-      label: 'Customer App (Flutter)',
-      icon: Smartphone,
-      tag: 'Employer',
-    },
-    {
-      id: 'preview-employee' as AdminTab,
-      label: 'Employee App (Flutter)',
-      icon: HardHat,
-      tag: 'Worker',
-    },
-    {
-      id: 'preview-dual' as AdminTab,
-      label: 'Dual Live Apps Simulation',
-      icon: Columns,
-      tag: 'Side-by-Side',
-    },
-    {
-      id: 'preview-handover' as AdminTab,
-      label: 'Download Source ZIPs',
-      icon: Archive,
-      tag: 'Handover',
-    },
-  ];
-
   return (
     <aside className="w-64 bg-[#1E1F23] text-white flex flex-col shrink-0 min-h-screen border-r border-white/5 select-none">
       {/* Brand Header */}
@@ -138,50 +102,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             <span className="w-2 h-2 rounded-full bg-[#FFC928]" title="Admin Active" />
           </div>
           <p className="text-[10px] text-white/50 tracking-wider uppercase font-mono">
-            {isClientDeliveryMode ? 'Admin Production Portal' : 'Central Platform & Apps'}
+            Admin Production Portal
           </p>
         </div>
       </div>
 
       {/* Navigation list */}
       <nav className="p-3 space-y-4 flex-1 overflow-y-auto">
-        {/* Mobile Apps Preview Section (shown when not locked for client delivery) */}
-        {!isClientDeliveryMode && (
-          <div className="space-y-1">
-            <div className="px-3 py-1.5 text-[11px] font-bold tracking-wider text-[#FFC928] uppercase flex items-center justify-between">
-              <span>Mobile Apps Preview</span>
-              <span className="text-[9px] bg-[#FFC928]/20 px-1.5 py-0.5 rounded text-[#FFC928]">LIVE</span>
-            </div>
-            {appPreviewItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onSelectTab(item.id)}
-                  className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                    isActive
-                      ? 'bg-[#FFC928] text-[#202124] shadow-md font-bold'
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    <Icon className={`w-4 h-4 ${isActive ? 'text-[#202124]' : 'text-[#FFC928]'}`} />
-                    <span>{item.label}</span>
-                  </div>
-                  <span
-                    className={`text-[9px] px-1.5 py-0.5 rounded ${
-                      isActive ? 'bg-[#202124]/10 text-[#202124]' : 'bg-white/10 text-white/70'
-                    }`}
-                  >
-                    {item.tag}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
         {/* Workforce Operations Section */}
         <div className="space-y-1">
           <div className="px-3 py-1.5 text-[11px] font-semibold tracking-wider text-white/40 uppercase">
@@ -219,8 +146,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       <div className="p-4 border-t border-white/10 text-xs text-white/50 bg-black/20">
         <div className="flex items-center justify-between mb-1">
           <span className="text-[11px] font-medium text-white/70">ManPowerLink Enterprise</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#16834A]/20 text-[#16834A] font-mono font-bold">
-            {isClientDeliveryMode ? 'ONLINE' : 'DEV HUB'}
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#FFC928] text-[#202124] font-mono font-bold">
+            ONLINE
           </span>
         </div>
         <p className="text-[10px] leading-relaxed text-white/40">

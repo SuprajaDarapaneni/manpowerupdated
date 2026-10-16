@@ -75,7 +75,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <h1 className="text-xl font-bold text-[#202124]">
               Workforce Command & Analytics
             </h1>
-            <span className="px-2 py-0.5 text-[10px] font-bold bg-[#16834A]/10 text-[#16834A] rounded">
+            <span className="px-2 py-0.5 text-[10px] font-bold bg-[#FFC928] text-[#202124] rounded">
               LIVE MONGODB DATA
             </span>
           </div>
@@ -118,13 +118,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="bg-white p-5 rounded-xl border border-[#202124]/10 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-[#686868]">Total Employers</span>
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+            <div className="p-2 bg-[#FFC928]/20 text-[#D71920] rounded-lg">
               <Users className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-[#202124] tabular-nums">{totalCustomers}</span>
-            <span className="text-[11px] font-medium text-[#16834A] flex items-center">
+            <span className="text-[11px] font-medium text-[#D71920] flex items-center">
               <ArrowUpRight className="w-3 h-3" /> +18%
             </span>
           </div>
@@ -135,13 +135,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="bg-white p-5 rounded-xl border border-[#202124]/10 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-[#686868]">Total Employees</span>
-            <div className="p-2 bg-amber-50 text-amber-600 rounded-lg">
+            <div className="p-2 bg-[#FFC928]/30 text-[#D71920] rounded-lg">
               <Briefcase className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-[#202124] tabular-nums">{totalEmployees}</span>
-            <span className="text-[11px] font-semibold text-[#16834A] bg-emerald-50 px-1.5 py-0.5 rounded">
+            <span className="text-[11px] font-semibold text-[#A80F18] bg-[#FFC928]/30 px-1.5 py-0.5 rounded">
               {activeEmployees} active on duty
             </span>
           </div>
@@ -152,7 +152,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <div className="bg-white p-5 rounded-xl border border-[#202124]/10 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-[#686868]">Gross Booking Value</span>
-            <div className="p-2 bg-emerald-50 text-[#16834A] rounded-lg">
+            <div className="p-2 bg-[#D71920]/10 text-[#D71920] rounded-lg">
               <DollarSign className="w-4 h-4" />
             </div>
           </div>
@@ -160,7 +160,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="text-2xl font-bold text-[#202124] tabular-nums">
               ₹{totalBookingValue.toLocaleString()}
             </span>
-            <span className="text-[11px] font-medium text-[#16834A]">+24%</span>
+            <span className="text-[11px] font-medium text-[#D71920]">+24%</span>
           </div>
           <p className="text-[11px] text-[#686868] mt-1">Payroll committed across shifts</p>
         </div>
@@ -168,8 +168,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {/* Platform Commission */}
         <div className="bg-white p-5 rounded-xl border border-[#202124]/10 shadow-xs">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[#686868]">Platform Commission</span>
-            <div className="p-2 bg-red-50 text-[#D71920] rounded-lg">
+            <span className="text-xs font-medium text-[#686868]">Platform Fee</span>
+            <div className="p-2 bg-[#FFC928] text-[#202124] rounded-lg">
               <TrendingUp className="w-4 h-4" />
             </div>
           </div>
@@ -177,7 +177,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <span className="text-2xl font-bold text-[#D71920] tabular-nums">
               ₹{platformCommission.toLocaleString()}
             </span>
-            <span className="text-[11px] font-medium text-[#16834A]">10% avg margin</span>
+            <span className="text-[11px] font-medium text-[#A80F18]">10% avg margin</span>
           </div>
           <p className="text-[11px] text-[#686868] mt-1">Retained revenue in ledger</p>
         </div>
@@ -187,7 +187,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         <div className="bg-white p-3.5 rounded-xl border border-[#202124]/10 text-xs">
           <span className="text-[#686868] block">Jobs Searching</span>
-          <span className="text-lg font-bold text-amber-600 tabular-nums">
+          <span className="text-lg font-bold text-[#D71920] tabular-nums">
             {jobsAwaitingWorkers.length}
           </span>
           <span className="text-[10px] text-[#686868] block mt-0.5">Broadcasting</span>
@@ -195,7 +195,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <div className="bg-white p-3.5 rounded-xl border border-[#202124]/10 text-xs">
           <span className="text-[#686868] block">Confirmed Orders</span>
-          <span className="text-lg font-bold text-blue-600 tabular-nums">
+          <span className="text-lg font-bold text-[#202124] tabular-nums">
             {confirmedBookings.length}
           </span>
           <span className="text-[10px] text-[#686868] block mt-0.5">Staffed 100%</span>
@@ -203,7 +203,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <div className="bg-white p-3.5 rounded-xl border border-[#202124]/10 text-xs">
           <span className="text-[#686868] block">Ongoing Shifts</span>
-          <span className="text-lg font-bold text-purple-600 tabular-nums">
+          <span className="text-lg font-bold text-[#D71920] tabular-nums">
             {ongoingJobs.length}
           </span>
           <span className="text-[10px] text-[#686868] block mt-0.5">Clocked in</span>
@@ -211,7 +211,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <div className="bg-white p-3.5 rounded-xl border border-[#202124]/10 text-xs">
           <span className="text-[#686868] block">Completed Shifts</span>
-          <span className="text-lg font-bold text-[#16834A] tabular-nums">
+          <span className="text-lg font-bold text-[#A80F18] tabular-nums">
             {completedBookings.length}
           </span>
           <span className="text-[10px] text-[#686868] block mt-0.5">OTP verified</span>
@@ -227,7 +227,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
         <div className="bg-white p-3.5 rounded-xl border border-[#202124]/10 text-xs">
           <span className="text-[#686868] block">Cancelled</span>
-          <span className="text-lg font-bold text-[#C62828] tabular-nums">
+          <span className="text-lg font-bold text-[#D71920] tabular-nums">
             {cancelledBookings.length}
           </span>
           <span className="text-[10px] text-[#686868] block mt-0.5">0 no-shows</span>
@@ -281,12 +281,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </td>
                     <td className="py-3">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold ${
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
                           booking.status === 'CONFIRMED'
-                            ? 'bg-blue-50 text-blue-700'
+                            ? 'bg-[#FFC928] text-[#202124]'
                             : booking.status === 'ORDER_COMPLETED'
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-amber-50 text-amber-700'
+                            ? 'bg-[#FFC928]/30 text-[#A80F18]'
+                            : 'bg-[#D71920]/10 text-[#D71920]'
                         }`}
                       >
                         {booking.status.replace(/_/g, ' ')}

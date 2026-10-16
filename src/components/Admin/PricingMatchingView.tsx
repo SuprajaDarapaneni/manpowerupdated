@@ -33,8 +33,8 @@ export const PricingMatchingView: React.FC<PricingMatchingViewProps> = ({
 
       <div className="bg-white rounded-2xl border border-[#202124]/10 p-6 shadow-xs max-w-3xl">
         {saved && (
-          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center gap-2 text-xs text-[#16834A]">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
+          <div className="mb-4 p-3 bg-[#FFC928]/20 border border-[#FFC928]/40 rounded-lg flex items-center gap-2 text-xs text-[#A80F18]">
+            <CheckCircle2 className="w-4 h-4 shrink-0 text-[#D71920]" />
             <span>Rules saved and active across worker dispatch algorithms.</span>
           </div>
         )}

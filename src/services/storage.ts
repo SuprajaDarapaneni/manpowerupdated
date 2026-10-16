@@ -15,6 +15,11 @@ import {
   LegalDocument,
   MobileAppRemoteConfig,
   SettingsAuditRecord,
+  UpiPayoutRequest,
+  PaymentControlSettings,
+  PaymentMethodSetting,
+  AppNotification,
+  GpsLocationStamp,
 } from '../types';
 import {
   initialCategories,
@@ -41,9 +46,83 @@ const STORAGE_KEYS = {
   AUDIT: 'manpowerlink_audit_v1',
   VIEW_MODE: 'manpowerlink_view_mode_v2',
   ADMIN_AUTH: 'manpowerlink_admin_auth_v1',
+  UPI_PAYOUT_REQUESTS: 'manpowerlink_upi_payout_requests_v1',
 };
 
+// Official Kotak / PhonePe UPI Account for Platform Recharges & Payments
+export const PLATFORM_UPI_ID = 'prnm@kotak';
+export const PLATFORM_UPI_NAME = 'PRAVEEN';
+
+// Standard UPI Deep Link builder for opening PhonePe, GPay, Paytm, Kotak, BHIM
+export const getUpiIntentUrl = (
+  amount?: number,
+  note = 'ManPowerLink Recharge',
+  payeeUpi = PLATFORM_UPI_ID,
+  payeeName = PLATFORM_UPI_NAME
+) => {
+  const amtStr = amount && amount > 0 ? `&am=${amount.toFixed(2)}` : '';
+  return `upi://pay?pa=${encodeURIComponent(payeeUpi)}&pn=${encodeURIComponent(payeeName)}${amtStr}&cu=INR&tn=${encodeURIComponent(note)}`;
+};
+
+export const initialPayoutRequests: UpiPayoutRequest[] = [
+  {
+    id: 'payreq-1',
+    requesterId: 'w-1',
+    requesterName: 'Ramesh Kumar',
+    requesterRole: 'employee',
+    requesterPhone: '+91 98765 43210',
+    beneficiaryUpiId: 'ramesh.kumar@okhdfcbank',
+    amount: 1800,
+    status: 'pending',
+    requestedAt: '15 Oct 2026, 06:15 PM',
+    adminNote: 'Waiting for admin to accept and credit to UPI',
+  },
+  {
+    id: 'payreq-2',
+    requesterId: 'w-2',
+    requesterName: 'Suresh Gowda',
+    requesterRole: 'employee',
+    requesterPhone: '+91 98765 43211',
+    beneficiaryUpiId: 'suresh.gowda@paytm',
+    amount: 2400,
+    status: 'accepted',
+    requestedAt: '14 Oct 2026, 02:30 PM',
+    acceptedAt: '14 Oct 2026, 03:00 PM',
+    utrNumber: '428919028371',
+    adminNote: 'Approved & credited to suresh.gowda@paytm via Kotak UPI',
+  },
+];
+
 export type ViewMode = 'admin-only' | 'interactive-hub';
+
+// Web Audio API Ringtone / Chime Synthesizer
+export const playNotificationSound = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const now = ctx.currentTime;
+    
+    // Play a friendly two-tone mobile ring chime
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, now); // D5
+    osc.frequency.setValueAtTime(880, now + 0.12); // A5
+    osc.frequency.setValueAtTime(1174.66, now + 0.24); // D6
+    
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.6);
+  } catch {
+    // Audio contexts might be blocked until user interacts
+  }
+};
 
 class DataService {
   private listeners: (() => void)[] = [];
@@ -77,19 +156,17 @@ class DataService {
     this.listeners.forEach((l) => l());
   }
 
-  // View Mode: Defaults to 'interactive-hub' so mobile apps preview can be checked immediately.
-  // Can be switched to 'admin-only' at any time to verify client delivery mode.
+  // View Mode: Defaults strictly to 'admin-only' for production client delivery.
+  // The developer preview hub with top switcher is ONLY enabled if explicitly passing ?dev=true or ?hub=true.
   public getViewMode(): ViewMode {
     if (typeof window !== 'undefined') {
       const search = window.location.search;
-      if (search.includes('admin=true')) {
-        return 'admin-only';
-      }
-      if (search.includes('preview=true') || search.includes('preview=hub')) {
+      if (search.includes('dev=true') || search.includes('hub=true')) {
         return 'interactive-hub';
       }
+      return 'admin-only';
     }
-    return this.getItem<ViewMode>(STORAGE_KEYS.VIEW_MODE, 'interactive-hub');
+    return 'admin-only';
   }
 
   public setViewMode(mode: ViewMode): void {
@@ -134,6 +211,12 @@ class DataService {
     return newCat;
   }
 
+  public deleteCategory(categoryId: string): void {
+    const list = this.getCategories().filter((c) => c.id !== categoryId);
+    this.setCategories(list);
+    this.logAudit('Service Category Removed', `Deleted category ID: ${categoryId}`);
+  }
+
   // Workers
   public getWorkers(): Worker[] {
     return this.getItem(STORAGE_KEYS.WORKERS, initialWorkers);
@@ -156,6 +239,34 @@ class DataService {
     this.logAudit(`Worker Status Changed: ${status}`, `Worker: ${worker.name} (${worker.phone})`);
   }
 
+  public addWorker(worker: Omit<Worker, 'id'>): Worker {
+    const newWorker: Worker = {
+      ...worker,
+      id: `w-${Date.now()}`,
+      avatar: worker.avatar || `https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80`,
+      email: worker.email || `${worker.name.toLowerCase().replace(/\s+/g, '')}@example.com`,
+      rating: worker.rating || 5.0,
+      reviewCount: worker.reviewCount || 1,
+      categoryIds: worker.categoryIds || ['cat-1'],
+      completedJobsCount: worker.completedJobsCount || 0,
+      totalEarnings: worker.totalEarnings || 0,
+      walletBalance: worker.walletBalance || 500,
+      approvalStatus: worker.approvalStatus || 'approved',
+      isAvailable: worker.isAvailable ?? true,
+      walletTransactions: worker.walletTransactions || [],
+    };
+    const list = [newWorker, ...this.getWorkers()];
+    this.setWorkers(list);
+    this.logAudit('Worker Registered', `Added worker: ${newWorker.name} (${newWorker.phone})`);
+    return newWorker;
+  }
+
+  public deleteWorker(workerId: string): void {
+    const list = this.getWorkers().filter((w) => w.id !== workerId);
+    this.setWorkers(list);
+    this.logAudit('Worker Removed', `Deleted worker ID: ${workerId}`);
+  }
+
   // Customers
   public getCustomers(): Customer[] {
     return this.getItem(STORAGE_KEYS.CUSTOMERS, initialCustomers);
@@ -163,6 +274,240 @@ class DataService {
 
   public setCustomers(customers: Customer[]): void {
     this.setItem(STORAGE_KEYS.CUSTOMERS, customers);
+  }
+
+  public getCustomer(id: string): Customer | undefined {
+    return this.getCustomers().find((c) => c.id === id);
+  }
+
+  public updateCustomer(customer: Customer): void {
+    const list = this.getCustomers().map((c) => (c.id === customer.id ? customer : c));
+    this.setCustomers(list);
+  }
+
+  public addCustomer(customer: Omit<Customer, 'id'>): Customer {
+    const newCustomer: Customer = {
+      ...customer,
+      id: `c-${Date.now()}`,
+      avatar: customer.avatar || `https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80`,
+      totalBookings: customer.totalBookings || 0,
+      walletBalance: customer.walletBalance || 0,
+      status: customer.status || 'active',
+      walletTransactions: customer.walletTransactions || [],
+    };
+    const list = [newCustomer, ...this.getCustomers()];
+    this.setCustomers(list);
+    this.logAudit('Employer Registered', `Added employer: ${newCustomer.name} (${newCustomer.phone})`);
+    return newCustomer;
+  }
+
+  public deleteCustomer(customerId: string): void {
+    const list = this.getCustomers().filter((c) => c.id !== customerId);
+    this.setCustomers(list);
+    this.logAudit('Employer Removed', `Deleted customer ID: ${customerId}`);
+  }
+
+  // Customer Wallet Recharge via Direct PhonePe / UPI QR without 3rd party APIs
+  public rechargeCustomerWallet(
+    customerId: string,
+    amount: number,
+    utrRef: string = `UPI/${Date.now().toString().slice(-8)}`
+  ): { success: boolean; newBalance: number } {
+    const customers = this.getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return { success: false, newBalance: 0 };
+
+    const currentBal = customer.walletBalance || 0;
+    const newBal = currentBal + amount;
+    const newTx = {
+      id: `ctx-${Date.now()}`,
+      type: 'credit' as const,
+      amount,
+      description: `Wallet Top-up via PhonePe / UPI QR`,
+      timestamp: new Date().toLocaleString(),
+      utrRef,
+    };
+
+    const updatedCustomer: Customer = {
+      ...customer,
+      walletBalance: newBal,
+      walletTransactions: [newTx, ...(customer.walletTransactions || [])],
+    };
+
+    this.updateCustomer(updatedCustomer);
+    this.logAudit('Customer Wallet Recharged', `${customer.name} credited ₹${amount} via PhonePe/UPI QR. UTR: ${utrRef}. New balance: ₹${newBal}`);
+    playNotificationSound();
+    return { success: true, newBalance: newBal };
+  }
+
+  // Debit Customer Wallet
+  public debitCustomerWallet(
+    customerId: string,
+    amount: number,
+    purpose: string = 'Order Advance / Booking Debit'
+  ): { success: boolean; newBalance: number; error?: string } {
+    const customers = this.getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return { success: false, newBalance: 0, error: 'Customer not found' };
+
+    const currentBal = customer.walletBalance || 0;
+    if (currentBal < amount) {
+      return {
+        success: false,
+        newBalance: currentBal,
+        error: `Insufficient wallet balance (Available: ₹${currentBal.toLocaleString()}, Required: ₹${amount.toLocaleString()}). Please top up via PhonePe/UPI QR.`,
+      };
+    }
+
+    const newBal = currentBal - amount;
+    const newTx = {
+      id: `ctx-${Date.now()}`,
+      type: 'debit' as const,
+      amount,
+      description: purpose,
+      timestamp: new Date().toLocaleString(),
+    };
+
+    const updatedCustomer: Customer = {
+      ...customer,
+      walletBalance: newBal,
+      walletTransactions: [newTx, ...(customer.walletTransactions || [])],
+    };
+
+    this.updateCustomer(updatedCustomer);
+    this.logAudit('Customer Wallet Debited', `${customer.name} debited ₹${amount} for: ${purpose}. Remaining balance: ₹${newBal}`);
+    playNotificationSound();
+    return { success: true, newBalance: newBal };
+  }
+
+  // ==========================================
+  // UPI Payout & Credit Requests (Ask & Accept)
+  // ==========================================
+  public getPayoutRequests(): UpiPayoutRequest[] {
+    return this.getItem(STORAGE_KEYS.UPI_PAYOUT_REQUESTS, initialPayoutRequests);
+  }
+
+  public setPayoutRequests(requests: UpiPayoutRequest[]): void {
+    this.setItem(STORAGE_KEYS.UPI_PAYOUT_REQUESTS, requests);
+  }
+
+  public createPayoutRequest(
+    data: Omit<UpiPayoutRequest, 'id' | 'status' | 'requestedAt'>
+  ): UpiPayoutRequest {
+    const list = this.getPayoutRequests();
+    const newRequest: UpiPayoutRequest = {
+      ...data,
+      id: `payreq-${Date.now()}`,
+      status: 'pending',
+      requestedAt: new Date().toLocaleString(),
+    };
+    this.setPayoutRequests([newRequest, ...list]);
+    this.logAudit(
+      'UPI Payout Requested',
+      `${data.requesterName} (${data.requesterRole}) asked for ₹${data.amount} credit to UPI: ${data.beneficiaryUpiId}`
+    );
+    playNotificationSound();
+    return newRequest;
+  }
+
+  public acceptPayoutRequest(
+    requestId: string,
+    utrNumber?: string,
+    adminNote?: string
+  ): { success: boolean; error?: string } {
+    const list = this.getPayoutRequests();
+    const req = list.find((r) => r.id === requestId);
+    if (!req) return { success: false, error: 'Request not found' };
+    if (req.status === 'accepted') return { success: false, error: 'Already accepted' };
+
+    const utr = utrNumber?.trim() || `KOTAK/UPI/${Date.now().toString().slice(-8)}`;
+
+    // Debit requester's balance and record ledger entry
+    if (req.requesterRole === 'employee') {
+      const workers = this.getWorkers();
+      const worker = workers.find((w) => w.id === req.requesterId);
+      if (worker) {
+        const cur = worker.walletBalance || 0;
+        const newBal = Math.max(0, cur - req.amount);
+        const newTx = {
+          id: `wtx-${Date.now()}`,
+          type: 'fee_deduction' as const,
+          amount: req.amount,
+          description: `Payout credited to UPI: ${req.beneficiaryUpiId} (UTR: ${utr})`,
+          timestamp: new Date().toLocaleString(),
+        };
+        const updatedWorker = {
+          ...worker,
+          walletBalance: newBal,
+          walletTransactions: [newTx, ...(worker.walletTransactions || [])],
+        };
+        this.updateWorker(updatedWorker);
+      }
+    } else {
+      const customers = this.getCustomers();
+      const customer = customers.find((c) => c.id === req.requesterId);
+      if (customer) {
+        const cur = customer.walletBalance || 0;
+        const newBal = Math.max(0, cur - req.amount);
+        const newTx = {
+          id: `ctx-${Date.now()}`,
+          type: 'debit' as const,
+          amount: req.amount,
+          description: `Payout credited to UPI: ${req.beneficiaryUpiId} (UTR: ${utr})`,
+          timestamp: new Date().toLocaleString(),
+          utrRef: utr,
+        };
+        const updatedCustomer = {
+          ...customer,
+          walletBalance: newBal,
+          walletTransactions: [newTx, ...(customer.walletTransactions || [])],
+        };
+        this.updateCustomer(updatedCustomer);
+      }
+    }
+
+    const updatedList = list.map((r) =>
+      r.id === requestId
+        ? {
+            ...r,
+            status: 'accepted' as const,
+            acceptedAt: new Date().toLocaleString(),
+            utrNumber: utr,
+            adminNote: adminNote || `Approved & credited to ${r.beneficiaryUpiId} via Kotak UPI`,
+          }
+        : r
+    );
+
+    this.setPayoutRequests(updatedList);
+    this.logAudit(
+      'UPI Payout Accepted & Credited',
+      `Transferred ₹${req.amount} to UPI: ${req.beneficiaryUpiId} for ${req.requesterName} (${req.requesterRole}). UTR: ${utr}`
+    );
+    playNotificationSound();
+    return { success: true };
+  }
+
+  public rejectPayoutRequest(requestId: string, reason?: string): { success: boolean; error?: string } {
+    const list = this.getPayoutRequests();
+    const req = list.find((r) => r.id === requestId);
+    if (!req) return { success: false, error: 'Request not found' };
+
+    const updatedList = list.map((r) =>
+      r.id === requestId
+        ? {
+            ...r,
+            status: 'rejected' as const,
+            adminNote: reason || 'Declined by administrator',
+          }
+        : r
+    );
+
+    this.setPayoutRequests(updatedList);
+    this.logAudit(
+      'UPI Payout Rejected',
+      `Declined payout request for ₹${req.amount} to ${req.beneficiaryUpiId} (${req.requesterName}). Reason: ${reason || 'N/A'}`
+    );
+    return { success: true };
   }
 
   // Bookings
@@ -177,6 +522,20 @@ class DataService {
   public updateBooking(booking: Booking): void {
     const list = this.getBookings().map((b) => (b.id === booking.id ? booking : b));
     this.setBookings(list);
+  }
+
+  public updateBookingStatus(bookingId: string, status: Booking['status']): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return;
+    const updated = { ...booking, status, updatedAt: new Date().toLocaleString() };
+    this.updateBooking(updated);
+    this.logAudit(`Order Status Updated: ${status}`, `${booking.orderNumber} set to ${status}`);
+  }
+
+  public deleteBooking(bookingId: string): void {
+    const list = this.getBookings().filter((b) => b.id !== bookingId);
+    this.setBookings(list);
+    this.logAudit('Order Cancelled / Deleted', `Deleted booking ID: ${bookingId}`);
   }
 
   public createBooking(bookingData: Partial<Booking>): Booking {
@@ -218,20 +577,98 @@ class DataService {
       startTime: bookingData.startTime || '09:00 AM',
       endTime: bookingData.endTime || '05:00 PM',
       durationType: bookingData.durationType || 'full_day',
+      jobTitle: bookingData.jobTitle || 'Loading and moving boxes',
+      paymentMode: bookingData.paymentMode || 'cash',
       description: bookingData.description || 'Temporary manpower required.',
-      specialInstructions: bookingData.specialInstructions || '',
+      specialInstructions: bookingData.specialInstructions || bookingData.remarks || 'Requires gloves and safety boots. Heavy boxes.',
+      remarks: bookingData.remarks || bookingData.specialInstructions || '',
+      pricingModel: bookingData.pricingModel || 'hourly',
+      pricePerHourPerHead: bookingData.pricePerHourPerHead,
+      shiftHours: bookingData.shiftHours,
+      packageApproxHours: bookingData.packageApproxHours,
+      packageTitle: bookingData.packageTitle,
+      upiTransactionRef: bookingData.upiTransactionRef,
+      walletDebited: bookingData.walletDebited || false,
       foodDetails: bookingData.foodDetails,
       status: 'SEARCHING_EMPLOYEES',
-      paymentStatus: 'pending',
-      paymentMethod: bookingData.paymentMethod || 'online',
+      paymentStatus: bookingData.walletDebited || bookingData.upiTransactionRef ? 'successful' : 'pending',
+      paymentMethod: (bookingData.paymentMethod as any) || (bookingData.paymentMode === 'wallet' ? 'wallet' : 'cash'),
       startOtp,
       endOtp,
       createdAt: new Date().toLocaleString(),
       updatedAt: new Date().toLocaleString(),
+      timelineTree: [
+        {
+          id: `node-${Date.now()}-1`,
+          stageKey: 'JOB_POSTED',
+          title: 'Job Order Published',
+          description: `Customer posted requirement for ${bookingData.requiredWorkers || 2} workers at ₹${bookingData.offeredPricePerWorker || 2000}/day. Broadcast to eligible workers.`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          location: {
+            address: bookingData.workLocation?.address || 'Mangalore Port Warehouse',
+            lat: bookingData.workLocation?.lat || 12.914,
+            lng: bookingData.workLocation?.lng || 74.856,
+          },
+          actor: bookingData.customerName || 'Customer',
+          completed: true,
+          current: true,
+        },
+        {
+          id: `node-${Date.now()}-2`,
+          stageKey: 'WORKERS_MATCHED',
+          title: 'Worker Acceptance / Bid',
+          description: 'Awaiting worker job acceptance or counter-bids.',
+          timestamp: 'In progress',
+          location: { address: 'Mangalore Radius', lat: 12.914, lng: 74.856 },
+          actor: 'Worker Matching Engine',
+          completed: false,
+        },
+        {
+          id: `node-${Date.now()}-3`,
+          stageKey: 'START_OTP_VERIFIED',
+          title: 'Arrival & Start OTP Check-in',
+          description: `Worker provides Start OTP (${startOtp}) upon arrival at worksite to verify attendance.`,
+          timestamp: 'Pending Check-in',
+          location: { address: bookingData.workLocation?.address || 'Worksite', lat: 12.914, lng: 74.856 },
+          actor: 'Customer & Worker',
+          completed: false,
+        },
+        {
+          id: `node-${Date.now()}-4`,
+          stageKey: 'WORK_COMPLETED_OTP',
+          title: 'Work Completed & End OTP Verification',
+          description: `Shift completion verified via End OTP (${endOtp}). Direct cash wage collected.`,
+          timestamp: 'Pending Completion',
+          location: { address: bookingData.workLocation?.address || 'Worksite', lat: 12.914, lng: 74.856 },
+          actor: 'Customer & Worker',
+          completed: false,
+        },
+        {
+          id: `node-${Date.now()}-5`,
+          stageKey: 'CASH_PAYMENT',
+          title: 'Direct Cash / UPI Settlement',
+          description: 'Customer pays full wages in Cash or direct Worker UPI upon shift end.',
+          timestamp: 'Pending Cash Payment',
+          location: { address: 'Worksite Pay Counter', lat: 12.914, lng: 74.856 },
+          actor: 'Customer to Worker',
+          completed: false,
+        },
+        {
+          id: `node-${Date.now()}-6`,
+          stageKey: 'PLATFORM_FEE_DEDUCTED',
+          title: 'Platform Fee Wallet Deduction',
+          description: `Platform fee (₹${commAmount}) debited from worker prepaid wallet balance.`,
+          timestamp: 'Pending Settlement',
+          location: { address: 'ManPowerLink Platform Cloud', lat: 12.914, lng: 74.856 },
+          actor: 'System Automated Wallet Debit',
+          completed: false,
+        },
+      ],
     };
 
     this.setBookings([newBooking, ...existing]);
     this.logAudit('New Job Created', `${newBooking.orderNumber} by ${newBooking.customerName}`);
+    playNotificationSound();
     return newBooking;
   }
 
@@ -347,7 +784,7 @@ class DataService {
   }
 
   // Verify Start OTP
-  public verifyStartOtp(bookingId: string, workerId: string, enteredOtp: string): { success: boolean; message: string } {
+  public verifyStartOtp(bookingId: string, workerId: string, enteredOtp: string, locationAddress = 'Worksite Entrance Gate'): { success: boolean; message: string } {
     const booking = this.getBookings().find((b) => b.id === bookingId);
     if (!booking) return { success: false, message: 'Booking not found.' };
 
@@ -367,20 +804,43 @@ class DataService {
       return a;
     });
 
+    const updatedTimeline = (booking.timelineTree || []).map((node) => {
+      if (node.stageKey === 'START_OTP_VERIFIED') {
+        return {
+          ...node,
+          completed: true,
+          current: false,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          location: { address: locationAddress, lat: 12.914, lng: 74.856 },
+        };
+      }
+      if (node.stageKey === 'WORK_COMPLETED_OTP') {
+        return { ...node, current: true };
+      }
+      return node;
+    });
+
     const updatedBooking: Booking = {
       ...booking,
       assignedWorkers: assigned,
       status: 'WORK_STARTED',
+      timelineTree: updatedTimeline,
       updatedAt: new Date().toLocaleString(),
     };
 
     this.updateBooking(updatedBooking);
-    this.logAudit('Work Started (OTP Verified)', `Start OTP verified for ${booking.orderNumber}`);
+    this.logAudit('Work Started (OTP Verified)', `Start OTP verified for ${booking.orderNumber} at ${locationAddress}`);
+    playNotificationSound();
     return { success: true, message: 'Work successfully verified & started!' };
   }
 
-  // Verify End OTP & Complete Work
-  public verifyEndOtp(bookingId: string, workerId: string, enteredOtp: string): { success: boolean; message: string } {
+  // Verify End OTP & Complete Work (Customer pays Cash/UPI, Admin deducts platform fee from worker prepaid wallet)
+  public verifyEndOtp(
+    bookingId: string,
+    workerId: string,
+    enteredOtp: string,
+    locationAddress = 'Worksite Supervisor Desk'
+  ): { success: boolean; message: string; walletDeducted?: number; remainingWallet?: number } {
     const booking = this.getBookings().find((b) => b.id === bookingId);
     if (!booking) return { success: false, message: 'Booking not found.' };
 
@@ -402,18 +862,124 @@ class DataService {
 
     const allCompleted = assigned.every((a) => a.endOtpVerified);
 
+    // Platform fee calculation (e.g. 10% = ₹200)
+    const workerWage = booking.offeredPricePerWorker || 2000;
+    const platformFee = Math.round(workerWage * 0.1); // 10% platform fee
+
+    // Deduct platform fee from worker prepaid wallet
+    let workerRemainingWallet = 0;
+    const workers = this.getWorkers();
+    const worker = workers.find((w) => w.id === workerId);
+    if (worker) {
+      const currentWallet = worker.walletBalance || 0;
+      workerRemainingWallet = Math.max(0, currentWallet - platformFee);
+      const newTx = {
+        id: `wt-${Date.now()}`,
+        type: 'fee_deduction' as const,
+        amount: platformFee,
+        description: `Platform Fee deduction for ${booking.orderNumber}`,
+        timestamp: new Date().toLocaleString(),
+      };
+      this.updateWorker({
+        ...worker,
+        walletBalance: workerRemainingWallet,
+        completedJobsCount: (worker.completedJobsCount || 0) + 1,
+        totalEarnings: (worker.totalEarnings || 0) + workerWage,
+        walletTransactions: [newTx, ...(worker.walletTransactions || [])],
+      });
+    }
+
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const updatedTimeline = (booking.timelineTree || []).map((node) => {
+      if (node.stageKey === 'WORK_COMPLETED_OTP') {
+        return {
+          ...node,
+          completed: true,
+          current: false,
+          timestamp: nowTime,
+          location: { address: locationAddress, lat: 12.914, lng: 74.856 },
+        };
+      }
+      if (node.stageKey === 'CASH_PAYMENT') {
+        return {
+          ...node,
+          completed: true,
+          current: false,
+          description: `Customer paid ₹${workerWage} wage directly to worker in Cash/UPI.`,
+          timestamp: nowTime,
+          location: { address: locationAddress, lat: 12.914, lng: 74.856 },
+        };
+      }
+      if (node.stageKey === 'PLATFORM_FEE_DEDUCTED') {
+        return {
+          ...node,
+          completed: true,
+          current: false,
+          description: `Platform fee (₹${platformFee}) automatically debited from worker wallet.`,
+          timestamp: nowTime,
+          location: { address: 'ManPowerLink Platform Cloud', lat: 12.914, lng: 74.856 },
+        };
+      }
+      return node;
+    });
+
     const updatedBooking: Booking = {
       ...booking,
       assignedWorkers: assigned,
       status: allCompleted ? 'WORK_COMPLETED' : 'WORK_STARTED',
-      paymentStatus: allCompleted ? 'successful' : booking.paymentStatus,
+      paymentStatus: 'successful',
+      paymentMethod: 'cash',
       finalSettlementAmount: booking.totalEstimatedAmount,
+      timelineTree: updatedTimeline,
       updatedAt: new Date().toLocaleString(),
     };
 
     this.updateBooking(updatedBooking);
-    this.logAudit('Work Completed (End OTP Verified)', `Work marked completed on ${booking.orderNumber}`);
-    return { success: true, message: 'Work marked complete! Earnings recorded in ledger.' };
+    this.logAudit(
+      'Work Completed & Cash Collected',
+      `Cash wage ₹${workerWage} received. Platform fee ₹${platformFee} debited from worker wallet.`
+    );
+    playNotificationSound();
+
+    return {
+      success: true,
+      message: `Work completed! Cash of ₹${workerWage} collected. Platform fee of ₹${platformFee} debited from your wallet.`,
+      walletDeducted: platformFee,
+      remainingWallet: workerRemainingWallet,
+    };
+  }
+
+  // Worker Prepaid Wallet Recharge
+  public rechargeWorkerWallet(
+    workerId: string,
+    amount: number,
+    method = 'UPI / NetBanking'
+  ): { success: boolean; newBalance: number } {
+    const workers = this.getWorkers();
+    const worker = workers.find((w) => w.id === workerId);
+    if (!worker) return { success: false, newBalance: 0 };
+
+    const currentBal = worker.walletBalance || 0;
+    const newBal = currentBal + amount;
+    const newTx = {
+      id: `wt-${Date.now()}`,
+      type: 'recharge' as const,
+      amount,
+      description: `Prepaid Wallet Recharge via ${method}`,
+      timestamp: new Date().toLocaleString(),
+    };
+
+    const updatedWorker: Worker = {
+      ...worker,
+      walletBalance: newBal,
+      walletTransactions: [newTx, ...(worker.walletTransactions || [])],
+    };
+
+    this.updateWorker(updatedWorker);
+    this.logAudit('Worker Wallet Recharged', `${worker.name} recharged ₹${amount}. New balance: ₹${newBal}`);
+    playNotificationSound();
+    return { success: true, newBalance: newBal };
   }
 
   // Commission Settings
@@ -475,10 +1041,40 @@ class DataService {
     return this.getItem('manpowerlink_admin_users_v1', initialAdminUsers);
   }
 
+  public setAdminUsers(users: AdminUser[]): void {
+    this.setItem('manpowerlink_admin_users_v1', users);
+  }
+
   public setAdminUserStatus(userId: string, status: 'active' | 'suspended'): void {
     const list = this.getAdminUsers().map((u) => (u.id === userId ? { ...u, status } : u));
-    this.setItem('manpowerlink_admin_users_v1', list);
+    this.setAdminUsers(list);
     this.logAudit(`Admin Staff Account ${status}`, `User ID: ${userId}`);
+  }
+
+  public addAdminUser(user: Omit<AdminUser, 'id'>): AdminUser {
+    const newUser: AdminUser = {
+      ...user,
+      id: `usr-${Date.now()}`,
+      lastLogin: 'Never',
+      status: user.status || 'active',
+      permissions: user.permissions || ['read_bookings', 'manage_workers'],
+    };
+    const list = [newUser, ...this.getAdminUsers()];
+    this.setAdminUsers(list);
+    this.logAudit('Staff Account Created', `Created staff: ${newUser.name} (${newUser.role})`);
+    return newUser;
+  }
+
+  public updateAdminUser(user: AdminUser): void {
+    const list = this.getAdminUsers().map((u) => (u.id === user.id ? user : u));
+    this.setAdminUsers(list);
+    this.logAudit('Staff Account Modified', `Updated: ${user.name} (${user.role})`);
+  }
+
+  public deleteAdminUser(userId: string): void {
+    const list = this.getAdminUsers().filter((u) => u.id !== userId);
+    this.setAdminUsers(list);
+    this.logAudit('Staff Account Removed', `Deleted user ID: ${userId}`);
   }
 
   // Safety Incidents
