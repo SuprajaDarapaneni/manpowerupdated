@@ -115,15 +115,21 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                       newPrice,
                       'Employer raised offer to expedite fulfillment',
                     );
-                setState(() => _isUpdating = false);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Offer revised and broadcast to nearby workers!')),
-                );
+                if (mounted) {
+                  setState(() => _isUpdating = false);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Offer revised and broadcast to nearby workers!')),
+                  );
+                }
               } catch (e) {
-                setState(() => _isUpdating = false);
+                if (mounted) {
+                  setState(() => _isUpdating = false);
+                }
               }
             },
-            child: const Text('Confirm Price Update'),
+            child: _isUpdating
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Confirm Price Update'),
           ),
         ],
       ),
@@ -162,7 +168,7 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.between,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(_booking.categoryName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                         Container(

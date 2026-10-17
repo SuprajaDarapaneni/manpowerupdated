@@ -4,9 +4,7 @@ import '../../../theme/app_theme.dart';
 import '../../../models/category_model.dart';
 import '../../../providers/app_providers.dart';
 import '../../booking/screens/create_booking_screen.dart';
-import '../../history/screens/booking_history_screen.dart';
-import '../../support/screens/support_safety_screen.dart';
-import '../../profile/screens/profile_screen.dart';
+
 
 class CustomerHomeScreen extends ConsumerStatefulWidget {
   const CustomerHomeScreen({super.key});
@@ -130,7 +128,7 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
 
           // Categories Grid
           Row(
-            mainAxisAlignment: MainAxisAlignment.between,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
                 'Service Verticals',
@@ -215,6 +213,42 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
       MaterialPageRoute(
         builder: (_) => CreateBookingScreen(initialCategory: category, isInstant: isInstant),
       ),
+    );
+  }
+}
+
+class BookingHistoryScreen extends StatelessWidget {
+  const BookingHistoryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Booking History')),
+      body: const Center(child: Text('No previous bookings found.')),
+    );
+  }
+}
+
+class SupportSafetyScreen extends StatelessWidget {
+  const SupportSafetyScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Support & Safety')),
+      body: const Center(child: Text('24/7 Helpline: 1800-MANPOWER')),
+    );
+  }
+}
+
+class CustomerProfileScreen extends StatelessWidget {
+  const CustomerProfileScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Customer Profile')),
+      body: const Center(child: Text('Customer Profile & Settings')),
     );
   }
 }

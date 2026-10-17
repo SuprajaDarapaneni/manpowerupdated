@@ -1,24 +1,17 @@
-# Customer & Employer Mobile Application (Flutter)
+# customer_app
 
-This is the independent Flutter mobile codebase for **Customers and Employers** in the ManPowerLink temporary manpower marketplace.
+A new Flutter project.
 
-## Features
-- **Job Posting**:
-  - Dynamic category-specific requirements (Catering, Loading, Construction, Event Staff, Cleaning).
-  - Rate selection: **Hourly rate per worker** (`rate/hr/head × hours × workers`) or **Turnkey Full Package** (`Full Day Shift ~8.5 hrs`, `Half Day Express ~4.5 hrs`, `Heavy Cargo Pack ~6 hrs`, `Turnkey Catering Pack ~10 hrs`).
-  - Remarks / Notes field for special job instructions.
-  - Interactive Date & Time picker.
-- **In-App Wallet**:
-  - Direct PhonePe / UPI QR code generation and UPI ID copy.
-  - Instant wallet top-up and automatic deduction for job posting fees.
-- **Worker Management**:
-  - Review bids from verified workers.
-  - Accept bids and reveal Secure Start-Job OTP.
-  - Live status tracking and completion approval.
+## Getting Started
 
-## Running the App
-```bash
-cd customer-app
-flutter pub get
-flutter run
-```
+This project is a starting point for a Flutter application.
+
+A few resources to get you started if this is your first Flutter project:
+
+- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
+- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
+- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+
+For help getting started with Flutter development, view the
+[online documentation](https://docs.flutter.dev/), which offers tutorials,
+samples, guidance on mobile development, and a full API reference.

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/app_theme.dart';
 import '../../../models/category_model.dart';
-import '../../../models/booking_model.dart';
 import '../../../providers/app_providers.dart';
 import 'booking_detail_screen.dart';
 
@@ -39,7 +38,6 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
   bool _morningTiffin = true;
   bool _lunch = true;
   bool _eveningTea = true;
-  int _peopleCount = 150;
 
   bool _isSubmitting = false;
   String? _errorMessage;
@@ -328,7 +326,7 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.between,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label, style: TextStyle(fontSize: 12, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
           Text(
