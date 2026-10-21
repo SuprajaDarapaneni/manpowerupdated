@@ -75,7 +75,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: primaryRed, width: 2),
+          borderSide: const BorderSide(color: primaryYellow, width: 2),
         ),
         hintStyle: const TextStyle(color: secondaryText, fontSize: 13),
       ),

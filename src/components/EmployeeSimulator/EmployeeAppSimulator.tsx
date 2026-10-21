@@ -367,10 +367,10 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   ManPower<span className="text-[#D71920]">Link</span>
                 </h1>
                 <p className="text-[11px] font-bold text-[#D71920] uppercase tracking-wider">
-                  Employee & Worker App
+                  Employee App
                 </p>
                 <p className="text-xs text-[#686868] mt-1">
-                  Find work opportunities and manage your jobs
+                  Find work opportunities and manage shifts
                 </p>
               </div>
 
@@ -419,8 +419,19 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                     type="submit"
                     className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2"
                   >
-                    <span>Sign In as Worker</span>
+                    <span>Sign In to Employee App</span>
                     <ArrowRight className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAuthenticated(true);
+                      setActiveTab('home');
+                    }}
+                    className="w-full py-2 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                  >
+                    <span>Quick Enter Employee App →</span>
                   </button>
                 </div>
 
@@ -676,13 +687,18 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                       )}
 
                       {/* Step 1: Start OTP with Confirmation */}
-                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+                      <div className="bg-amber-50/50 p-3.5 rounded-2xl border-2 border-[#FFC928]/90 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#202124]">Step 1: Check-in via Start OTP</span>
-                          <span className="text-[10px] text-[#D71920] font-bold">Customer OTP: 4829</span>
+                          <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-[#D71920]" />
+                            <span>Step 1: Check-in via Start OTP</span>
+                          </span>
+                          <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded font-black">
+                            Customer OTP: 4829
+                          </span>
                         </div>
                         <p className="text-[10px] text-[#686868]">
-                          Ask the worksite manager for their 4-digit code:
+                          Ask the worksite manager for their 4-digit start OTP:
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -691,12 +707,12 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                             value={startOtpInput}
                             onChange={(e) => setStartOtpInput(e.target.value)}
                             placeholder="e.g. 4829"
-                            className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-slate-200 rounded-xl"
+                            className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-amber-300 rounded-xl focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40 text-[#202124]"
                           />
                           <button
                             type="button"
                             onClick={promptVerifyStartOtp}
-                            className="px-3.5 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                            className="px-3.5 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer border border-[#FFC928] shadow-2xs"
                           >
                             Verify & Start
                           </button>
@@ -704,13 +720,18 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                       </div>
 
                       {/* Step 2: End OTP with Cash collection & Platform Fee deduction */}
-                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+                      <div className="bg-amber-50/50 p-3.5 rounded-2xl border-2 border-[#FFC928]/90 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-[#202124]">Step 2: Collect Cash & End OTP</span>
-                          <span className="text-[10px] text-[#D71920] font-bold">Code: 9154</span>
+                          <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-[#FFC928]" />
+                            <span>Step 2: Collect Cash & End OTP</span>
+                          </span>
+                          <span className="text-[10px] bg-[#D71920] text-white px-2 py-0.5 rounded font-bold">
+                            End Code: 9154
+                          </span>
                         </div>
                         <p className="text-[10px] text-[#686868]">
-                          Collect full wage in cash from customer, then enter End OTP:
+                          Collect full wage from customer, then enter End OTP to finish:
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -719,14 +740,14 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                             value={endOtpInput}
                             onChange={(e) => setEndOtpInput(e.target.value)}
                             placeholder="e.g. 9154"
-                            className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-slate-200 rounded-xl"
+                            className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-amber-300 rounded-xl focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40 text-[#202124]"
                           />
                           <button
                             type="button"
                             onClick={promptVerifyEndOtp}
-                            className="px-3.5 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                            className="px-3.5 py-1.5 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-black rounded-xl transition-colors cursor-pointer border border-amber-400 shadow-2xs"
                           >
-                            Complete
+                            Complete Shift
                           </button>
                         </div>
                       </div>

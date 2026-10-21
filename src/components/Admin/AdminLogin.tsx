@@ -5,15 +5,25 @@ import { dataService } from '../../services/storage';
 interface AdminLoginProps {
   onSuccess: () => void;
   onDevToggle?: () => void;
-  onOpenPreview?: () => void;
+  onOpenPreview?: (route: 'customer' | 'employee' | 'dual' | 'handover') => void;
+  showPreviews?: boolean;
 }
 
-export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onDevToggle, onOpenPreview }) => {
+export const AdminLogin: React.FC<AdminLoginProps> = ({
+  onSuccess,
+  onDevToggle,
+  onOpenPreview,
+  showPreviews = false,
+}) => {
   const [email, setEmail] = useState('admin@manpowerlink.com');
   const [password, setPassword] = useState('Admin@2026Secure');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [devClicks, setDevClicks] = useState(0);
+  const [devUnlocked, setDevUnlocked] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return new URLSearchParams(window.location.search).get('dev') === 'true';
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,32 +142,61 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onDevToggle, 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-2 py-2.5 px-4 bg-[#D71920] hover:bg-[#A80F18] text-white font-semibold text-sm rounded-lg flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+              className="w-full mt-2 py-2.5 px-4 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-sm rounded-xl flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer border border-[#FFC928]/40"
             >
               {isLoading ? (
                 <span>Authenticating...</span>
               ) : (
                 <>
-                  <span>Sign In to Dashboard</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <span>Sign In to Admin Dashboard</span>
+                  <ArrowRight className="w-4 h-4 text-[#FFC928]" />
                 </>
               )}
             </button>
 
-            {onOpenPreview && (
-              <button
-                type="button"
-                onClick={onOpenPreview}
-                className="w-full mt-2 py-2.5 px-4 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold text-xs rounded-lg flex items-center justify-center gap-2 shadow-xs transition-colors cursor-pointer"
-              >
-                <Smartphone className="w-4 h-4 text-[#202124]" />
-                <span>Check Customer & Employee Apps Preview</span>
-              </button>
+            {/* Quick Mobile Apps Preview Launchers (ONLY shown when developer mode is enabled for testing) */}
+            {(showPreviews || devUnlocked) && (
+              <div className="pt-3 border-t border-[#202124]/10 space-y-2 animate-fadeIn">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[#202124] uppercase tracking-wider">
+                    Developer Cross-Check & Testing
+                  </span>
+                  <span className="text-[10px] font-bold bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-full">
+                    Preview Mode
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onOpenPreview ? onOpenPreview('customer') : undefined}
+                    className="py-2.5 px-3 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer border border-amber-300"
+                  >
+                    <Smartphone className="w-4 h-4 text-[#D71920]" />
+                    <span>Customer App</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onOpenPreview ? onOpenPreview('employee') : undefined}
+                    className="py-2.5 px-3 bg-[#D71920] hover:bg-[#A80F18] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer border border-[#FFC928]"
+                  >
+                    <Smartphone className="w-4 h-4 text-[#FFC928]" />
+                    <span>Employee App</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onOpenPreview ? onOpenPreview('dual') : undefined}
+                  className="w-full py-2.5 px-3 bg-linear-to-r from-[#D71920] via-[#E5A900] to-[#FFC928] hover:opacity-95 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <span className="bg-[#202124] text-[#FFC928] px-1.5 py-0.5 rounded text-[10px] font-mono">LIVE</span>
+                  <span>Launch Dual Side-by-Side Apps Simulator</span>
+                </button>
+              </div>
             )}
           </form>
 
           {/* Credentials notice */}
-          <div className="mt-6 pt-5 border-t border-[#202124]/10 text-center">
+          <div className="mt-5 pt-4 border-t border-[#202124]/10 text-center">
             <p className="text-[11px] text-[#686868]">
               Administrator Terminal: <span className="font-mono text-[#202124]">admin@manpowerlink.com</span>
             </p>
@@ -172,17 +211,16 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onSuccess, onDevToggle, 
         <div className="mt-6 text-center">
           <p
             onClick={() => {
-              if (onDevToggle) {
-                const next = devClicks + 1;
-                setDevClicks(next);
-                if (next >= 3) {
-                  setDevClicks(0);
-                  onDevToggle();
-                }
+              const next = devClicks + 1;
+              setDevClicks(next);
+              if (next >= 3) {
+                setDevClicks(0);
+                setDevUnlocked((prev) => !prev);
+                if (onDevToggle) onDevToggle();
               }
             }}
-            className="text-[10px] text-[#686868]/60 cursor-default select-none transition-colors"
-            title="Production Environment"
+            className="text-[10px] text-[#686868]/60 cursor-default select-none transition-colors hover:text-[#686868]"
+            title="Production Environment (Click 3x for Developer Preview Tools)"
           >
             © 2026 ManPowerLink Technologies Inc. v1.0.0
           </p>

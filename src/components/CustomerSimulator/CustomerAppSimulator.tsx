@@ -1120,11 +1120,11 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 <h1 className="text-lg font-bold text-[#202124]">
                   ManPower<span className="text-[#D71920]">Link</span>
                 </h1>
-                <p className="text-[11px] font-semibold text-[#D71920] uppercase tracking-wider">
-                  Customer & Employer App
+                <p className="text-[11px] font-bold text-[#D71920] uppercase tracking-wider">
+                  Customer App
                 </p>
                 <p className="text-xs text-[#686868] mt-1">
-                  Find reliable workers for your next job
+                  Book and manage temporary manpower
                 </p>
               </div>
 
@@ -1140,7 +1140,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   <div className="space-y-3">
                     <div>
                       <label className="block text-[11px] font-bold text-[#202124] mb-1">
-                        Email or Mobile Number
+                        Mobile Phone or Email
                       </label>
                       <div className="relative">
                         <Mail className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1149,7 +1149,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                           required
                           value={loginPhoneOrEmail}
                           onChange={(e) => setLoginPhoneOrEmail(e.target.value)}
-                          placeholder="e.g. apex@logistics.in"
+                          placeholder="+91 99001 55432"
                           className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
                         />
                       </div>
@@ -1191,8 +1191,19 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       disabled={isAuthLoading}
                       className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2"
                     >
-                      <span>Sign In as Employer</span>
+                      <span>Sign In to Customer App</span>
                       <ArrowRight className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsAuthenticated(true);
+                        setActiveTab('home');
+                      }}
+                      className="w-full py-2 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <span>Quick Enter Customer App →</span>
                     </button>
                   </div>
 
@@ -1339,7 +1350,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       {activeTab === 'post-job' && 'Post Job Order'}
                       {activeTab === 'bookings' && 'Orders & Live Bids'}
                       {activeTab === 'messages' && 'Worksite Chat'}
-                      {activeTab === 'profile' && 'Employer Profile'}
+                      {activeTab === 'profile' && 'Customer Profile'}
                     </h2>
                     <p className="text-[10px] text-white/80 leading-tight flex items-center gap-1">
                       <MapPin className="w-2.5 h-2.5 text-[#FFC928]" />
@@ -1349,7 +1360,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  {/* Employer Wallet Balance Chip */}
+                  {/* Customer Wallet Balance Chip */}
                   <button
                     type="button"
                     onClick={() => setShowAddMoneyModal(true)}
@@ -1672,21 +1683,24 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       </span>
                     </div>
 
-                    {/* Step indicator bar */}
-                    <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                      <div className="w-3/4 h-full bg-[#D71920] rounded-full" />
+                    {/* Step indicator bar - Red and Yellow Dual Progress */}
+                    <div className="w-full h-2 bg-amber-100 rounded-full overflow-hidden border border-amber-200">
+                      <div className="w-3/4 h-full bg-linear-to-r from-[#D71920] via-[#E5A900] to-[#FFC928] rounded-full" />
                     </div>
 
                     {/* Section 1: Select Service Category Chips */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2">
+                    <div className="bg-white p-3.5 rounded-3xl border border-amber-200/80 shadow-2xs space-y-2">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#202124]">Select Service Category</label>
+                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-[#D71920]" />
+                          <span>Select Service Category</span>
+                        </label>
                         <button
                           type="button"
                           onClick={() => setShowAddCategoryModal(true)}
-                          className="text-[11px] font-bold text-[#D71920] hover:underline flex items-center gap-0.5 cursor-pointer"
+                          className="text-[11px] font-bold text-[#D71920] hover:text-[#A80F18] flex items-center gap-0.5 cursor-pointer bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200"
                         >
-                          <Plus className="w-3 h-3" />
+                          <Plus className="w-3 h-3 text-[#D71920]" />
                           <span>Add Custom</span>
                         </button>
                       </div>
@@ -1705,11 +1719,11 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                               }}
                               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
                                 isSelected
-                                  ? 'bg-[#D71920] text-white shadow-xs font-bold'
-                                  : 'bg-slate-50 border border-slate-200 text-[#202124] hover:bg-slate-100'
+                                  ? 'bg-[#D71920] text-white shadow-xs font-bold border-2 border-[#FFC928]'
+                                  : 'bg-amber-50/50 border border-amber-200/70 text-[#202124] hover:bg-amber-100/70 hover:border-[#FFC928]'
                               }`}
                             >
-                              {isSelected && <Check className="w-3.5 h-3.5" />}
+                              {isSelected && <Check className="w-3.5 h-3.5 text-[#FFC928]" />}
                               <span>{cat.name}</span>
                             </button>
                           );
@@ -1717,42 +1731,47 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       </div>
                     </div>
 
-                    {/* Section 2: Job Requirement Title (Framed with distinct border as in screenshot) */}
-                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#D71920] shadow-xs space-y-1">
-                      <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
-                        <Briefcase className="w-3.5 h-3.5 text-[#D71920]" />
-                        <span>Job Requirement Title *</span>
+                    {/* Section 2: Job Requirement Title (Balanced Red & Yellow border & warm input) */}
+                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#FFC928] shadow-xs space-y-1.5 focus-within:ring-2 focus-within:ring-[#FFC928]/40 transition-all">
+                      <label className="text-xs font-bold text-[#202124] flex items-center justify-between">
+                        <span className="flex items-center gap-1.5">
+                          <Briefcase className="w-3.5 h-3.5 text-[#D71920]" />
+                          <span>Job Requirement Title *</span>
+                        </span>
+                        <span className="text-[10px] font-bold bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-md">
+                          Required
+                        </span>
                       </label>
                       <input
                         type="text"
                         required
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
-                        placeholder="e.g. Loading and moving boxes"
-                        className="w-full py-1.5 text-xs bg-transparent focus:outline-none font-semibold text-[#202124]"
+                        placeholder="e.g. Loading and moving warehouse crates"
+                        className="w-full px-3 py-2 text-xs bg-amber-50/40 border border-amber-200/80 rounded-xl focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/30 font-semibold text-[#202124]"
                       />
                     </div>
 
                     {/* Section 3: Pricing Model Choice (Hourly vs Full Package) */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2.5">
+                    <div className="bg-white p-3.5 rounded-3xl border border-amber-200/80 shadow-2xs space-y-2.5">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-[#202124]">Choose Pricing & Duration Model</label>
-                        <span className="text-[10px] font-bold text-[#D71920] bg-red-50 px-2 py-0.5 rounded-md">
+                        <span className="text-[10px] font-bold text-[#202124] bg-[#FFC928] px-2 py-0.5 rounded-md">
                           {pricingModel === 'hourly' ? 'Hourly Basis' : 'Turnkey Package'}
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 bg-slate-100 p-1 rounded-2xl">
+                      <div className="grid grid-cols-2 gap-2 bg-amber-50/80 p-1 rounded-2xl border border-amber-200/60">
                         <button
                           type="button"
                           onClick={() => setPricingModel('hourly')}
                           className={`py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                             pricingModel === 'hourly'
-                              ? 'bg-[#D71920] text-white shadow-xs'
+                              ? 'bg-[#FFC928] text-[#202124] font-black shadow-xs border border-amber-400'
                               : 'text-slate-600 hover:text-[#202124]'
                           }`}
                         >
-                          <Clock className="w-3.5 h-3.5" />
+                          <Clock className="w-3.5 h-3.5 text-[#D71920]" />
                           <span>Hourly Basis</span>
                         </button>
                         <button
@@ -1760,11 +1779,11 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                           onClick={() => setPricingModel('full_package')}
                           className={`py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                             pricingModel === 'full_package'
-                              ? 'bg-[#FFC928] text-[#202124] shadow-xs'
+                              ? 'bg-[#D71920] text-white font-black shadow-xs border border-[#FFC928]'
                               : 'text-slate-600 hover:text-[#202124]'
                           }`}
                         >
-                          <Sparkles className="w-3.5 h-3.5" />
+                          <Sparkles className="w-3.5 h-3.5 text-[#FFC928]" />
                           <span>★ Full Package</span>
                         </button>
                       </div>
@@ -1773,7 +1792,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       {pricingModel === 'hourly' && (
                         <div className="space-y-3 pt-1">
                           {/* Separate field: Price / Hour / Head */}
-                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1">
+                          <div className="bg-amber-50/40 p-3 rounded-2xl border border-amber-200/70 space-y-1">
                             <div className="flex items-center justify-between">
                               <label className="text-xs font-bold text-[#202124] flex items-center gap-1">
                                 <DollarSign className="w-3.5 h-3.5 text-[#D71920]" />
@@ -1789,25 +1808,25 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                                 min={50}
                                 value={pricePerHourPerHead}
                                 onChange={(e) => setPricePerHourPerHead(Math.max(50, Number(e.target.value)))}
-                                className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
+                                className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-amber-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40"
                                 placeholder="250"
                               />
                             </div>
                           </div>
 
                           {/* Stepper: Shift Duration in Hours */}
-                          <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 flex items-center justify-between">
+                          <div className="bg-amber-50/40 p-3 rounded-2xl border border-amber-200/70 flex items-center justify-between">
                             <div>
                               <span className="text-xs font-bold text-[#202124] block">Shift Duration</span>
                               <span className="text-[10px] text-slate-500">Working hours required</span>
                             </div>
-                            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-slate-200">
+                            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-amber-200">
                               <button
                                 type="button"
                                 onClick={() => setShiftHours(Math.max(1, shiftHours - 1))}
-                                className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                                className="w-7 h-7 rounded-lg bg-amber-100/70 flex items-center justify-center text-slate-700 font-bold hover:bg-amber-200 cursor-pointer"
                               >
-                                <Minus className="w-3 h-3" />
+                                <Minus className="w-3 h-3 text-[#D71920]" />
                               </button>
                               <span className="text-xs font-black text-[#202124] min-w-12 text-center">
                                 {shiftHours} hrs
@@ -1815,7 +1834,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                               <button
                                 type="button"
                                 onClick={() => setShiftHours(shiftHours + 1)}
-                                className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 font-bold hover:bg-slate-200 cursor-pointer"
+                                className="w-7 h-7 rounded-lg bg-[#FFC928] flex items-center justify-center text-[#202124] font-bold hover:bg-[#E5A900] cursor-pointer"
                               >
                                 <Plus className="w-3 h-3" />
                               </button>
@@ -1823,9 +1842,9 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                           </div>
 
                           {/* Formula calculation badge */}
-                          <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-[11px] text-[#A80F18] flex items-center justify-between font-bold">
-                            <span>Cost per worker:</span>
-                            <span className="font-mono">
+                          <div className="bg-amber-100/60 p-2.5 rounded-xl border border-amber-300 text-[11px] text-[#202124] flex items-center justify-between font-bold">
+                            <span className="text-[#A80F18]">Cost per worker:</span>
+                            <span className="font-mono text-[#D71920] font-black">
                               ₹{pricePerHourPerHead}/hr/head × {shiftHours} hrs = ₹{(pricePerHourPerHead * shiftHours).toLocaleString()}
                             </span>
                           </div>
@@ -1847,7 +1866,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                                   onClick={() => setSelectedPackageId(pkg.id)}
                                   className={`p-3 rounded-2xl border transition-all cursor-pointer ${
                                     isPkgSelected
-                                      ? 'bg-amber-50/80 border-[#D71920] shadow-xs'
+                                      ? 'bg-linear-to-r from-amber-50 to-yellow-50 border-2 border-[#FFC928] shadow-xs'
                                       : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                                   }`}
                                 >
@@ -1856,23 +1875,23 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                                       <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
                                         isPkgSelected ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
                                       }`}>
-                                        {isPkgSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                        {isPkgSelected && <span className="w-1.5 h-1.5 rounded-full bg-[#FFC928]" />}
                                       </span>
                                       <h4 className="text-xs font-bold text-[#202124]">{pkg.title}</h4>
                                     </div>
-                                    <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-md font-extrabold">
+                                    <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-md font-extrabold border border-amber-400">
                                       {pkg.badge}
                                     </span>
                                   </div>
                                   <p className="text-[10px] text-slate-500 mb-2 pl-5 leading-tight">{pkg.description}</p>
                                   
                                   {/* Approx time taking & Fixed rate display */}
-                                  <div className="flex items-center justify-between text-xs font-bold pl-5 pt-1 border-t border-slate-200/60">
+                                  <div className="flex items-center justify-between text-xs font-bold pl-5 pt-1 border-t border-amber-200/50">
                                     <span className="text-[#A80F18] flex items-center gap-1 text-[11px]">
                                       <Clock className="w-3.5 h-3.5 text-[#D71920]" />
                                       <span>Approx Time: ~{pkg.approxHours} Hours</span>
                                     </span>
-                                    <span className="text-[#202124] font-black">
+                                    <span className="text-[#D71920] font-black">
                                       ₹{pkg.fixedRatePerWorker.toLocaleString()} / worker
                                     </span>
                                   </div>
@@ -2048,18 +2067,18 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     </div>
 
                     {/* Section 7: Required Remarks / Special Notes Field */}
-                    <div className="bg-white p-3.5 rounded-3xl border-2 border-amber-300 shadow-2xs space-y-1.5">
+                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#FFC928] shadow-xs space-y-1.5 focus-within:ring-2 focus-within:ring-[#FFC928]/40 transition-all">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
                           <FileText className="w-4 h-4 text-[#D71920]" />
                           <span>Additional Remarks / Worksite Notes *</span>
                         </label>
-                        <span className="text-[10px] font-bold text-[#A80F18] bg-[#FFC928]/30 px-2 py-0.5 rounded">
+                        <span className="text-[10px] font-bold text-[#202124] bg-[#FFC928] px-2 py-0.5 rounded-md">
                           Required
                         </span>
                       </div>
                       <p className="text-[10px] text-slate-500">
-                        Specific guidelines, safety equipment required, supervisor contact, gate access, or dietary/handling demands.
+                        Specific guidelines, safety equipment required, supervisor contact, gate access, or cargo details.
                       </p>
                       <textarea
                         rows={3}
@@ -2067,24 +2086,24 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         value={remarks}
                         onChange={(e) => setRemarks(e.target.value)}
                         placeholder="e.g. Safety boots required. Report to Gate 4 at dock warehouse. Supervisor phone: +91 99001 55432."
-                        className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none font-medium text-[#202124] focus:border-[#D71920]"
+                        className="w-full p-2.5 text-xs bg-amber-50/40 border border-amber-200/90 rounded-2xl focus:outline-none font-medium text-[#202124] focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40"
                       />
                     </div>
 
                     {/* Section 8: Payment Mode (Wallet Debit vs PhonePe QR vs Cash) */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2.5">
+                    <div className="bg-white p-3.5 rounded-3xl border border-amber-200/80 shadow-2xs space-y-2.5">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1">
+                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
                           <CreditCard className="w-4 h-4 text-[#D71920]" />
-                          <span>Payment Method & Debit Options</span>
+                          <span>Payment Method & Settlement</span>
                         </label>
                         <button
                           type="button"
                           onClick={() => setShowAddMoneyModal(true)}
-                          className="text-[10px] font-bold text-[#5f259f] hover:underline flex items-center gap-0.5 cursor-pointer"
+                          className="text-[10px] font-bold text-[#D71920] hover:text-[#A80F18] flex items-center gap-1 cursor-pointer bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200"
                         >
-                          <QrCode className="w-3 h-3" />
-                          <span>+ Add Money (PhonePe QR)</span>
+                          <QrCode className="w-3 h-3 text-[#FFC928]" />
+                          <span>+ Add Money</span>
                         </button>
                       </div>
 
@@ -2094,7 +2113,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                           onClick={() => setPaymentSelection('wallet')}
                           className={`p-3 rounded-2xl border transition-all cursor-pointer ${
                             paymentSelection === 'wallet'
-                              ? 'bg-amber-50/80 border-[#D71920] shadow-xs'
+                              ? 'bg-linear-to-r from-amber-50 to-yellow-50 border-2 border-[#FFC928] shadow-xs'
                               : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                           }`}
                         >
@@ -2103,31 +2122,31 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                               <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
                                 paymentSelection === 'wallet' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
                               }`}>
-                                {paymentSelection === 'wallet' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                {paymentSelection === 'wallet' && <span className="w-1.5 h-1.5 rounded-full bg-[#FFC928]" />}
                               </span>
                               <div>
                                 <span className="text-xs font-bold text-[#202124] block">Instant Wallet Debit</span>
                                 <span className="text-[10px] text-slate-500">
-                                  Available Balance: <strong className="text-[#16834A]">₹{walletBalance.toLocaleString()}</strong>
+                                  Available Balance: <strong className="text-emerald-700">₹{walletBalance.toLocaleString()}</strong>
                                 </span>
                               </div>
                             </div>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
                               walletBalance >= totalEstimatedCost
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-red-100 text-red-800'
+                                ? 'bg-[#FFC928] text-[#202124]'
+                                : 'bg-red-100 text-[#D71920]'
                             }`}>
-                              {walletBalance >= totalEstimatedCost ? 'Balance Sufficient' : 'Needs Top-Up'}
+                              {walletBalance >= totalEstimatedCost ? 'Balance Ready' : 'Needs Top-Up'}
                             </span>
                           </div>
                         </div>
 
-                        {/* Option 2: Direct PhonePe / UPI QR (No 3rd party integration) */}
+                        {/* Option 2: Direct UPI QR / Intent */}
                         <div
                           onClick={() => setPaymentSelection('upi_qr')}
                           className={`p-3 rounded-2xl border transition-all cursor-pointer ${
                             paymentSelection === 'upi_qr'
-                              ? 'bg-amber-50/80 border-[#D71920] shadow-xs'
+                              ? 'bg-linear-to-r from-amber-50 to-yellow-50 border-2 border-[#FFC928] shadow-xs'
                               : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                           }`}
                         >
@@ -2136,15 +2155,15 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                               <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
                                 paymentSelection === 'upi_qr' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
                               }`}>
-                                {paymentSelection === 'upi_qr' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                                {paymentSelection === 'upi_qr' && <span className="w-1.5 h-1.5 rounded-full bg-[#FFC928]" />}
                               </span>
                               <div>
-                                <span className="text-xs font-bold text-[#202124] block">Direct PhonePe / UPI QR</span>
-                                <span className="text-[10px] text-slate-500">Scan QR directly without 3rd-party gateway</span>
+                                <span className="text-xs font-bold text-[#202124] block">Direct UPI Intent & QR (prnm@kotak)</span>
+                                <span className="text-[10px] text-slate-500">GPay, PhonePe, Paytm, Kotak UPI supported</span>
                               </div>
                             </div>
-                            <span className="text-[10px] bg-[#5f259f] text-white px-2 py-0.5 rounded-md font-bold">
-                              Zero Fee
+                            <span className="text-[10px] bg-[#D71920] text-white px-2 py-0.5 rounded-md font-bold">
+                              Verified Payee
                             </span>
                           </div>
                         </div>
@@ -2154,7 +2173,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                           onClick={() => setPaymentSelection('cash')}
                           className={`p-3 rounded-2xl border transition-all cursor-pointer ${
                             paymentSelection === 'cash'
-                              ? 'bg-amber-50/80 border-[#D71920] shadow-xs'
+                              ? 'bg-linear-to-r from-amber-50 to-yellow-50 border-2 border-[#FFC928] shadow-xs'
                               : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
                           }`}
                         >
@@ -2162,60 +2181,60 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                             <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
                               paymentSelection === 'cash' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
                             }`}>
-                              {paymentSelection === 'cash' && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                              {paymentSelection === 'cash' && <span className="w-1.5 h-1.5 rounded-full bg-[#FFC928]" />}
                             </span>
                             <div>
                               <span className="text-xs font-bold text-[#202124] block">Direct Cash on Worksite</span>
-                              <span className="text-[10px] text-slate-500">Pay workers in person upon shift completion</span>
+                              <span className="text-[10px] text-slate-500">Pay workers in person upon verified shift completion</span>
                             </div>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Total Summary Pill */}
-                    <div className="bg-[#FFC928]/20 p-3.5 rounded-2xl border border-[#FFC928]/60 flex items-center justify-between text-xs">
+                    {/* Total Summary Pill - Distinct Gold & Red Banner */}
+                    <div className="bg-linear-to-r from-[#FFFDF0] via-[#FFF9E6] to-[#FFF3CD] p-4 rounded-2xl border-2 border-[#FFC928] shadow-xs flex items-center justify-between text-xs">
                       <div>
-                        <span className="text-[10px] text-slate-600 font-semibold block">Total Estimated Cost:</span>
-                        <span className="text-lg font-black text-[#D71920]">
+                        <span className="text-[10px] text-[#A80F18] font-bold uppercase tracking-wider block">Total Estimated Cost</span>
+                        <span className="text-2xl font-black text-[#D71920]">
                           ₹{totalEstimatedCost.toLocaleString()}
                         </span>
-                        <span className="text-[10px] text-slate-600 block">
+                        <span className="text-[10px] text-slate-600 block mt-0.5">
                           {paymentSelection === 'wallet' && 'Instant debit from employer wallet balance'}
-                          {paymentSelection === 'upi_qr' && 'Pay direct via PhonePe / UPI QR'}
+                          {paymentSelection === 'upi_qr' && 'Pay direct via verified UPI (prnm@kotak)'}
                           {paymentSelection === 'cash' && 'Pay directly to workers on shift end'}
                         </span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[10px] font-extrabold text-[#A80F18] bg-[#FFC928]/50 px-2.5 py-1 rounded-xl block">
+                        <span className="text-[11px] font-black text-[#202124] bg-[#FFC928] px-3 py-1 rounded-xl block shadow-2xs border border-amber-400">
                           {requiredWorkers} Workers × ₹{costPerWorker.toLocaleString()}
                         </span>
-                        <span className="text-[9px] text-slate-500 mt-1 block">
-                          {pricingModel === 'hourly' ? `${shiftHours} Hours` : `Turnkey ~${packageApproxHours}h`}
+                        <span className="text-[10px] text-[#A80F18] font-bold mt-1 block">
+                          {pricingModel === 'hourly' ? `${shiftHours} Hours Shift` : `Turnkey ~${packageApproxHours}h`}
                         </span>
                       </div>
                     </div>
 
-                    {/* Publish / Book Button */}
+                    {/* Publish / Book Button - Primary Red and Yellow CTA */}
                     <button
                       type="button"
                       onClick={promptPublishJob}
-                      className="w-full py-3 bg-[#D71920] hover:bg-[#A80F18] text-white font-extrabold text-xs rounded-2xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+                      className="w-full py-3.5 bg-linear-to-r from-[#D71920] via-[#C6171E] to-[#B7151B] hover:from-[#B7151B] hover:to-[#961217] text-white font-black text-sm rounded-2xl shadow-md border-2 border-[#FFC928] transition-all cursor-pointer flex items-center justify-center gap-2"
                     >
                       {paymentSelection === 'wallet' ? (
                         <>
                           <Wallet className="w-4 h-4 text-[#FFC928]" />
-                          <span>Debit ₹{totalEstimatedCost.toLocaleString()} & Broadcast Job</span>
+                          <span>Debit ₹{totalEstimatedCost.toLocaleString()} & Broadcast Job Order</span>
                         </>
                       ) : paymentSelection === 'upi_qr' ? (
                         <>
-                          <QrCode className="w-4 h-4 text-white" />
-                          <span>Pay ₹{totalEstimatedCost.toLocaleString()} via PhonePe QR & Broadcast</span>
+                          <QrCode className="w-4 h-4 text-[#FFC928]" />
+                          <span>Pay ₹{totalEstimatedCost.toLocaleString()} via UPI & Broadcast Job</span>
                         </>
                       ) : (
                         <>
-                          <Send className="w-4 h-4 text-white" />
-                          <span>Publish Job & Notify Workers</span>
+                          <Send className="w-4 h-4 text-[#FFC928]" />
+                          <span>Publish Job Order & Alert Workers (Cash)</span>
                         </>
                       )}
                     </button>
@@ -2296,17 +2315,17 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         <h4 className="text-xs font-bold text-[#202124]">Apex Logistics & Warehousing</h4>
                         <p className="text-[11px] text-[#686868]">apex@logistics.in</p>
                         <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded font-bold">
-                          Verified Employer
+                          Verified Customer
                         </span>
                       </div>
                     </div>
 
-                    {/* Employer Prepaid Wallet Card */}
+                    {/* Customer Prepaid Wallet Card */}
                     <div className="bg-linear-to-r from-[#1E1F23] to-[#2D3039] p-4 rounded-3xl text-white shadow-md space-y-3 border border-white/10">
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-semibold text-white/70 flex items-center gap-1.5">
                           <Wallet className="w-4 h-4 text-[#FFC928]" />
-                          <span>Prepaid Employer Wallet</span>
+                          <span>Prepaid Customer Wallet</span>
                         </span>
                         <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
                           Active

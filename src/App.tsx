@@ -27,6 +27,7 @@ import {
   HardHat,
   ArrowLeft,
   LayoutDashboard,
+  Lock,
 } from 'lucide-react';
 
 type AppRoute = 'admin' | 'customer' | 'employee' | 'dual' | 'handover' | 'dev-hub';
@@ -51,6 +52,11 @@ export default function App() {
 
   // Active sub-tab inside Dev Hub if opened via ?dev=true
   const [hubTab, setHubTab] = useState<'admin' | 'dual' | 'customer' | 'employee' | 'handover'>('dual');
+  const [isDevMode, setIsDevMode] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return params.get('dev') === 'true' || params.get('debug') === 'true';
+  });
 
   // Reactive platform state
   const [categories, setCategories] = useState(() => dataService.getCategories());
@@ -177,32 +183,103 @@ export default function App() {
     }
   };
 
+  // Navigation switcher bar only for preview and developer testing pages
+  const renderTopSwitcherBar = () => {
+    if (route === 'admin') return null; // Standard Admin View NEVER shows preview switcher
+    return (
+      <header className="bg-white border-b border-slate-200 px-6 py-2.5 flex items-center justify-between text-xs sticky top-0 z-50 shrink-0 select-none shadow-xs">
+        {/* Brand */}
+        <div className="flex items-center gap-3">
+          <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-black text-white text-xs shadow-xs border border-[#FFC928]">
+            M
+          </div>
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="font-extrabold text-[#202124] text-sm tracking-tight">ManPowerLink</span>
+              <span className="text-[10px] font-bold bg-[#FFC928] text-[#202124] px-1.5 py-0.5 rounded">
+                PREVIEW MODE
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+          <button
+            onClick={() => navigateTo('customer')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+              route === 'customer'
+                ? 'bg-[#D71920] text-white shadow-xs'
+                : 'text-slate-600 hover:text-[#202124] hover:bg-white/60'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5 text-[#FFC928]" />
+            <span>Customer App</span>
+          </button>
+          <button
+            onClick={() => navigateTo('employee')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+              route === 'employee'
+                ? 'bg-[#D71920] text-white shadow-xs'
+                : 'text-slate-600 hover:text-[#202124] hover:bg-white/60'
+            }`}
+          >
+            <HardHat className="w-3.5 h-3.5 text-[#FFC928]" />
+            <span>Employee App</span>
+          </button>
+          <button
+            onClick={() => navigateTo('dual')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+              route === 'dual'
+                ? 'bg-[#FFC928] text-[#202124] shadow-xs'
+                : 'text-slate-600 hover:text-[#202124] hover:bg-white/60'
+            }`}
+          >
+            <Columns className="w-3.5 h-3.5 text-[#D71920]" />
+            <span>⚡ Dual Split View (Live)</span>
+          </button>
+          <button
+            onClick={() => navigateTo('handover')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+              route === 'handover'
+                ? 'bg-slate-800 text-white shadow-xs'
+                : 'text-slate-600 hover:text-[#202124] hover:bg-white/60'
+            }`}
+          >
+            <Archive className="w-3.5 h-3.5" />
+            <span>Source ZIPs</span>
+          </button>
+        </nav>
+
+        {/* Back to Client Admin Dashboard */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigateTo('admin')}
+            className="px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white shadow-xs"
+            title="Return to pure Client Admin Dashboard"
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 text-[#FFC928]" />
+            <span>Back to Admin Dashboard</span>
+          </button>
+        </div>
+      </header>
+    );
+  };
+
   // =========================================================================
   // 1. SEPARATE STANDALONE PREVIEW: CUSTOMER APP (?preview=customer)
   // =========================================================================
   if (route === 'customer') {
     return (
-      <div className="min-h-screen bg-[#121316] text-white flex flex-col items-center justify-center p-4 relative antialiased">
-        <div className="w-full max-w-md flex items-center justify-between mb-3 px-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#FFC928]" />
-            <span className="text-xs font-bold text-white tracking-wide uppercase">
-              Customer Mobile App (Flutter)
-            </span>
-          </div>
-          <button
-            onClick={() => navigateTo('admin')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Admin Dashboard</span>
-          </button>
+      <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col antialiased">
+        {renderTopSwitcherBar()}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8">
+          <CustomerAppSimulator
+            categories={categories}
+            workers={workers}
+            bookings={bookings}
+          />
         </div>
-        <CustomerAppSimulator
-          categories={categories}
-          workers={workers}
-          bookings={bookings}
-        />
       </div>
     );
   }
@@ -212,23 +289,11 @@ export default function App() {
   // =========================================================================
   if (route === 'employee') {
     return (
-      <div className="min-h-screen bg-[#121316] text-white flex flex-col items-center justify-center p-4 relative antialiased">
-        <div className="w-full max-w-md flex items-center justify-between mb-3 px-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#D71920]" />
-            <span className="text-xs font-bold text-white tracking-wide uppercase">
-              Employee Mobile App (Flutter)
-            </span>
-          </div>
-          <button
-            onClick={() => navigateTo('admin')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold text-white transition-colors cursor-pointer"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Admin Dashboard</span>
-          </button>
+      <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col antialiased">
+        {renderTopSwitcherBar()}
+        <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8">
+          <EmployeeAppSimulator workers={workers} bookings={bookings} />
         </div>
-        <EmployeeAppSimulator workers={workers} bookings={bookings} />
       </div>
     );
   }
@@ -239,9 +304,10 @@ export default function App() {
   if (route === 'dual') {
     return (
       <div className="min-h-screen bg-[#1E1F23] text-white flex flex-col antialiased">
+        {renderTopSwitcherBar()}
         <div className="bg-[#121316] border-b border-white/10 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-extrabold text-white text-xs">
+            <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-extrabold text-white text-xs border border-[#FFC928]">
               M
             </div>
             <div>
@@ -275,9 +341,10 @@ export default function App() {
   if (route === 'handover') {
     return (
       <div className="min-h-screen bg-[#FFFDF8] text-[#202124] flex flex-col antialiased">
+        {renderTopSwitcherBar()}
         <div className="bg-white border-b border-[#202124]/10 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-extrabold text-white text-xs">
+            <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-extrabold text-white text-xs border border-[#FFC928]">
               M
             </div>
             <div>
@@ -449,31 +516,40 @@ export default function App() {
   // =========================================================================
   if (!adminAuth.isAuthenticated) {
     return (
-      <AdminLogin
-        onSuccess={() => setAdminAuth(dataService.getAdminAuth())}
-      />
+      <div className="min-h-screen bg-[#FFFDF8] flex flex-col antialiased">
+        <div className="flex-1">
+          <AdminLogin
+            onSuccess={() => setAdminAuth(dataService.getAdminAuth())}
+            showPreviews={isDevMode}
+            onDevToggle={() => setIsDevMode((prev) => !prev)}
+            onOpenPreview={(target) => navigateTo(target)}
+          />
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FFFDF8] flex text-[#202124] antialiased">
-      <AdminSidebar
-        activeTab={adminTab}
-        onSelectTab={(tab) => setAdminTab(tab)}
-        pendingWorkersCount={workers.filter((w) => w.approvalStatus === 'pending').length}
-        openDisputesCount={disputes.filter((d) => d.status === 'open' || d.status === 'investigating').length}
-        openSafetyCount={safetyIncidents.filter((s) => s.status !== 'resolved').length}
-      />
-
-      <div className="flex-1 flex flex-col min-w-0">
-        <AdminHeader
-          currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
-          onLogout={handleLogout}
-          /* onOpenPreview omitted here so the client dashboard has zero preview buttons/menus */
+    <div className="min-h-screen bg-[#FFFDF8] flex flex-col text-[#202124] antialiased">
+      <div className="flex-1 flex min-h-0">
+        <AdminSidebar
+          activeTab={adminTab}
+          onSelectTab={(tab) => setAdminTab(tab)}
+          pendingWorkersCount={workers.filter((w) => w.approvalStatus === 'pending').length}
+          openDisputesCount={disputes.filter((d) => d.status === 'open' || d.status === 'investigating').length}
+          openSafetyCount={safetyIncidents.filter((s) => s.status !== 'resolved').length}
         />
-        <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto">
-          {renderAdminContent()}
-        </main>
+
+        <div className="flex-1 flex flex-col min-w-0">
+          <AdminHeader
+            currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
+            onLogout={handleLogout}
+            onOpenPreview={isDevMode ? (mode) => navigateTo(mode) : undefined}
+          />
+          <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto">
+            {renderAdminContent()}
+          </main>
+        </div>
       </div>
     </div>
   );
