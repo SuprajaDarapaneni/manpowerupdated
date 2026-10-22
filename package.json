@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
+    "dev:all": "node scripts/start-all.mjs",
+    "dev:frontend": "npm --prefix admin/frontend run dev",
+    "dev:backend": "npm --prefix admin/backend run dev",
     "build": "vite build",
+    "build:frontend": "npm --prefix admin/frontend run build",
+    "build:backend": "npm --prefix admin/backend run build",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit"
