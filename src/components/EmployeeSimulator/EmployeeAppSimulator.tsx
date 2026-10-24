@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Home,
   Search,
@@ -33,6 +33,10 @@ import {
   Volume2,
   AlertTriangle,
   Wallet,
+  Coffee,
+  Pause,
+  Play,
+  Receipt,
 } from 'lucide-react';
 import { Booking, Worker, StatusTimelineNode } from '../../types';
 import { dataService, playNotificationSound } from '../../services/storage';
@@ -110,7 +114,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'worker' | 'customer'; text: string; time: string }>>([
     { sender: 'customer', text: 'Ramesh, please report at Dock 4 Container Bay at 9:00 AM.', time: '09:12 AM' },
     { sender: 'worker', text: 'Understood sir. I have my safety gear ready and will verify Start OTP on arrival.', time: '09:14 AM' },
-    { sender: 'customer', text: 'Start OTP will be 4829. Enter upon supervisor inspection.', time: '09:15 AM' },
+    { sender: 'customer', text: 'Start OTP will be provided at worksite upon supervisor gate inspection.', time: '09:15 AM' },
   ]);
   const [inputMessage, setInputMessage] = useState('');
 
@@ -686,19 +690,57 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                         </div>
                       )}
 
-                      {/* Step 1: Start OTP with Confirmation */}
+                      {/* 1. Step: GPS Worksite Arrival */}
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                            <MapPin className="w-3.5 h-3.5 text-[#D71920]" />
+                            <span>Worksite Arrival (GPS Check)</span>
+                          </span>
+                          <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">
+                            GPS ±10m
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[#686868]">
+                          Location: {currentGpsLocation.address}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            triggerAppRingAlert('📍 GPS Arrival Recorded! You have reached the worksite. Please request Start OTP from employer.');
+                          }}
+                          className="w-full py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-xs font-bold text-[#202124] flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#D71920]" />
+                          <span>I Have Reached Worksite</span>
+                        </button>
+                      </div>
+
+                      {/* 2. Step 1: Start OTP with Dynamic Code & Auto-Fill */}
                       <div className="bg-amber-50/50 p-3.5 rounded-2xl border-2 border-[#FFC928]/90 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-[#D71920]" />
-                            <span>Step 1: Check-in via Start OTP</span>
+                            <span>Step 1: Verify Start OTP</span>
                           </span>
-                          <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded font-black">
-                            Customer OTP: 4829
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded font-black">
+                              Code: {selectedBooking?.startOtp || 'Pending'}
+                            </span>
+                            {selectedBooking?.startOtp && (
+                              <button
+                                type="button"
+                                onClick={() => setStartOtpInput(selectedBooking.startOtp || '')}
+                                className="text-[9px] bg-[#D71920] text-white px-1.5 py-0.5 rounded font-bold hover:bg-[#A80F18] cursor-pointer"
+                                title="Auto-fill OTP from booking"
+                              >
+                                Auto-Fill
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <p className="text-[10px] text-[#686868]">
-                          Ask the worksite manager for their 4-digit start OTP:
+                          Ask the worksite employer for their 4-digit start OTP to begin shift:
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -706,7 +748,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                             maxLength={4}
                             value={startOtpInput}
                             onChange={(e) => setStartOtpInput(e.target.value)}
-                            placeholder="e.g. 4829"
+                            placeholder={selectedBooking?.startOtp ? `e.g. ${selectedBooking.startOtp}` : '4-digit OTP'}
                             className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-amber-300 rounded-xl focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40 text-[#202124]"
                           />
                           <button
@@ -719,27 +761,106 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                         </div>
                       </div>
 
-                      {/* Step 2: End OTP with Cash collection & Platform Fee deduction */}
+                      {/* 3. Work In-Progress Controls: Work Hold & Resume */}
+                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-[#202124]">Work Hold / Break Management</span>
+                          <span className="text-[10px] text-slate-500 font-semibold">
+                            {selectedBooking?.workHoldState?.isHold ? (
+                              <span className="text-[#D71920] font-black animate-pulse">ON HOLD</span>
+                            ) : (
+                              'ACTIVE SHIFT'
+                            )}
+                          </span>
+                        </div>
+                        {selectedBooking?.workHoldState?.isHold ? (
+                          <div className="space-y-1.5">
+                            <div className="p-2 bg-red-50 border border-red-200 rounded-xl text-xs text-[#C62828] flex items-center justify-between">
+                              <span>⏸ Break in progress ({selectedBooking.workHoldState.holdReason || 'Meal / Rain Break'})</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedBooking) {
+                                  dataService.resumeBookingWork(selectedBooking.id);
+                                  triggerAppRingAlert('▶ Work Resumed! Shift timer continues.');
+                                }
+                              }}
+                              className="w-full py-1.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors"
+                            >
+                              ▶ Resume Work Now
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedBooking) {
+                                  dataService.holdBookingWork(selectedBooking.id, 'Lunch / Meal Break (45 min)');
+                                  triggerAppRingAlert('⏸ Shift put on hold for Lunch Break.');
+                                }
+                              }}
+                              className="flex-1 py-1.5 px-2 bg-amber-100 hover:bg-amber-200 text-[#202124] rounded-xl text-[11px] font-bold border border-amber-300 transition-colors cursor-pointer text-center"
+                            >
+                              ⏸ Meal Break
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (selectedBooking) {
+                                  dataService.holdBookingWork(selectedBooking.id, 'Weather / Rain Delay');
+                                  triggerAppRingAlert('⏸ Shift put on hold for Weather Delay.');
+                                }
+                              }}
+                              className="flex-1 py-1.5 px-2 bg-slate-200 hover:bg-slate-300 text-[#202124] rounded-xl text-[11px] font-bold border border-slate-300 transition-colors cursor-pointer text-center"
+                            >
+                              ⏸ Rain / Delay
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* 4. Step 2: End OTP with Dynamic Code & Auto-Fill & Cash Collection */}
                       <div className="bg-amber-50/50 p-3.5 rounded-2xl border-2 border-[#FFC928]/90 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-[#FFC928]" />
-                            <span>Step 2: Collect Cash & End OTP</span>
+                            <span>Step 2: Collect Wage & End OTP</span>
                           </span>
-                          <span className="text-[10px] bg-[#D71920] text-white px-2 py-0.5 rounded font-bold">
-                            End Code: 9154
-                          </span>
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] bg-[#D71920] text-white px-2 py-0.5 rounded font-bold">
+                              Code: {selectedBooking?.endOtp || 'Pending'}
+                            </span>
+                            {selectedBooking?.endOtp && (
+                              <button
+                                type="button"
+                                onClick={() => setEndOtpInput(selectedBooking.endOtp || '')}
+                                className="text-[9px] bg-[#FFC928] text-[#202124] px-1.5 py-0.5 rounded font-black hover:bg-[#E5A900] cursor-pointer"
+                                title="Auto-fill End OTP"
+                              >
+                                Auto-Fill
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-[10px] text-[#686868]">
-                          Collect full wage from customer, then enter End OTP to finish:
-                        </p>
+                        <div className="bg-white p-2.5 rounded-xl border border-amber-200 text-xs space-y-1">
+                          <div className="flex justify-between font-bold text-[#202124]">
+                            <span>Wage to Collect from Employer:</span>
+                            <span className="text-emerald-700 font-black">₹{selectedBooking?.offeredPricePerWorker || 2000}</span>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-[#686868]">
+                            <span>Platform Commission (debited from your wallet):</span>
+                            <span className="text-[#D71920] font-bold">-₹{Math.round((selectedBooking?.offeredPricePerWorker || 2000) * 0.1)}</span>
+                          </div>
+                        </div>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             maxLength={4}
                             value={endOtpInput}
                             onChange={(e) => setEndOtpInput(e.target.value)}
-                            placeholder="e.g. 9154"
+                            placeholder={selectedBooking?.endOtp ? `e.g. ${selectedBooking.endOtp}` : '4-digit OTP'}
                             className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-amber-300 rounded-xl focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40 text-[#202124]"
                           />
                           <button

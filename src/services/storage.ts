@@ -20,6 +20,8 @@ import {
   PaymentMethodSetting,
   AppNotification,
   GpsLocationStamp,
+  ServiceZone,
+  ZoneCategoryPrice,
 } from '../types';
 import {
   initialCategories,
@@ -47,6 +49,8 @@ const STORAGE_KEYS = {
   VIEW_MODE: 'manpowerlink_view_mode_v2',
   ADMIN_AUTH: 'manpowerlink_admin_auth_v1',
   UPI_PAYOUT_REQUESTS: 'manpowerlink_upi_payout_requests_v1',
+  ZONES: 'manpowerlink_service_zones_v2',
+  ZONE_PRICES: 'manpowerlink_zone_prices_v2',
 };
 
 // Official Kotak / PhonePe UPI Account for Platform Recharges & Payments
@@ -90,6 +94,215 @@ export const initialPayoutRequests: UpiPayoutRequest[] = [
     acceptedAt: '14 Oct 2026, 03:00 PM',
     utrNumber: '428919028371',
     adminNote: 'Approved & credited to suresh.gowda@paytm via Kotak UPI',
+  },
+];
+
+export const initialServiceZones: ServiceZone[] = [
+  {
+    id: 'zone-1',
+    name: 'Baikampady Industrial Hub',
+    code: 'ZONE-MNG-BAIKAMPADY',
+    city: 'Mangalore',
+    state: 'Karnataka',
+    description: 'Heavy industrial estate, manufacturing units, logistics warehouses, and container freight stations.',
+    pincodes: ['575011', '575010', '575019'],
+    geofenceRadiusKm: 12,
+    centerCoordinates: { lat: 12.942, lng: 74.818 },
+    isActive: true,
+    surgeMultiplier: 1.0,
+    createdAt: '2026-09-01',
+  },
+  {
+    id: 'zone-2',
+    name: 'Panambur Port & Dock Corridor',
+    code: 'ZONE-MNG-PANAMBUR',
+    city: 'Mangalore',
+    state: 'Karnataka',
+    description: 'New Mangalore Port, maritime cargo handling, container de-stuffing berths, and customs CFS.',
+    pincodes: ['575010', '575024'],
+    geofenceRadiusKm: 10,
+    centerCoordinates: { lat: 12.928, lng: 74.809 },
+    isActive: true,
+    surgeMultiplier: 1.15,
+    createdAt: '2026-09-01',
+  },
+  {
+    id: 'zone-3',
+    name: 'Mangalore City Central & Commercial',
+    code: 'ZONE-MNG-CENTRAL',
+    city: 'Mangalore',
+    state: 'Karnataka',
+    description: 'Commercial retail hubs, domestic packing & shifting, restaurants, banquet event halls.',
+    pincodes: ['575001', '575002', '575003', '575004'],
+    geofenceRadiusKm: 15,
+    centerCoordinates: { lat: 12.871, lng: 74.843 },
+    isActive: true,
+    surgeMultiplier: 1.0,
+    createdAt: '2026-09-01',
+  },
+  {
+    id: 'zone-4',
+    name: 'Surathkal & Mukka Industrial Belt',
+    code: 'ZONE-MNG-SURATHKAL',
+    city: 'Mangalore',
+    state: 'Karnataka',
+    description: 'Academic logistics, infrastructure projects, NITK corridor, and construction hubs.',
+    pincodes: ['575014', '575025'],
+    geofenceRadiusKm: 12,
+    centerCoordinates: { lat: 13.011, lng: 74.793 },
+    isActive: true,
+    surgeMultiplier: 1.0,
+    createdAt: '2026-09-15',
+  },
+  {
+    id: 'zone-5',
+    name: 'Udupi & Manipal Commercial Zone',
+    code: 'ZONE-UDU-MANIPAL',
+    city: 'Udupi',
+    state: 'Karnataka',
+    description: 'Hospitality catering, educational institutional labor, healthcare shifting, and tourism events.',
+    pincodes: ['576101', '576104'],
+    geofenceRadiusKm: 16,
+    centerCoordinates: { lat: 13.341, lng: 74.742 },
+    isActive: true,
+    surgeMultiplier: 1.05,
+    createdAt: '2026-09-20',
+  },
+];
+
+export const initialZonePrices: ZoneCategoryPrice[] = [
+  // Baikampady Zone
+  {
+    id: 'zp-1',
+    zoneId: 'zone-1',
+    zoneName: 'Baikampady Industrial Hub',
+    categoryId: 'cat-1',
+    categoryName: 'Loading & Unloading',
+    hourlyRate: 280,
+    fullDayRate: 2200,
+    halfDayRate: 1200,
+    lumpSumBasePrice: 8000,
+    overtimeHourlyRate: 350,
+    nightShiftAllowance: 250,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 150,
+    updatedAt: '2026-10-15',
+  },
+  {
+    id: 'zp-2',
+    zoneId: 'zone-1',
+    zoneName: 'Baikampady Industrial Hub',
+    categoryId: 'cat-6',
+    categoryName: 'Packing & Moving',
+    hourlyRate: 260,
+    fullDayRate: 2000,
+    halfDayRate: 1100,
+    lumpSumBasePrice: 7500,
+    overtimeHourlyRate: 320,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 150,
+    updatedAt: '2026-10-15',
+  },
+  {
+    id: 'zp-3',
+    zoneId: 'zone-1',
+    zoneName: 'Baikampady Industrial Hub',
+    categoryId: 'cat-5',
+    categoryName: 'Construction & Masonry Support',
+    hourlyRate: 270,
+    fullDayRate: 2100,
+    halfDayRate: 1150,
+    lumpSumBasePrice: 8500,
+    overtimeHourlyRate: 340,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 150,
+    updatedAt: '2026-10-15',
+  },
+
+  // Panambur Port Zone
+  {
+    id: 'zp-4',
+    zoneId: 'zone-2',
+    zoneName: 'Panambur Port & Dock Corridor',
+    categoryId: 'cat-1',
+    categoryName: 'Loading & Unloading',
+    hourlyRate: 300,
+    fullDayRate: 2400,
+    halfDayRate: 1300,
+    lumpSumBasePrice: 9500,
+    overtimeHourlyRate: 400,
+    nightShiftAllowance: 300,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 200,
+    updatedAt: '2026-10-16',
+  },
+  {
+    id: 'zp-5',
+    zoneId: 'zone-2',
+    zoneName: 'Panambur Port & Dock Corridor',
+    categoryId: 'cat-4',
+    categoryName: 'Commercial Cleaning',
+    hourlyRate: 220,
+    fullDayRate: 1800,
+    halfDayRate: 1000,
+    lumpSumBasePrice: 6500,
+    overtimeHourlyRate: 280,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 100,
+    updatedAt: '2026-10-16',
+  },
+
+  // Mangalore City Central
+  {
+    id: 'zp-6',
+    zoneId: 'zone-3',
+    zoneName: 'Mangalore City Central & Commercial',
+    categoryId: 'cat-6',
+    categoryName: 'Packing & Moving',
+    hourlyRate: 250,
+    fullDayRate: 1900,
+    halfDayRate: 1050,
+    lumpSumBasePrice: 7000,
+    overtimeHourlyRate: 300,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 100,
+    updatedAt: '2026-10-17',
+  },
+  {
+    id: 'zp-7',
+    zoneId: 'zone-3',
+    zoneName: 'Mangalore City Central & Commercial',
+    categoryId: 'cat-2',
+    categoryName: 'Food & Catering Service',
+    hourlyRate: 200,
+    fullDayRate: 1600,
+    halfDayRate: 900,
+    lumpSumBasePrice: 6000,
+    overtimeHourlyRate: 250,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 100,
+    updatedAt: '2026-10-17',
+  },
+  {
+    id: 'zp-8',
+    zoneId: 'zone-3',
+    zoneName: 'Mangalore City Central & Commercial',
+    categoryId: 'cat-3',
+    categoryName: 'Event Staffing',
+    hourlyRate: 300,
+    fullDayRate: 2400,
+    halfDayRate: 1300,
+    lumpSumBasePrice: 8500,
+    overtimeHourlyRate: 380,
+    nightShiftAllowance: 250,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 150,
+    updatedAt: '2026-10-17',
   },
 ];
 
@@ -590,6 +803,8 @@ class DataService {
       upiTransactionRef: bookingData.upiTransactionRef,
       walletDebited: bookingData.walletDebited || false,
       foodDetails: bookingData.foodDetails,
+      zoneId: bookingData.zoneId || 'zone-1',
+      zoneName: bookingData.zoneName || 'Baikampady Industrial Hub',
       status: 'SEARCHING_EMPLOYEES',
       paymentStatus: bookingData.walletDebited || bookingData.upiTransactionRef ? 'successful' : 'pending',
       paymentMethod: (bookingData.paymentMethod as any) || (bookingData.paymentMode === 'wallet' ? 'wallet' : 'cash'),
@@ -602,7 +817,7 @@ class DataService {
           id: `node-${Date.now()}-1`,
           stageKey: 'JOB_POSTED',
           title: 'Job Order Published',
-          description: `Customer posted requirement for ${bookingData.requiredWorkers || 2} workers at ₹${bookingData.offeredPricePerWorker || 2000}/day. Broadcast to eligible workers.`,
+          description: `Customer posted requirement for ${bookingData.requiredWorkers || 2} workers at ₹${bookingData.offeredPricePerWorker || 2000}/day in ${bookingData.zoneName || 'Baikampady Zone'}. Broadcast to eligible workers.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           location: {
             address: bookingData.workLocation?.address || 'Mangalore Port Warehouse',
@@ -670,6 +885,226 @@ class DataService {
     this.logAudit('New Job Created', `${newBooking.orderNumber} by ${newBooking.customerName}`);
     playNotificationSound();
     return newBooking;
+  }
+
+  // ==========================================
+  // Service Zones & Zone Pricing Matrix
+  // ==========================================
+  public getServiceZones(): ServiceZone[] {
+    return this.getItem(STORAGE_KEYS.ZONES, initialServiceZones);
+  }
+
+  public setServiceZones(zones: ServiceZone[]): void {
+    this.setItem(STORAGE_KEYS.ZONES, zones);
+  }
+
+  public addServiceZone(zone: Omit<ServiceZone, 'id' | 'createdAt'>): ServiceZone {
+    const list = this.getServiceZones();
+    const newZone: ServiceZone = {
+      ...zone,
+      id: `zone-${Date.now()}`,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    this.setServiceZones([...list, newZone]);
+    this.logAudit('Service Zone Created', `Added service zone: ${newZone.name} (${newZone.code})`);
+    return newZone;
+  }
+
+  public updateServiceZone(zone: ServiceZone): void {
+    const list = this.getServiceZones().map((z) => (z.id === zone.id ? zone : z));
+    this.setServiceZones(list);
+    this.logAudit('Service Zone Updated', `Updated service zone: ${zone.name}`);
+  }
+
+  public deleteServiceZone(zoneId: string): void {
+    const list = this.getServiceZones().filter((z) => z.id !== zoneId);
+    this.setServiceZones(list);
+    // Also remove pricing for this zone
+    const prices = this.getZoneCategoryPrices().filter((p) => p.zoneId !== zoneId);
+    this.setZoneCategoryPrices(prices);
+    this.logAudit('Service Zone Removed', `Deleted zone ID: ${zoneId}`);
+  }
+
+  public getZoneCategoryPrices(): ZoneCategoryPrice[] {
+    return this.getItem(STORAGE_KEYS.ZONE_PRICES, initialZonePrices);
+  }
+
+  public setZoneCategoryPrices(prices: ZoneCategoryPrice[]): void {
+    this.setItem(STORAGE_KEYS.ZONE_PRICES, prices);
+  }
+
+  public getPriceForZoneAndCategory(zoneId: string, categoryId: string): ZoneCategoryPrice | undefined {
+    return this.getZoneCategoryPrices().find((p) => p.zoneId === zoneId && p.categoryId === categoryId);
+  }
+
+  public setPriceForZoneCategory(priceData: Omit<ZoneCategoryPrice, 'id' | 'updatedAt'>): ZoneCategoryPrice {
+    const list = this.getZoneCategoryPrices();
+    const existingIndex = list.findIndex(
+      (p) => p.zoneId === priceData.zoneId && p.categoryId === priceData.categoryId
+    );
+    const updatedRecord: ZoneCategoryPrice = {
+      ...priceData,
+      id: existingIndex >= 0 ? list[existingIndex].id : `zp-${Date.now()}`,
+      updatedAt: new Date().toISOString().split('T')[0],
+    };
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = updatedRecord;
+    } else {
+      list.push(updatedRecord);
+    }
+    this.setZoneCategoryPrices([...list]);
+    this.logAudit(
+      'Zone Price Configured',
+      `Configured rate for Zone "${priceData.zoneName}" - Category "${priceData.categoryName}": ₹${priceData.hourlyRate}/hr, ₹${priceData.fullDayRate}/shift`
+    );
+    return updatedRecord;
+  }
+
+  public clonePricesToZone(sourceZoneId: string, targetZoneId: string): number {
+    const zones = this.getServiceZones();
+    const targetZone = zones.find((z) => z.id === targetZoneId);
+    if (!targetZone) return 0;
+
+    const sourcePrices = this.getZoneCategoryPrices().filter((p) => p.zoneId === sourceZoneId);
+    const otherPrices = this.getZoneCategoryPrices().filter((p) => p.zoneId !== targetZoneId);
+
+    const cloned = sourcePrices.map((sp) => ({
+      ...sp,
+      id: `zp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      zoneId: targetZone.id,
+      zoneName: targetZone.name,
+      updatedAt: new Date().toISOString().split('T')[0],
+    }));
+
+    this.setZoneCategoryPrices([...otherPrices, ...cloned]);
+    this.logAudit(
+      'Zone Prices Cloned',
+      `Cloned ${cloned.length} category rates to Zone "${targetZone.name}"`
+    );
+    return cloned.length;
+  }
+
+  // ==========================================
+  // Work Hold / Resume & 10-Step Workflow Methods
+  // ==========================================
+  public holdBookingWork(bookingId: string, reason: string): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return;
+
+    const curHold = booking.workHoldState || { isHold: false, totalHoldMinutes: 0 };
+    const updatedBooking: Booking = {
+      ...booking,
+      workHoldState: {
+        isHold: true,
+        holdStartedAt: new Date().toISOString(),
+        totalHoldMinutes: curHold.totalHoldMinutes || 0,
+        holdReason: reason,
+      },
+      updatedAt: new Date().toLocaleString(),
+    };
+    this.updateBooking(updatedBooking);
+    this.logAudit('Work Put On Hold', `${booking.orderNumber} paused: ${reason}`);
+    playNotificationSound();
+  }
+
+  public resumeBookingWork(bookingId: string): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking || !booking.workHoldState) return;
+
+    let additionalMinutes = 0;
+    if (booking.workHoldState.holdStartedAt) {
+      const startMs = new Date(booking.workHoldState.holdStartedAt).getTime();
+      const nowMs = Date.now();
+      additionalMinutes = Math.max(1, Math.round((nowMs - startMs) / (1000 * 60)));
+    }
+
+    const updatedBooking: Booking = {
+      ...booking,
+      workHoldState: {
+        isHold: false,
+        holdStartedAt: undefined,
+        totalHoldMinutes: (booking.workHoldState.totalHoldMinutes || 0) + additionalMinutes,
+        holdReason: undefined,
+      },
+      updatedAt: new Date().toLocaleString(),
+    };
+    this.updateBooking(updatedBooking);
+    this.logAudit('Work Resumed', `${booking.orderNumber} resumed after ${additionalMinutes} min break`);
+    playNotificationSound();
+  }
+
+  public calculateAndSettleJob(
+    bookingId: string,
+    paymentMethod: 'cash' | 'upi' | 'wallet',
+    utrRef?: string,
+    workerRating: number = 5,
+    customerFeedback: string = 'Work completed satisfactorily'
+  ): { success: boolean; settlement?: any; error?: string } {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    const totalEst = booking.totalEstimatedAmount || (booking.offeredPricePerWorker * (booking.requiredWorkers || 1));
+    const commRate = booking.platformCommissionRate || 10;
+    const commDeducted = Math.round((totalEst * commRate) / 100);
+    const workerNetPayout = totalEst - commDeducted;
+
+    // Deduct platform commission from assigned worker's wallet if cash or credit
+    const workers = this.getWorkers();
+    const assignedWorkerId = booking.assignedWorkers[0]?.workerId || 'w-1';
+    const worker = workers.find((w) => w.id === assignedWorkerId);
+
+    if (worker) {
+      const curBal = worker.walletBalance || 500;
+      const newBal = Math.max(0, curBal - commDeducted);
+      const newTx = {
+        id: `wtx-${Date.now()}`,
+        type: 'fee_deduction' as const,
+        amount: commDeducted,
+        description: `Platform fee for ${booking.orderNumber} (${booking.categoryName})`,
+        timestamp: new Date().toLocaleString(),
+      };
+      const updatedWorker = {
+        ...worker,
+        walletBalance: newBal,
+        completedJobsCount: (worker.completedJobsCount || 0) + 1,
+        totalEarnings: (worker.totalEarnings || 0) + totalEst,
+        walletTransactions: [newTx, ...(worker.walletTransactions || [])],
+      };
+      this.updateWorker(updatedWorker);
+    }
+
+    const updatedBooking: Booking = {
+      ...booking,
+      status: 'ORDER_COMPLETED',
+      paymentStatus: 'successful',
+      paymentMode: paymentMethod,
+      finalSettlementAmount: totalEst,
+      paymentBreakdown: {
+        baseWage: totalEst,
+        overtimeAmount: 0,
+        foodAllowance: 0,
+        totalCalculated: totalEst,
+        platformCommissionDeducted: commDeducted,
+        workerNetPayout,
+      },
+      finalReportSummary: {
+        completedAt: new Date().toLocaleString(),
+        totalHoursWorked: booking.shiftHours || booking.packageApproxHours || 8,
+        workerRating,
+        customerFeedback,
+        settlementUtr: utrRef || `MPL/STL/${Date.now().toString().slice(-8)}`,
+      },
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit(
+      'Order Completed & Settled',
+      `${booking.orderNumber} completed. Total: ₹${totalEst}, Paid via ${paymentMethod.toUpperCase()}, Commission debited: ₹${commDeducted}`
+    );
+    playNotificationSound();
+    return { success: true, settlement: updatedBooking.paymentBreakdown };
   }
 
   // Worker Bidding

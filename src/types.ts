@@ -59,6 +59,41 @@ export interface ServiceCategory {
   };
 }
 
+export interface ServiceZone {
+  id: string;
+  name: string;
+  code: string;
+  city: string;
+  state: string;
+  description: string;
+  pincodes: string[];
+  geofenceRadiusKm: number;
+  centerCoordinates: {
+    lat: number;
+    lng: number;
+  };
+  isActive: boolean;
+  surgeMultiplier?: number;
+  createdAt: string;
+}
+
+export interface ZoneCategoryPrice {
+  id: string;
+  zoneId: string;
+  zoneName: string;
+  categoryId: string;
+  categoryName: string;
+  hourlyRate: number;
+  fullDayRate: number;
+  halfDayRate: number;
+  lumpSumBasePrice: number;
+  overtimeHourlyRate: number;
+  nightShiftAllowance: number;
+  platformCommissionPercent: number;
+  minWorkerWalletBalance: number;
+  updatedAt: string;
+}
+
 export interface Worker {
   id: string;
   name: string;
@@ -219,6 +254,29 @@ export interface Booking {
   startOtp: string;
   endOtp: string;
   jobTitle?: string;
+  zoneId?: string;
+  zoneName?: string;
+  workHoldState?: {
+    isHold: boolean;
+    holdStartedAt?: string;
+    totalHoldMinutes: number;
+    holdReason?: string;
+  };
+  paymentBreakdown?: {
+    baseWage: number;
+    overtimeAmount: number;
+    foodAllowance: number;
+    totalCalculated: number;
+    platformCommissionDeducted: number;
+    workerNetPayout: number;
+  };
+  finalReportSummary?: {
+    completedAt: string;
+    totalHoursWorked: number;
+    workerRating: number;
+    customerFeedback?: string;
+    settlementUtr?: string;
+  };
   timelineTree?: StatusTimelineNode[];
   createdAt: string;
   updatedAt: string;

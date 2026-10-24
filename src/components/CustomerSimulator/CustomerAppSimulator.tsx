@@ -162,6 +162,10 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   const [addMoneyUtr, setAddMoneyUtr] = useState('');
   const [copiedUpi, setCopiedUpi] = useState(false);
 
+  // Service Zone Selection
+  const [selectedZoneId, setSelectedZoneId] = useState<string>('zone-1');
+  const serviceZones = dataService.getServiceZones();
+
   // Post Job Form State: Pricing Model (Hourly vs Full Package)
   const [pricingModel, setPricingModel] = useState<'hourly' | 'full_package'>('hourly');
   const [jobTitle, setJobTitle] = useState('Loading and moving boxes');
@@ -571,6 +575,8 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       paymentMethod: paymentSelection === 'wallet' ? 'wallet' : paymentSelection === 'upi_qr' ? 'online' : 'cash',
       walletDebited,
       upiTransactionRef: upiRef,
+      zoneId: selectedZoneId,
+      zoneName: serviceZones.find((z) => z.id === selectedZoneId)?.name || 'Baikampady Industrial Hub',
       workLocation: {
         address: jobLocation,
         city: 'Mangalore, Karnataka',
@@ -1686,6 +1692,42 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     {/* Step indicator bar - Red and Yellow Dual Progress */}
                     <div className="w-full h-2 bg-amber-100 rounded-full overflow-hidden border border-amber-200">
                       <div className="w-3/4 h-full bg-linear-to-r from-[#D71920] via-[#E5A900] to-[#FFC928] rounded-full" />
+                    </div>
+
+                    {/* Section 0: Select Service Zone (Dynamic Pricing Linkage) */}
+                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#FFC928] shadow-xs space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#D71920]" />
+                          <span>Select Operational Service Zone *</span>
+                        </label>
+                        <span className="text-[10px] bg-[#FFC928] text-[#202124] font-bold px-2 py-0.5 rounded">
+                          Zone Pricing
+                        </span>
+                      </div>
+                      <select
+                        value={selectedZoneId}
+                        onChange={(e) => {
+                          const zId = e.target.value;
+                          setSelectedZoneId(zId);
+                          const zonePrice = dataService.getPriceForZoneAndCategory(zId, selectedCategory.id);
+                          if (zonePrice) {
+                            setPricePerHourPerHead(zonePrice.hourlyRate);
+                            setCustomPackageRate(zonePrice.fullDayRate);
+                          }
+                          const zoneObj = serviceZones.find((z) => z.id === zId);
+                          if (zoneObj) {
+                            setJobLocation(`${zoneObj.name}, ${zoneObj.city}`);
+                          }
+                        }}
+                        className="w-full px-3 py-2 text-xs bg-amber-50/50 border border-amber-300 rounded-xl focus:outline-none focus:border-[#FFC928] font-bold text-[#202124] cursor-pointer"
+                      >
+                        {serviceZones.map((z) => (
+                          <option key={z.id} value={z.id}>
+                            📍 {z.name} ({z.code}) – {z.city}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Section 1: Select Service Category Chips */}

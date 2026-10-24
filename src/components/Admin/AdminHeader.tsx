@@ -10,6 +10,7 @@ import {
   HardHat,
   Archive,
   ExternalLink,
+  Menu,
 } from 'lucide-react';
 import { dataService } from '../../services/storage';
 
@@ -17,12 +18,14 @@ interface AdminHeaderProps {
   currentTabName: string;
   onLogout: () => void;
   onOpenPreview?: (route: 'customer' | 'employee' | 'dual' | 'handover') => void;
+  onToggleMobileSidebar?: () => void;
 }
 
 export const AdminHeader: React.FC<AdminHeaderProps> = ({
   currentTabName,
   onLogout,
   onOpenPreview,
+  onToggleMobileSidebar,
 }) => {
   const adminAuth = dataService.getAdminAuth();
   const [showPreviewMenu, setShowPreviewMenu] = useState(false);
@@ -40,13 +43,23 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   }, []);
 
   return (
-    <header className="h-16 bg-white border-b border-[#202124]/10 px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
-      {/* Zone 1: Breadcrumb and Title */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 text-sm text-[#686868]">
+    <header className="h-16 bg-white border-b border-[#202124]/10 px-4 sm:px-6 flex items-center justify-between sticky top-0 z-30 shadow-xs">
+      {/* Zone 1: Mobile Hamburger & Breadcrumb Title */}
+      <div className="flex items-center gap-2 sm:gap-3">
+        {onToggleMobileSidebar && (
+          <button
+            type="button"
+            onClick={onToggleMobileSidebar}
+            className="md:hidden p-2 rounded-xl text-[#202124] hover:bg-slate-100 transition-colors cursor-pointer border border-slate-200 shadow-2xs"
+            title="Open navigation menu"
+          >
+            <Menu className="w-5 h-5 text-[#202124]" />
+          </button>
+        )}
+        <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-[#686868]">
           <span className="font-semibold text-[#D71920]">ManPowerLink</span>
           <span>/</span>
-          <span className="font-medium text-[#202124]">{currentTabName}</span>
+          <span className="font-medium text-[#202124] truncate max-w-[130px] sm:max-w-none">{currentTabName}</span>
         </div>
         <span className="hidden sm:inline-block px-2 py-0.5 text-[11px] font-bold bg-[#FFC928]/30 text-[#A80F18] rounded">
           Central API Connected

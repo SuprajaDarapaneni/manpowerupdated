@@ -10,14 +10,14 @@ import { CommissionSetupView } from './components/Admin/CommissionSetupView';
 import { WorkersManagementView } from './components/Admin/WorkersManagementView';
 import { CustomersManagementView } from './components/Admin/CustomersManagementView';
 import { UsersManagementView } from './components/Admin/UsersManagementView';
-import { PricingMatchingView } from './components/Admin/PricingMatchingView';
+import { ZonePricingView } from './components/Admin/ZonePricingView';
 import { DisputesView } from './components/Admin/DisputesView';
 import { SafetyPrivacyView } from './components/Admin/SafetyPrivacyView';
 import { ReportsView } from './components/Admin/ReportsView';
 import { AuditTrailView } from './components/Admin/AuditTrailView';
 import { SettingsManagement } from './components/Admin/SettingsManagement';
-import { CustomerAppSimulator } from './components/CustomerSimulator/CustomerAppSimulator';
-import { EmployeeAppSimulator } from './components/EmployeeSimulator/EmployeeAppSimulator';
+import { CustomerApp } from './apps/customer/CustomerApp';
+import { EmployeeApp } from './apps/employee/EmployeeApp';
 import { DualAppsPreview } from './components/DualAppsPreview';
 import { HandoverCenter } from './components/Handover/HandoverCenter';
 import {
@@ -57,6 +57,7 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     return params.get('dev') === 'true' || params.get('debug') === 'true';
   });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Reactive platform state
   const [categories, setCategories] = useState(() => dataService.getCategories());
@@ -153,7 +154,7 @@ export default function App() {
           />
         );
       case 'pricing':
-        return <PricingMatchingView initialOtpSettings={otpSettings} />;
+        return <ZonePricingView initialOtpSettings={otpSettings} />;
       case 'disputes':
         return <DisputesView disputes={disputes} />;
       case 'safety':
@@ -183,118 +184,29 @@ export default function App() {
     }
   };
 
-  // Navigation switcher bar only for preview and developer testing pages
-  const renderTopSwitcherBar = () => {
-    if (route === 'admin') return null; // Standard Admin View NEVER shows preview switcher
-    return (
-      <header className="bg-white border-b border-slate-200 px-6 py-2.5 flex items-center justify-between text-xs sticky top-0 z-50 shrink-0 select-none shadow-xs">
-        {/* Brand */}
-        <div className="flex items-center gap-3">
-          <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-black text-white text-xs shadow-xs border border-[#FFC928]">
-            M
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-extrabold text-[#202124] text-sm tracking-tight">ManPowerLink</span>
-              <span className="text-[10px] font-bold bg-[#FFC928] text-[#202124] px-1.5 py-0.5 rounded">
-                PREVIEW MODE
-              </span>
-            </div>
-          </div>
-        </div>
 
-        {/* Navigation Tabs */}
-        <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
-          <button
-            onClick={() => navigateTo('customer')}
-            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-              route === 'customer'
-                ? 'bg-[#D71920] text-white shadow-xs'
-                : 'text-slate-600 hover:text-[#202124] hover:bg-white/60'
-            }`}
-          >
-            <Smartphone className="w-3.5 h-3.5 text-[#FFC928]" />
-            <span>Customer App</span>
-          </button>
-          <button
-            onClick={() => navigateTo('employee')}
-            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-              route === 'employee'
-                ? 'bg-[#D71920] text-white shadow-xs'
-                : 'text-slate-600 hover:text-[#202124] hover:bg-white/60'
-            }`}
-          >
-            <HardHat className="w-3.5 h-3.5 text-[#FFC928]" />
-            <span>Employee App</span>
-          </button>
-          <button
-            onClick={() => navigateTo('dual')}
-            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-              route === 'dual'
-                ? 'bg-[#FFC928] text-[#202124] shadow-xs'
-                : 'text-slate-600 hover:text-[#202124] hover:bg-white/60'
-            }`}
-          >
-            <Columns className="w-3.5 h-3.5 text-[#D71920]" />
-            <span>⚡ Dual Split View (Live)</span>
-          </button>
-          <button
-            onClick={() => navigateTo('handover')}
-            className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
-              route === 'handover'
-                ? 'bg-slate-800 text-white shadow-xs'
-                : 'text-slate-600 hover:text-[#202124] hover:bg-white/60'
-            }`}
-          >
-            <Archive className="w-3.5 h-3.5" />
-            <span>Source ZIPs</span>
-          </button>
-        </nav>
-
-        {/* Back to Client Admin Dashboard */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => navigateTo('admin')}
-            className="px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white shadow-xs"
-            title="Return to pure Client Admin Dashboard"
-          >
-            <LayoutDashboard className="w-3.5 h-3.5 text-[#FFC928]" />
-            <span>Back to Admin Dashboard</span>
-          </button>
-        </div>
-      </header>
-    );
-  };
 
   // =========================================================================
-  // 1. SEPARATE STANDALONE PREVIEW: CUSTOMER APP (?preview=customer)
+  // 1. SEPARATE STANDALONE PREVIEW: CUSTOMER APP (?preview=customer or ?app=customer)
   // =========================================================================
   if (route === 'customer') {
     return (
-      <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col antialiased">
-        {renderTopSwitcherBar()}
-        <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8">
-          <CustomerAppSimulator
-            categories={categories}
-            workers={workers}
-            bookings={bookings}
-          />
-        </div>
-      </div>
+      <CustomerApp
+        onBackToAdmin={() => navigateTo('admin')}
+        showExitBar={isDevMode}
+      />
     );
   }
 
   // =========================================================================
-  // 2. SEPARATE STANDALONE PREVIEW: EMPLOYEE APP (?preview=employee)
+  // 2. SEPARATE STANDALONE PREVIEW: EMPLOYEE APP (?preview=employee or ?app=employee)
   // =========================================================================
   if (route === 'employee') {
     return (
-      <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col antialiased">
-        {renderTopSwitcherBar()}
-        <div className="flex-1 flex flex-col items-center justify-center p-6 md:p-8">
-          <EmployeeAppSimulator workers={workers} bookings={bookings} />
-        </div>
-      </div>
+      <EmployeeApp
+        onBackToAdmin={() => navigateTo('admin')}
+        showExitBar={isDevMode}
+      />
     );
   }
 
@@ -304,7 +216,6 @@ export default function App() {
   if (route === 'dual') {
     return (
       <div className="min-h-screen bg-[#1E1F23] text-white flex flex-col antialiased">
-        {renderTopSwitcherBar()}
         <div className="bg-[#121316] border-b border-white/10 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-extrabold text-white text-xs border border-[#FFC928]">
@@ -312,12 +223,12 @@ export default function App() {
             </div>
             <div>
               <span className="font-bold text-sm text-white">Dual Mobile Apps Simulation</span>
-              <p className="text-[10px] text-white/50">Side-by-side Customer & Employee interaction</p>
+              <p className="text-[10px] text-white/50">Side-by-side Customer & Employee 10-Step Workflow</p>
             </div>
           </div>
           <button
             onClick={() => navigateTo('admin')}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FFC928] text-[#202124] text-xs font-bold hover:bg-[#E5A900] transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold transition-colors cursor-pointer shadow-xs"
           >
             <LayoutDashboard className="w-3.5 h-3.5" />
             <span>Back to Admin Dashboard</span>
@@ -341,7 +252,6 @@ export default function App() {
   if (route === 'handover') {
     return (
       <div className="min-h-screen bg-[#FFFDF8] text-[#202124] flex flex-col antialiased">
-        {renderTopSwitcherBar()}
         <div className="bg-white border-b border-[#202124]/10 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-extrabold text-white text-xs border border-[#FFC928]">
@@ -460,12 +370,12 @@ export default function App() {
           )}
           {hubTab === 'customer' && (
             <div className="p-8 flex flex-col items-center justify-center min-h-[calc(100vh-61px)] bg-[#121316]">
-              <CustomerAppSimulator categories={categories} workers={workers} bookings={bookings} />
+              <CustomerApp />
             </div>
           )}
           {hubTab === 'employee' && (
             <div className="p-8 flex flex-col items-center justify-center min-h-[calc(100vh-61px)] bg-[#121316]">
-              <EmployeeAppSimulator workers={workers} bookings={bookings} />
+              <EmployeeApp />
             </div>
           )}
           {hubTab === 'admin' && (
@@ -478,18 +388,24 @@ export default function App() {
                 <>
                   <AdminSidebar
                     activeTab={adminTab}
-                    onSelectTab={(tab) => setAdminTab(tab)}
+                    onSelectTab={(tab) => {
+                      setAdminTab(tab);
+                      setIsMobileSidebarOpen(false);
+                    }}
                     pendingWorkersCount={workers.filter((w) => w.approvalStatus === 'pending').length}
                     openDisputesCount={disputes.filter((d) => d.status === 'open' || d.status === 'investigating').length}
                     openSafetyCount={safetyIncidents.filter((s) => s.status !== 'resolved').length}
+                    isOpenMobile={isMobileSidebarOpen}
+                    onCloseMobile={() => setIsMobileSidebarOpen(false)}
                   />
                   <div className="flex-1 flex flex-col min-w-0">
                     <AdminHeader
                       currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
                       onLogout={handleLogout}
                       onOpenPreview={(mode) => navigateTo(mode)}
+                      onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
                     />
-                    <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto">
+                    <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl w-full mx-auto">
                       {renderAdminContent()}
                     </main>
                   </div>
@@ -531,13 +447,18 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#FFFDF8] flex flex-col text-[#202124] antialiased">
-      <div className="flex-1 flex min-h-0">
+      <div className="flex-1 flex min-h-0 relative">
         <AdminSidebar
           activeTab={adminTab}
-          onSelectTab={(tab) => setAdminTab(tab)}
+          onSelectTab={(tab) => {
+            setAdminTab(tab);
+            setIsMobileSidebarOpen(false);
+          }}
           pendingWorkersCount={workers.filter((w) => w.approvalStatus === 'pending').length}
           openDisputesCount={disputes.filter((d) => d.status === 'open' || d.status === 'investigating').length}
           openSafetyCount={safetyIncidents.filter((s) => s.status !== 'resolved').length}
+          isOpenMobile={isMobileSidebarOpen}
+          onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />
 
         <div className="flex-1 flex flex-col min-w-0">
@@ -545,8 +466,9 @@ export default function App() {
             currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
             onLogout={handleLogout}
             onOpenPreview={isDevMode ? (mode) => navigateTo(mode) : undefined}
+            onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
           />
-          <main className="flex-1 p-6 overflow-y-auto max-w-7xl w-full mx-auto">
+          <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl w-full mx-auto">
             {renderAdminContent()}
           </main>
         </div>
