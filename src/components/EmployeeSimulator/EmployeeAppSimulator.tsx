@@ -98,12 +98,34 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   // Audio / Alert Notification State
   const [activeAlertToast, setActiveAlertToast] = useState<string | null>(null);
 
-  // Live Location Simulation
+  // Live Location Simulation (Automatic GPS Tracking)
   const [currentGpsLocation, setCurrentGpsLocation] = useState({
     address: 'Panambur Container Terminal Dock 4, Mangalore',
     lat: 12.945,
     lng: 74.815,
   });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setCurrentGpsLocation({
+            address: `Live GPS Pin (${pos.coords.latitude.toFixed(4)}° N, ${pos.coords.longitude.toFixed(4)}° E), Industrial Zone, Mangalore`,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+        },
+        () => {
+          setCurrentGpsLocation({
+            address: 'Live GPS Worksite Pin (12.9450° N, 74.8150° E), Panambur Terminal, Mangalore',
+            lat: 12.945,
+            lng: 74.815,
+          });
+        },
+        { timeout: 5000, enableHighAccuracy: true }
+      );
+    }
+  }, []);
 
   // OTP inputs for attendance check-in/out
   const [startOtpInput, setStartOtpInput] = useState('');

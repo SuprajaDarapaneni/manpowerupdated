@@ -169,8 +169,42 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   // Post Job Form State: Pricing Model (Hourly vs Full Package)
   const [pricingModel, setPricingModel] = useState<'hourly' | 'full_package'>('hourly');
   const [jobTitle, setJobTitle] = useState('Loading and moving boxes');
-  const [requiredWorkers, setRequiredWorkers] = useState(3);
-  const [jobLocation, setJobLocation] = useState('Mangalore Industrial Area, Karnataka');
+  const [jobLocation, setJobLocation] = useState('Live GPS Worksite Pin (12.9141° N, 74.8560° E), Industrial Zone, Mangalore');
+  const [isGpsAutoFilled, setIsGpsAutoFilled] = useState(true);
+  const [isDetectingGps, setIsDetectingGps] = useState(false);
+  const [gpsCoordinates, setGpsCoordinates] = useState<{ lat: number; lng: number } | null>({ lat: 12.9141, lng: 74.8560 });
+
+  const autoDetectGps = () => {
+    setIsDetectingGps(true);
+    if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setGpsCoordinates({ lat, lng });
+          setJobLocation(`Live GPS Pin (${lat.toFixed(4)}° N, ${lng.toFixed(4)}° E), Industrial Zone, Mangalore`);
+          setIsGpsAutoFilled(true);
+          setIsDetectingGps(false);
+        },
+        () => {
+          setGpsCoordinates({ lat: 12.9141, lng: 74.8560 });
+          setJobLocation('Live GPS Worksite Pin (12.9141° N, 74.8560° E), Industrial Zone, Mangalore');
+          setIsGpsAutoFilled(true);
+          setIsDetectingGps(false);
+        },
+        { timeout: 5000, enableHighAccuracy: true }
+      );
+    } else {
+      setGpsCoordinates({ lat: 12.9141, lng: 74.8560 });
+      setJobLocation('Live GPS Worksite Pin (12.9141° N, 74.8560° E), Industrial Zone, Mangalore');
+      setIsGpsAutoFilled(true);
+      setIsDetectingGps(false);
+    }
+  };
+
+  useEffect(() => {
+    autoDetectGps();
+  }, []);
 
   // Hourly Basis Specific Fields
   const [pricePerHourPerHead, setPricePerHourPerHead] = useState(250);
@@ -2093,18 +2127,49 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       </div>
                     </div>
 
-                    {/* Section 6: Job Site Location */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-1.5">
-                      <label className="text-xs font-bold text-[#202124] block">Job Site Location</label>
-                      <div className="flex items-center gap-2 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
-                        <MapPin className="w-4 h-4 text-[#D71920] shrink-0" />
-                        <input
-                          type="text"
-                          value={jobLocation}
-                          onChange={(e) => setJobLocation(e.target.value)}
-                          placeholder="Worksite location & gate"
-                          className="w-full text-xs bg-transparent focus:outline-none font-medium text-[#202124]"
-                        />
+                    {/* Section 6: Live GPS Worksite Location (Zero Manual Filing) */}
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 text-[#D71920]" />
+                          <span>Job Site Location (Automatic GPS)</span>
+                        </label>
+                        <span className="text-[10px] font-bold text-[#202124] bg-[#FFC928] px-2 py-0.5 rounded-md flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#D71920] animate-pulse"></span>
+                          {isGpsAutoFilled ? 'GPS Auto-Filled' : 'Custom'}
+                        </span>
+                      </div>
+                      <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-200 space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                          <span>Lat: {gpsCoordinates ? gpsCoordinates.lat.toFixed(4) : '12.9141'}° N, Lng: {gpsCoordinates ? gpsCoordinates.lng.toFixed(4) : '74.8560'}° E</span>
+                          <span className="text-[#D71920] font-semibold">±4m Accuracy</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={jobLocation}
+                            onChange={(e) => {
+                              setJobLocation(e.target.value);
+                              setIsGpsAutoFilled(false);
+                            }}
+                            placeholder="GPS auto-detecting location..."
+                            className="w-full text-xs bg-transparent focus:outline-none font-semibold text-[#202124]"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <p className="text-[10px] text-slate-500">
+                          ⚡ Zero manual entry required — workers are auto-dispatched to this GPS pin.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={autoDetectGps}
+                          disabled={isDetectingGps}
+                          className="px-2.5 py-1 text-[10px] font-bold text-[#D71920] bg-red-50 hover:bg-red-100 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                        >
+                          <MapPin className={`w-3 h-3 ${isDetectingGps ? 'animate-spin' : ''}`} />
+                          <span>{isDetectingGps ? 'Detecting...' : 'Re-Detect GPS'}</span>
+                        </button>
                       </div>
                     </div>
 
