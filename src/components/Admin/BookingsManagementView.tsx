@@ -19,6 +19,8 @@ import {
   X,
   FileText,
   DollarSign,
+  CreditCard,
+  Eye,
 } from 'lucide-react';
 import { Booking, WorkerBid } from '../../types';
 import { dataService } from '../../services/storage';
@@ -38,6 +40,15 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isCreatingOrder, setIsCreatingOrder] = useState<boolean>(false);
+
+  // Payment Verification States
+  const [selectedScreenshotUrl, setSelectedScreenshotUrl] = useState<string | null>(null);
+  const [showRejectModal, setShowRejectModal] = useState<boolean>(false);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState<string>('');
+
+  const pendingPaymentCount = bookings.filter(
+    (b) => b.paymentVerificationStatus === 'pending' || (b.paymentProofScreenshot && b.paymentStatus === 'pending')
+  ).length;
 
   const customers = dataService.getCustomers();
   const categories = dataService.getCategories();
@@ -70,6 +81,20 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
   const handleUpdateStatus = (newStatus: Booking['status']) => {
     if (!currentBooking) return;
     dataService.updateBookingStatus(currentBooking.id, newStatus);
+  };
+
+  const handleApprovePayment = (bookingId: string) => {
+    dataService.verifyBookingPayment(bookingId, true);
+  };
+
+  const handleRejectPayment = (bookingId: string) => {
+    if (!rejectionReasonInput.trim()) {
+      alert('Please enter a rejection reason.');
+      return;
+    }
+    dataService.verifyBookingPayment(bookingId, false, rejectionReasonInput.trim());
+    setShowRejectModal(false);
+    setRejectionReasonInput('');
   };
 
   const handleDeleteBooking = (bookingId: string, orderNumber: string) => {
@@ -133,7 +158,12 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
       b.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       b.categoryName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || b.status === statusFilter;
+    const matchesStatus =
+      statusFilter === 'all'
+        ? true
+        : statusFilter === 'pending_payment'
+        ? b.paymentVerificationStatus === 'pending' || (Boolean(b.paymentProofScreenshot) && b.paymentStatus === 'pending')
+        : b.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
@@ -195,6 +225,11 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
             className="px-2.5 py-1 text-xs bg-[#FFFDF8] border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920]"
           >
             <option value="all">All States ({bookings.length})</option>
+            {pendingPaymentCount > 0 && (
+              <option value="pending_payment" className="font-bold text-[#D71920]">
+                ⚡ Pending Payment Approval ({pendingPaymentCount})
+              </option>
+            )}
             <option value="SEARCHING_EMPLOYEES">Searching Employees</option>
             <option value="OFFERS_SENT">Offers Sent / Bidding</option>
             <option value="CONFIRMED">Confirmed / Staffed</option>
@@ -334,6 +369,133 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
                 <div className="text-[11px] text-[#686868]">
                   Verified on-site by worker & employer
                 </div>
+              </div>
+
+              {/* Employer Payment Proof & Verification Card */}
+              <div className="mt-4 p-4 rounded-xl border border-amber-200 bg-amber-50/40 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-amber-200/60">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-[#FFC928]/30 text-[#A80F18]">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-[#202124]">
+                        Employer UPI Payment Proof & Verification
+                      </h4>
+                      <p className="text-[11px] text-[#686868]">
+                        Verified by Admin before order status updates to CONFIRMED
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    {currentBooking.paymentVerificationStatus === 'verified' || currentBooking.paymentStatus === 'successful' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                        VERIFIED & APPROVED
+                      </span>
+                    ) : currentBooking.paymentVerificationStatus === 'rejected' ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-red-100 text-red-800 border border-red-300">
+                        <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                        PAYMENT REJECTED
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-200 text-amber-900 border border-amber-300 animate-pulse">
+                        <Clock className="w-3.5 h-3.5 text-amber-700" />
+                        PENDING APPROVAL
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-2.5 bg-white rounded-lg border border-neutral-200">
+                    <span className="text-[10px] text-[#686868] block">Payee UPI & Amount</span>
+                    <span className="font-bold text-[#202124] text-sm block mt-0.5">
+                      ₹{currentBooking.totalEstimatedAmount.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-[#686868]">Payee: prnm@kotak (PRAVEEN)</span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-lg border border-neutral-200">
+                    <span className="text-[10px] text-[#686868] block">UTR / Transaction Ref</span>
+                    <span className="font-mono font-bold text-xs text-[#202124] block mt-1 truncate">
+                      {currentBooking.paymentUtr || 'Pending Submission'}
+                    </span>
+                    <span className="text-[10px] text-[#686868]">Payment Method: Direct UPI QR</span>
+                  </div>
+
+                  <div className="p-2.5 bg-white rounded-lg border border-neutral-200 flex flex-col justify-between">
+                    <div>
+                      <span className="text-[10px] text-[#686868] block">Screenshot Receipt</span>
+                      <span className="text-xs font-semibold text-[#202124] block mt-0.5">
+                        {currentBooking.paymentProofScreenshot ? 'Proof Attached' : 'No Receipt'}
+                      </span>
+                    </div>
+                    {currentBooking.paymentProofScreenshot && (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedScreenshotUrl(currentBooking.paymentProofScreenshot || null)}
+                        className="mt-1 flex items-center gap-1 text-[11px] font-bold text-[#D71920] hover:underline cursor-pointer"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Inspect Screenshot</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Screenshot Thumbnail Preview if available */}
+                {currentBooking.paymentProofScreenshot && (
+                  <div className="p-3 bg-white rounded-lg border border-neutral-200 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={currentBooking.paymentProofScreenshot}
+                        alt="Payment Proof Receipt"
+                        onClick={() => setSelectedScreenshotUrl(currentBooking.paymentProofScreenshot || null)}
+                        className="w-14 h-14 object-cover rounded-lg border border-neutral-300 cursor-pointer hover:opacity-90 transition-opacity shadow-xs"
+                      />
+                      <div>
+                        <span className="text-xs font-bold text-[#202124] block">UPI Transfer Receipt Proof</span>
+                        <p className="text-[11px] text-[#686868]">Uploaded from Employer Job Post Checkout</p>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedScreenshotUrl(currentBooking.paymentProofScreenshot || null)}
+                          className="text-[11px] text-[#D71920] font-semibold hover:underline mt-0.5 inline-block cursor-pointer"
+                        >
+                          Click to enlarge receipt ↗
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleApprovePayment(currentBooking.id)}
+                        className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Approve Payment</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowRejectModal(true)}
+                        className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 text-xs font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                        <span>Reject</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rejection Note if rejected */}
+                {currentBooking.paymentRejectionReason && (
+                  <div className="p-3 bg-red-50 rounded-lg border border-red-200 text-xs text-red-800">
+                    <span className="font-bold block">Rejection Reason:</span>
+                    <p className="mt-0.5">{currentBooking.paymentRejectionReason}</p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -698,6 +860,84 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Screenshot Zoom Modal */}
+      {selectedScreenshotUrl && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-neutral-200 flex items-center justify-between bg-neutral-50">
+              <div className="flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-[#D71920]" />
+                <span className="font-bold text-sm text-[#202124]">UPI Payment Receipt Inspection</span>
+              </div>
+              <button
+                onClick={() => setSelectedScreenshotUrl(null)}
+                className="p-1 rounded-lg hover:bg-neutral-200 text-[#686868] hover:text-[#202124] cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1 flex items-center justify-center bg-neutral-900/10">
+              <img
+                src={selectedScreenshotUrl}
+                alt="Enlarged Payment Receipt"
+                className="max-h-[70vh] object-contain rounded-lg shadow-md border border-neutral-300"
+              />
+            </div>
+            <div className="p-3 border-t border-neutral-200 bg-white flex items-center justify-between text-xs">
+              <span className="text-[#686868]">Payee: prnm@kotak (PRAVEEN)</span>
+              <button
+                type="button"
+                onClick={() => setSelectedScreenshotUrl(null)}
+                className="px-4 py-1.5 bg-[#D71920] text-white font-bold rounded-lg cursor-pointer hover:bg-[#A80F18]"
+              >
+                Close Receipt
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Reason Modal */}
+      {showRejectModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200">
+            <div className="flex items-center gap-2 mb-3 text-red-600">
+              <AlertCircle className="w-5 h-5" />
+              <h3 className="text-base font-bold text-[#202124]">Reject Employer Payment</h3>
+            </div>
+            <p className="text-xs text-[#686868] mb-4">
+              Specify the reason why this UPI screenshot or transaction reference is being rejected. The employer will be notified immediately to re-submit proof.
+            </p>
+            <textarea
+              rows={3}
+              value={rejectionReasonInput}
+              onChange={(e) => setRejectionReasonInput(e.target.value)}
+              placeholder="e.g. UTR mismatch with bank statement, blurry screenshot, or partial amount received."
+              className="w-full p-3 text-xs bg-[#FFFDF8] border border-neutral-300 rounded-xl focus:outline-none focus:border-red-600 focus:ring-1 focus:ring-red-600"
+            />
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRejectModal(false);
+                  setRejectionReasonInput('');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-[#686868] hover:text-[#202124] cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => currentBooking && handleRejectPayment(currentBooking.id)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg cursor-pointer"
+              >
+                Confirm Rejection
+              </button>
+            </div>
           </div>
         </div>
       )}

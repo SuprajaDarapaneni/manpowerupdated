@@ -233,6 +233,7 @@ export interface Booking {
   packageApproxHours?: number;
   packageTitle?: string;
   upiTransactionRef?: string;
+  paymentUtr?: string;
   walletDebited?: boolean;
   priceRevisions?: {
     revisedAt: string;
@@ -251,6 +252,9 @@ export interface Booking {
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
   paymentMode?: 'cash' | 'upi' | 'wallet';
+  paymentProofScreenshot?: string;
+  paymentVerificationStatus?: 'pending' | 'verified' | 'rejected';
+  paymentRejectionReason?: string;
   startOtp: string;
   endOtp: string;
   jobTitle?: string;
@@ -566,7 +570,7 @@ export interface PaymentControlSettings {
 export interface AppNotification {
   id: string;
   recipientId: string;
-  recipientRole: 'customer' | 'employee' | 'admin';
+  recipientRole: 'customer' | 'employee' | 'admin' | 'all';
   title: string;
   message: string;
   eventType:

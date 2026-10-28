@@ -71,6 +71,10 @@ export default function App() {
   const [safetyIncidents, setSafetyIncidents] = useState(() => dataService.getSafetyIncidents());
   const [auditLogs, setAuditLogs] = useState(() => dataService.getAuditLogs());
 
+  const pendingPaymentsCount = bookings.filter(
+    (b) => b.paymentVerificationStatus === 'pending' || (Boolean(b.paymentProofScreenshot) && b.paymentStatus === 'pending')
+  ).length;
+
   // Subscribe to storage changes
   useEffect(() => {
     const unsubscribe = dataService.subscribe(() => {
@@ -395,6 +399,7 @@ export default function App() {
                     pendingWorkersCount={workers.filter((w) => w.approvalStatus === 'pending').length}
                     openDisputesCount={disputes.filter((d) => d.status === 'open' || d.status === 'investigating').length}
                     openSafetyCount={safetyIncidents.filter((s) => s.status !== 'resolved').length}
+                    pendingPaymentsCount={pendingPaymentsCount}
                     isOpenMobile={isMobileSidebarOpen}
                     onCloseMobile={() => setIsMobileSidebarOpen(false)}
                   />
@@ -456,6 +461,7 @@ export default function App() {
           pendingWorkersCount={workers.filter((w) => w.approvalStatus === 'pending').length}
           openDisputesCount={disputes.filter((d) => d.status === 'open' || d.status === 'investigating').length}
           openSafetyCount={safetyIncidents.filter((s) => s.status !== 'resolved').length}
+          pendingPaymentsCount={pendingPaymentsCount}
           isOpenMobile={isMobileSidebarOpen}
           onCloseMobile={() => setIsMobileSidebarOpen(false)}
         />

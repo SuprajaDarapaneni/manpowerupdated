@@ -51,6 +51,7 @@ interface AdminSidebarProps {
   pendingWorkersCount: number;
   openDisputesCount: number;
   openSafetyCount: number;
+  pendingPaymentsCount?: number;
   isClientDeliveryMode?: boolean;
   isOpenMobile?: boolean;
   onCloseMobile?: () => void;
@@ -62,6 +63,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   pendingWorkersCount,
   openDisputesCount,
   openSafetyCount,
+  pendingPaymentsCount = 0,
   isOpenMobile = false,
   onCloseMobile,
 }) => {
@@ -77,7 +79,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { id: 'dashboard' as AdminTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'categories' as AdminTab, label: 'Service Categories', icon: Layers },
     { id: 'pricing' as AdminTab, label: 'Service Zones & Set Price', icon: MapPin },
-    { id: 'bookings' as AdminTab, label: 'Orders & Bookings', icon: ClipboardList },
+    {
+      id: 'bookings' as AdminTab,
+      label: 'Orders & Bookings',
+      icon: ClipboardList,
+      badge: pendingPaymentsCount > 0 ? pendingPaymentsCount : undefined,
+    },
     { id: 'commission' as AdminTab, label: 'Commission & Payments', icon: Percent },
     {
       id: 'workers' as AdminTab,

@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Test connection check
+    match /test/{docId} {
+      allow read, write: if true;
+    }
+
+    // Real-time in-app & push notifications
+    match /notifications/{notificationId} {
+      // Allow reading notifications matching user ID or broadcast 'all'
+      allow read: if true;
+      // Allow creation of notifications from verified app workflows
+      allow create: if request.resource.data.keys().hasAll(['recipientId', 'recipientRole', 'title', 'message', 'eventType', 'read', 'timestamp']);
+      // Allow updating read status
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if false;
+    }
+
+    // Bookings & Labor Orders
+    match /bookings/{bookingId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['orderNumber', 'customerId', 'status', 'paymentStatus', 'createdAt']);
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // Payment proof verifications (UPI screenshots)
+    match /payment_verifications/{verificationId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['bookingId', 'orderNumber', 'customerId', 'amount', 'status', 'submittedAt']);
+      allow update: if true;
+      allow delete: if false;
+    }
+
+    // FCM Device Push Tokens
+    match /device_tokens/{tokenId} {
+      allow read: if true;
+      allow write: if request.resource.data.keys().hasAll(['userId', 'userRole', 'token', 'platform', 'updatedAt']);
+    }
+  }
+}

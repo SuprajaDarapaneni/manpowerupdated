@@ -36,6 +36,7 @@ import {
   initialSafetyIncidents,
   initialMatchingSettings,
 } from '../mockData';
+import { dispatchFirebaseNotification } from './firebase';
 
 const STORAGE_KEYS = {
   CATEGORIES: 'manpowerlink_categories_v1',
@@ -51,6 +52,7 @@ const STORAGE_KEYS = {
   UPI_PAYOUT_REQUESTS: 'manpowerlink_upi_payout_requests_v1',
   ZONES: 'manpowerlink_service_zones_v2',
   ZONE_PRICES: 'manpowerlink_zone_prices_v2',
+  NOTIFICATIONS: 'manpowerlink_notifications_v1',
 };
 
 // Official Kotak / PhonePe UPI Account for Platform Recharges & Payments
@@ -336,6 +338,76 @@ export const playNotificationSound = () => {
     // Audio contexts might be blocked until user interacts
   }
 };
+
+// Energetic Multi-Burst Incoming Job Ringtone (Dual 850Hz & 1050Hz Telephone Ring Cadence)
+export const playIncomingJobRingtone = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const now = ctx.currentTime;
+
+    // Create 3 bursts of dual-frequency rings (high-urgency taxi/gig incoming call)
+    for (let burst = 0; burst < 3; burst++) {
+      const burstStart = now + burst * 0.65;
+      
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'triangle';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(850, burstStart);
+      osc2.frequency.setValueAtTime(1050, burstStart);
+
+      gain.gain.setValueAtTime(0, burstStart);
+      gain.gain.linearRampToValueAtTime(0.35, burstStart + 0.05);
+      gain.gain.setValueAtTime(0.35, burstStart + 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.001, burstStart + 0.5);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(burstStart);
+      osc2.start(burstStart);
+      osc1.stop(burstStart + 0.52);
+      osc2.stop(burstStart + 0.52);
+    }
+  } catch (e) {
+    console.warn('Audio ringtone playback error:', e);
+  }
+};
+
+export const initialNotifications: AppNotification[] = [
+  {
+    id: 'notif-1',
+    recipientId: 'all',
+    recipientRole: 'employee',
+    title: '🚨 Radar Alert: Heavy Container Destuffing',
+    message: 'New job order #Order 1045 posted in Panambur Port Corridor for 4 workers. Rate: ₹2,400/day.',
+    eventType: 'BOOKING_CREATED',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    read: false,
+    timestamp: '15 Oct 2026, 08:30 AM',
+    soundType: 'urgent_ring',
+  },
+  {
+    id: 'notif-2',
+    recipientId: 'c-1',
+    recipientRole: 'customer',
+    title: 'Worker Dispatched & In Transit',
+    message: 'Worker Ramesh Kumar accepted shift #Order 1045 and is travelling to Dock 4.',
+    eventType: 'BID_ACCEPTED',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    read: true,
+    timestamp: '15 Oct 2026, 08:45 AM',
+    soundType: 'chime',
+  },
+];
 
 class DataService {
   private listeners: (() => void)[] = [];
@@ -806,8 +878,17 @@ class DataService {
       zoneId: bookingData.zoneId || 'zone-1',
       zoneName: bookingData.zoneName || 'Baikampady Industrial Hub',
       status: 'SEARCHING_EMPLOYEES',
-      paymentStatus: bookingData.walletDebited || bookingData.upiTransactionRef ? 'successful' : 'pending',
+      paymentStatus: bookingData.paymentProofScreenshot
+        ? 'pending'
+        : bookingData.walletDebited || bookingData.upiTransactionRef
+        ? 'successful'
+        : 'pending',
       paymentMethod: (bookingData.paymentMethod as any) || (bookingData.paymentMode === 'wallet' ? 'wallet' : 'cash'),
+      paymentProofScreenshot: bookingData.paymentProofScreenshot,
+      paymentVerificationStatus: bookingData.paymentProofScreenshot
+        ? 'pending'
+        : (bookingData.paymentVerificationStatus || 'verified'),
+      paymentRejectionReason: bookingData.paymentRejectionReason,
       startOtp,
       endOtp,
       createdAt: new Date().toLocaleString(),
@@ -883,8 +964,169 @@ class DataService {
 
     this.setBookings([newBooking, ...existing]);
     this.logAudit('New Job Created', `${newBooking.orderNumber} by ${newBooking.customerName}`);
-    playNotificationSound();
+
+    // Real-Time Push Notifications dispatched to all stakeholders
+    this.addNotification({
+      recipientId: 'all',
+      recipientRole: 'employee',
+      title: `🚨 NEW JOB ALERT: ${newBooking.categoryName}`,
+      message: `New shift #${newBooking.orderNumber} in ${newBooking.zoneName}. Wage: ₹${newBooking.offeredPricePerWorker}/worker. Accept now!`,
+      eventType: 'BOOKING_CREATED',
+      bookingId: newBooking.id,
+      orderNumber: newBooking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'urgent_ring',
+    });
+
+    this.addNotification({
+      recipientId: newBooking.customerId,
+      recipientRole: 'customer',
+      title: 'Job Order Published',
+      message: `Job ${newBooking.orderNumber} broadcasted. ${newBooking.paymentProofScreenshot ? 'UPI payment proof submitted for Admin verification.' : 'Nearby workers notified.'}`,
+      eventType: 'BOOKING_CREATED',
+      bookingId: newBooking.id,
+      orderNumber: newBooking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'chime',
+    });
+
+    this.addNotification({
+      recipientId: 'admin',
+      recipientRole: 'admin',
+      title: newBooking.paymentProofScreenshot ? '⚡ New Payment Verification' : 'New Order Created',
+      message: `${newBooking.customerName} created ${newBooking.orderNumber} (₹${newBooking.totalEstimatedAmount.toLocaleString()}). ${newBooking.paymentProofScreenshot ? 'UPI payment screenshot requires admin review.' : ''}`,
+      eventType: 'PAYMENT_RECEIVED',
+      bookingId: newBooking.id,
+      orderNumber: newBooking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'urgent_ring',
+    });
+
+    // Energetic Incoming Job Ringtone for Worker/Employer Ecosystem
+    playIncomingJobRingtone();
+
+    // Broadcast live event across browser simulators and tabs
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('manpowerlink_new_job_broadcast', { detail: newBooking })
+      );
+    }
+
     return newBooking;
+  }
+
+  // ==========================================
+  // In-App & Firebase Push Notifications
+  // ==========================================
+  public getNotifications(): AppNotification[] {
+    return this.getItem<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, initialNotifications);
+  }
+
+  public setNotifications(notifications: AppNotification[]): void {
+    this.setItem(STORAGE_KEYS.NOTIFICATIONS, notifications);
+  }
+
+  public addNotification(notification: Omit<AppNotification, 'id'>): AppNotification {
+    const list = this.getNotifications();
+    const newNotif: AppNotification = {
+      ...notification,
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: notification.timestamp || new Date().toLocaleString(),
+    };
+    this.setNotifications([newNotif, ...list]);
+
+    // Mirror to Firebase Firestore in real-time
+    dispatchFirebaseNotification({
+      recipientId: newNotif.recipientId,
+      recipientRole: newNotif.recipientRole,
+      title: newNotif.title,
+      message: newNotif.message,
+      eventType: newNotif.eventType,
+      bookingId: newNotif.bookingId,
+      orderNumber: newNotif.orderNumber,
+      read: false,
+      timestamp: newNotif.timestamp,
+      soundType: newNotif.soundType,
+    }).catch((err) => console.warn('Firebase notification sync warning:', err));
+
+    return newNotif;
+  }
+
+  public markNotificationRead(id: string): void {
+    const list = this.getNotifications().map((n) => (n.id === id ? { ...n, read: true } : n));
+    this.setNotifications(list);
+  }
+
+  public clearNotifications(): void {
+    this.setNotifications([]);
+  }
+
+  // ==========================================
+  // Admin Payment Proof Verification Workflow
+  // ==========================================
+  public verifyBookingPayment(
+    bookingId: string,
+    isApproved: boolean,
+    reason?: string
+  ): { success: boolean; error?: string } {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    const updated: Booking = {
+      ...booking,
+      paymentVerificationStatus: isApproved ? 'verified' : 'rejected',
+      paymentStatus: isApproved ? 'successful' : 'failed',
+      status: isApproved ? 'CONFIRMED' : 'DISPUTED',
+      paymentRejectionReason: isApproved ? undefined : (reason || 'Payment screenshot verification rejected by administrator.'),
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updated);
+
+    // Notify Customer of Verification Decision
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: isApproved ? '✅ Payment Verified & Order Confirmed' : '❌ Payment Proof Rejected',
+      message: isApproved
+        ? `Admin verified your payment of ₹${booking.totalEstimatedAmount.toLocaleString()} for ${booking.orderNumber}. Workers are confirmed.`
+        : `Payment proof for ${booking.orderNumber} was rejected: ${reason || 'Invalid screenshot/UTR'}. Please re-submit payment proof.`,
+      eventType: isApproved ? 'PAYMENT_RECEIVED' : 'PAYMENT_FAILED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: isApproved ? 'chime' : 'urgent_ring',
+    });
+
+    if (isApproved) {
+      // Alert Workers that the job is confirmed and escrow is funded
+      this.addNotification({
+        recipientId: 'all',
+        recipientRole: 'employee',
+        title: `⚡ Job Confirmed: ${booking.orderNumber}`,
+        message: `Payment confirmed for ${booking.jobTitle || booking.categoryName} in ${booking.zoneName}. Wage guaranteed: ₹${booking.offeredPricePerWorker}.`,
+        eventType: 'BID_ACCEPTED',
+        bookingId: booking.id,
+        orderNumber: booking.orderNumber,
+        read: false,
+        timestamp: new Date().toLocaleString(),
+        soundType: 'urgent_ring',
+      });
+      playIncomingJobRingtone();
+    } else {
+      playNotificationSound();
+    }
+
+    this.logAudit(
+      isApproved ? 'Order Payment Verified' : 'Order Payment Rejected',
+      `Admin reviewed ${booking.orderNumber} (${booking.customerName}) - ₹${booking.totalEstimatedAmount}. ${isApproved ? 'Approved.' : 'Reason: ' + reason}`
+    );
+
+    return { success: true };
   }
 
   // ==========================================

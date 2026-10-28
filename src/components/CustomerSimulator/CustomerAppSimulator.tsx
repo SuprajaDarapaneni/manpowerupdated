@@ -43,15 +43,20 @@ import {
   CalendarDays,
   CreditCard,
   Zap,
+  Upload,
+  Image,
 } from 'lucide-react';
 import { Booking, ServiceCategory, Worker, StatusTimelineNode, Customer } from '../../types';
 import {
   dataService,
   playNotificationSound,
+  playIncomingJobRingtone,
   PLATFORM_UPI_ID,
   PLATFORM_UPI_NAME,
   getUpiIntentUrl,
 } from '../../services/storage';
+import { EmbeddedLocationFetcher } from '../Common/EmbeddedLocationFetcher';
+import { savePaymentProofToFirebase } from '../../services/firebase';
 
 interface CustomerAppSimulatorProps {
   categories: ServiceCategory[];
@@ -215,6 +220,9 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     autoDetectGps();
   }, []);
 
+  // Job Capacity & Headcount
+  const [requiredWorkers, setRequiredWorkers] = useState<number>(3);
+
   // Hourly Basis Specific Fields
   const [pricePerHourPerHead, setPricePerHourPerHead] = useState(250);
   const [shiftHours, setShiftHours] = useState(8);
@@ -233,10 +241,18 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   // Additional Remarks / Notes Field
   const [remarks, setRemarks] = useState('Requires safety boots and gloves. Entrance via Gate 4 at dock warehouse.');
 
-  // Payment Selection: Wallet Debit vs Direct UPI/PhonePe QR vs Worksite Cash
-  const [paymentSelection, setPaymentSelection] = useState<'wallet' | 'upi_qr' | 'cash'>('wallet');
+  // Address Picker Modal State
+  const [showAddressPickerModal, setShowAddressPickerModal] = useState(false);
+
+  // Payment Selection: Defaults to 'upi_qr' as requested by client (UPI & QR Code with Screenshot Upload)
+  const [paymentSelection, setPaymentSelection] = useState<'wallet' | 'upi_qr' | 'cash'>('upi_qr');
   const [showDirectQrPaymentModal, setShowDirectQrPaymentModal] = useState(false);
   const [directPaymentUtr, setDirectPaymentUtr] = useState('');
+
+  // Payment Proof Screenshot Upload State
+  const [paymentScreenshotUrl, setPaymentScreenshotUrl] = useState<string | null>(null);
+  const [paymentScreenshotName, setPaymentScreenshotName] = useState<string | null>(null);
+  const [upiRefNumber, setUpiRefNumber] = useState<string>('');
 
   // Custom Category Add Modal State
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
@@ -538,6 +554,20 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     executePublishJob(directPaymentUtr || `UPI/QR-${Date.now().toString().slice(-6)}`);
   };
 
+  const handleScreenshotUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPaymentScreenshotName(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setPaymentScreenshotUrl(reader.result);
+        triggerAppRingAlert(`Payment screenshot "${file.name}" ready for verification!`);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Submit Job with Confirmation
   const promptPublishJob = () => {
     if (!jobTitle.trim()) {
@@ -560,17 +590,14 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       }
     }
 
-    if (paymentSelection === 'upi_qr') {
-      setShowDirectQrPaymentModal(true);
-      return;
-    }
-
     setPendingConfirmAction({
       title: 'Confirm Job Order Broadcast',
-      description: `Broadcast "${jobTitle}" for ${requiredWorkers} workers (${pricingModel === 'hourly' ? `${shiftHours} hrs @ ₹${pricePerHourPerHead}/hr/head` : `${currentPackage.title} ~${packageApproxHours} hrs`}) totaling ₹${totalEstimatedCost.toLocaleString()}?`,
+      description: paymentSelection === 'upi_qr'
+        ? `Broadcast "${jobTitle}" for ${requiredWorkers} workers (Total: ₹${totalEstimatedCost.toLocaleString()}). Payment proof will be submitted to Admin for verification.`
+        : `Broadcast "${jobTitle}" for ${requiredWorkers} workers (${pricingModel === 'hourly' ? `${shiftHours} hrs @ ₹${pricePerHourPerHead}/hr/head` : `${currentPackage.title} ~${packageApproxHours} hrs`}) totaling ₹${totalEstimatedCost.toLocaleString()}?`,
       onConfirm: () => {
         setPendingConfirmAction(null);
-        executePublishJob();
+        executePublishJob(upiRefNumber || directPaymentUtr);
       },
     });
   };
@@ -591,6 +618,8 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
         return;
       }
     }
+
+    const finalUpiRef = upiRef || upiRefNumber.trim() || `UPI/QR-${Date.now().toString().slice(-6)}`;
 
     const newBooking = dataService.createBooking({
       customerId: 'c-1',
@@ -616,23 +645,40 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       remarks: remarks.trim(),
       paymentMode: paymentSelection === 'wallet' ? 'wallet' : paymentSelection === 'upi_qr' ? 'upi' : 'cash',
       paymentMethod: paymentSelection === 'wallet' ? 'wallet' : paymentSelection === 'upi_qr' ? 'online' : 'cash',
+      paymentProofScreenshot: paymentScreenshotUrl || undefined,
+      paymentVerificationStatus: paymentScreenshotUrl ? 'pending' : (paymentSelection === 'wallet' ? 'verified' : 'pending'),
       walletDebited,
-      upiTransactionRef: upiRef,
+      upiTransactionRef: paymentSelection === 'upi_qr' ? finalUpiRef : undefined,
       zoneId: selectedZoneId,
       zoneName: serviceZones.find((z) => z.id === selectedZoneId)?.name || 'Baikampady Industrial Hub',
       workLocation: {
         address: jobLocation,
         city: 'Mangalore, Karnataka',
-        lat: 12.914,
-        lng: 74.856,
+        lat: gpsCoordinates ? gpsCoordinates.lat : 12.914,
+        lng: gpsCoordinates ? gpsCoordinates.lng : 74.856,
       },
     });
+
+    if (paymentScreenshotUrl) {
+      savePaymentProofToFirebase({
+        bookingId: newBooking.id,
+        orderNumber: newBooking.orderNumber,
+        customerId: newBooking.customerId,
+        customerName: newBooking.customerName,
+        amount: newBooking.totalEstimatedAmount,
+        payeeUpiId: PLATFORM_UPI_ID,
+        utrRef: finalUpiRef,
+        screenshotUrl: paymentScreenshotUrl,
+      }).catch((err) => console.warn('Firebase payment proof sync warning:', err));
+    }
 
     setActiveBookingId(newBooking.id);
     setSelectedBookingForTimeline(newBooking);
     navigateToTab('bookings');
     triggerAppRingAlert(
-      walletDebited
+      paymentScreenshotUrl
+        ? `🔔 Order #${newBooking.orderNumber} Submitted! Payment screenshot submitted. Awaiting Admin verification.`
+        : walletDebited
         ? `🔔 Order #${newBooking.orderNumber} Booked! ₹${totalEstimatedCost.toLocaleString()} debited from wallet.`
         : `🔔 Order #${newBooking.orderNumber} Published! Workers notified.`
     );
@@ -1153,6 +1199,38 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     </button>
                   </div>
                 </form>
+              </div>
+            </div>
+          )}
+
+          {/* Worksite Address & Interactive GPS Map Picker Modal */}
+          {showAddressPickerModal && (
+            <div className="absolute inset-0 bg-black/75 z-50 flex items-center justify-center p-2.5">
+              <div className="bg-white rounded-3xl max-w-sm w-full max-h-[95%] overflow-y-auto p-3.5 shadow-2xl border-2 border-[#FFC928]">
+                <div className="flex items-center justify-between pb-2 mb-2 border-b border-amber-200">
+                  <div className="flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-[#D71920]" />
+                    <h4 className="text-xs font-black text-[#202124]">Worksite Address &amp; GPS Picker</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddressPickerModal(false)}
+                    className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <EmbeddedLocationFetcher
+                  isEmbedded={true}
+                  initialAddress={jobLocation}
+                  onLocationSelected={(loc) => {
+                    setJobLocation(loc.address);
+                    setGpsCoordinates({ lat: loc.latitude, lng: loc.longitude });
+                    setIsGpsAutoFilled(true);
+                    setShowAddressPickerModal(false);
+                    triggerAppRingAlert(`Location applied: ${loc.address}`);
+                  }}
+                />
               </div>
             </div>
           )}
@@ -2185,15 +2263,25 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         <p className="text-[10px] text-slate-500">
                           ⚡ Zero manual entry required — workers are auto-dispatched to this GPS pin.
                         </p>
-                        <button
-                          type="button"
-                          onClick={autoDetectGps}
-                          disabled={isDetectingGps}
-                          className="px-2.5 py-1 text-[10px] font-bold text-[#D71920] bg-red-50 hover:bg-red-100 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
-                        >
-                          <MapPin className={`w-3 h-3 ${isDetectingGps ? 'animate-spin' : ''}`} />
-                          <span>{isDetectingGps ? 'Detecting...' : 'Re-Detect GPS'}</span>
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setShowAddressPickerModal(true)}
+                            className="px-2.5 py-1 text-[10px] font-bold text-[#202124] bg-[#FFC928] hover:bg-[#E5A900] rounded-lg flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
+                          >
+                            <MapPin className="w-3 h-3 text-[#D71920]" />
+                            <span>Address Picker & Map</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={autoDetectGps}
+                            disabled={isDetectingGps}
+                            className="px-2.5 py-1 text-[10px] font-bold text-[#D71920] bg-red-50 hover:bg-red-100 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
+                          >
+                            <MapPin className={`w-3 h-3 ${isDetectingGps ? 'animate-spin' : ''}`} />
+                            <span>{isDetectingGps ? 'Detecting...' : 'Re-Detect GPS'}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
 
@@ -2221,106 +2309,228 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       />
                     </div>
 
-                    {/* Section 8: Payment Mode (Wallet Debit vs PhonePe QR vs Cash) */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-amber-200/80 shadow-2xs space-y-2.5">
+                    {/* Section 8: Direct UPI QR Payment & Screenshot Proof Upload (Client Feedback Flow) */}
+                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#FFC928] shadow-xs space-y-3">
                       <div className="flex items-center justify-between">
                         <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
-                          <CreditCard className="w-4 h-4 text-[#D71920]" />
-                          <span>Payment Method & Settlement</span>
+                          <QrCode className="w-4 h-4 text-[#D71920]" />
+                          <span>UPI & QR Payment with Screenshot Upload *</span>
                         </label>
+                        <span className="text-[10px] bg-[#FFC928] text-[#202124] font-bold px-2 py-0.5 rounded-md">
+                          Admin Audited
+                        </span>
+                      </div>
+
+                      {/* Payment Method Selector Tabs */}
+                      <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-2xl text-[11px] font-bold text-center">
                         <button
                           type="button"
-                          onClick={() => setShowAddMoneyModal(true)}
-                          className="text-[10px] font-bold text-[#D71920] hover:text-[#A80F18] flex items-center gap-1 cursor-pointer bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200"
+                          onClick={() => setPaymentSelection('upi_qr')}
+                          className={`py-1.5 rounded-xl cursor-pointer transition-all ${
+                            paymentSelection === 'upi_qr'
+                              ? 'bg-[#D71920] text-white shadow-xs'
+                              : 'text-slate-600 hover:text-black'
+                          }`}
                         >
-                          <QrCode className="w-3 h-3 text-[#FFC928]" />
-                          <span>+ Add Money</span>
+                          UPI QR & Proof
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentSelection('wallet')}
+                          className={`py-1.5 rounded-xl cursor-pointer transition-all ${
+                            paymentSelection === 'wallet'
+                              ? 'bg-[#D71920] text-white shadow-xs'
+                              : 'text-slate-600 hover:text-black'
+                          }`}
+                        >
+                          Prepaid Wallet
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPaymentSelection('cash')}
+                          className={`py-1.5 rounded-xl cursor-pointer transition-all ${
+                            paymentSelection === 'cash'
+                              ? 'bg-[#D71920] text-white shadow-xs'
+                              : 'text-slate-600 hover:text-black'
+                          }`}
+                        >
+                          Worksite Cash
                         </button>
                       </div>
 
-                      <div className="space-y-2">
-                        {/* Option 1: Prepaid Wallet Debit */}
-                        <div
-                          onClick={() => setPaymentSelection('wallet')}
-                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                            paymentSelection === 'wallet'
-                              ? 'bg-linear-to-r from-amber-50 to-yellow-50 border-2 border-[#FFC928] shadow-xs'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                paymentSelection === 'wallet' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
-                              }`}>
-                                {paymentSelection === 'wallet' && <span className="w-1.5 h-1.5 rounded-full bg-[#FFC928]" />}
-                              </span>
+                      {paymentSelection === 'upi_qr' && (
+                        <div className="space-y-3 pt-1">
+                          {/* Official UPI Details Box */}
+                          <div className="bg-linear-to-r from-amber-50 to-orange-50 p-3 rounded-2xl border border-amber-300 space-y-2">
+                            <div className="flex items-center justify-between text-xs">
                               <div>
-                                <span className="text-xs font-bold text-[#202124] block">Instant Wallet Debit</span>
-                                <span className="text-[10px] text-slate-500">
-                                  Available Balance: <strong className="text-emerald-700">₹{walletBalance.toLocaleString()}</strong>
+                                <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">
+                                  Official Platform UPI ID
+                                </span>
+                                <span className="font-mono font-black text-sm text-[#D71920]">
+                                  {PLATFORM_UPI_ID}
+                                </span>
+                                <span className="text-[10px] text-slate-600 block">
+                                  Beneficiary: <strong>{PLATFORM_UPI_NAME} (Kotak / PhonePe)</strong>
                                 </span>
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(PLATFORM_UPI_ID);
+                                  triggerAppRingAlert(`UPI ID "${PLATFORM_UPI_ID}" copied to clipboard!`);
+                                }}
+                                className="px-2.5 py-1.5 bg-white hover:bg-amber-100 text-[#D71920] rounded-xl border border-amber-300 text-[10px] font-bold shadow-2xs flex items-center gap-1 cursor-pointer"
+                              >
+                                <Copy className="w-3 h-3" />
+                                <span>Copy UPI</span>
+                              </button>
                             </div>
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                              walletBalance >= totalEstimatedCost
-                                ? 'bg-[#FFC928] text-[#202124]'
-                                : 'bg-red-100 text-[#D71920]'
-                            }`}>
-                              {walletBalance >= totalEstimatedCost ? 'Balance Ready' : 'Needs Top-Up'}
-                            </span>
-                          </div>
-                        </div>
 
-                        {/* Option 2: Direct UPI QR / Intent */}
-                        <div
-                          onClick={() => setPaymentSelection('upi_qr')}
-                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                            paymentSelection === 'upi_qr'
-                              ? 'bg-linear-to-r from-amber-50 to-yellow-50 border-2 border-[#FFC928] shadow-xs'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                                paymentSelection === 'upi_qr' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
-                              }`}>
-                                {paymentSelection === 'upi_qr' && <span className="w-1.5 h-1.5 rounded-full bg-[#FFC928]" />}
-                              </span>
-                              <div>
-                                <span className="text-xs font-bold text-[#202124] block">Direct UPI Intent & QR (prnm@kotak)</span>
-                                <span className="text-[10px] text-slate-500">GPay, PhonePe, Paytm, Kotak UPI supported</span>
+                            {/* Dynamic QR Code display */}
+                            <div className="bg-white p-2.5 rounded-xl border border-amber-200 flex flex-col sm:flex-row items-center gap-3">
+                              <div className="w-24 h-24 rounded-lg bg-white border border-slate-200 p-1.5 shadow-2xs shrink-0 flex flex-col items-center justify-center">
+                                <div className="w-full h-full bg-slate-900 rounded-sm p-1 flex flex-col justify-between">
+                                  <div className="flex justify-between">
+                                    <div className="w-5 h-5 bg-white rounded-xs border-2 border-black flex items-center justify-center">
+                                      <div className="w-2 h-2 bg-black"></div>
+                                    </div>
+                                    <div className="w-5 h-5 bg-white rounded-xs border-2 border-black flex items-center justify-center">
+                                      <div className="w-2 h-2 bg-black"></div>
+                                    </div>
+                                  </div>
+                                  <div className="text-center font-mono text-[8px] text-amber-300 font-bold">
+                                    ₹{totalEstimatedCost}
+                                  </div>
+                                  <div className="flex justify-between items-end">
+                                    <div className="w-5 h-5 bg-white rounded-xs border-2 border-black flex items-center justify-center">
+                                      <div className="w-2 h-2 bg-black"></div>
+                                    </div>
+                                    <span className="text-[6px] text-white font-mono">UPI</span>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-xs space-y-1 text-center sm:text-left flex-1">
+                                <span className="font-extrabold text-[#202124] block">Scan via Any UPI App</span>
+                                <p className="text-[10px] text-slate-500 leading-tight">
+                                  Scan using PhonePe, Google Pay, Paytm, BHIM, or Kotak to pay ₹{totalEstimatedCost.toLocaleString()}.
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenUpiApp(totalEstimatedCost, jobTitle)}
+                                  className="w-full mt-1 py-1.5 px-3 bg-[#5f259f] hover:bg-[#4d1d82] text-white text-[11px] font-bold rounded-lg shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
+                                >
+                                  <Zap className="w-3.5 h-3.5 text-[#FFC928]" />
+                                  <span>Open PhonePe / UPI Direct</span>
+                                </button>
                               </div>
                             </div>
-                            <span className="text-[10px] bg-[#D71920] text-white px-2 py-0.5 rounded-md font-bold">
-                              Verified Payee
-                            </span>
                           </div>
-                        </div>
 
-                        {/* Option 3: Cash / UPI at Worksite */}
-                        <div
-                          onClick={() => setPaymentSelection('cash')}
-                          className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                            paymentSelection === 'cash'
-                              ? 'bg-linear-to-r from-amber-50 to-yellow-50 border-2 border-[#FFC928] shadow-xs'
-                              : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                              paymentSelection === 'cash' ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
-                            }`}>
-                              {paymentSelection === 'cash' && <span className="w-1.5 h-1.5 rounded-full bg-[#FFC928]" />}
-                            </span>
-                            <div>
-                              <span className="text-xs font-bold text-[#202124] block">Direct Cash on Worksite</span>
-                              <span className="text-[10px] text-slate-500">Pay workers in person upon verified shift completion</span>
+                          {/* Screenshot Upload Field as Requested by Client */}
+                          <div className="bg-amber-50/50 p-3 rounded-2xl border-2 border-dashed border-[#FFC928] space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                                <Upload className="w-3.5 h-3.5 text-[#D71920]" />
+                                <span>Upload Payment Proof Screenshot *</span>
+                              </label>
+                              <span className="text-[10px] bg-red-100 text-[#D71920] font-bold px-2 py-0.5 rounded">
+                                Required
+                              </span>
                             </div>
+
+                            {paymentScreenshotUrl ? (
+                              <div className="p-2 bg-white rounded-xl border border-amber-300 flex items-center justify-between gap-2 shadow-2xs">
+                                <div className="flex items-center gap-2">
+                                  <img
+                                    src={paymentScreenshotUrl}
+                                    alt="Payment Screenshot Preview"
+                                    className="w-12 h-12 object-cover rounded-lg border border-slate-200"
+                                  />
+                                  <div className="text-xs">
+                                    <span className="font-bold text-[#202124] block truncate max-w-[180px]">
+                                      {paymentScreenshotName || 'Payment_Proof_Receipt.png'}
+                                    </span>
+                                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3" /> Screenshot Attached
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setPaymentScreenshotUrl(null);
+                                    setPaymentScreenshotName(null);
+                                  }}
+                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg text-xs font-bold cursor-pointer"
+                                  title="Remove Screenshot"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            ) : (
+                              <div>
+                                <label className="flex flex-col items-center justify-center p-3 rounded-xl bg-white border border-slate-200 hover:border-[#D71920] transition-colors cursor-pointer text-center">
+                                  <Upload className="w-5 h-5 text-[#D71920] mb-1" />
+                                  <span className="text-xs font-bold text-[#202124]">
+                                    Click to Browse Payment Screenshot
+                                  </span>
+                                  <span className="text-[10px] text-slate-500">
+                                    PNG, JPG, WEBP receipt image (Max 10MB)
+                                  </span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleScreenshotUpload}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+                            )}
+
+                            {/* UTR / Reference Input */}
+                            <div className="space-y-1 pt-1">
+                              <label className="text-[11px] font-bold text-[#202124] block">
+                                UTR / Transaction Reference ID (12 Digits)
+                              </label>
+                              <input
+                                type="text"
+                                value={upiRefNumber}
+                                onChange={(e) => setUpiRefNumber(e.target.value)}
+                                placeholder="e.g. 428919028371 (From GPay/PhonePe)"
+                                className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                              />
+                            </div>
+
+                            <p className="text-[10px] text-[#A80F18] font-medium leading-tight">
+                              🛡️ Admin will verify your payment screenshot. Status will automatically update from Pending to Confirmed upon verification.
+                            </p>
                           </div>
                         </div>
-                      </div>
+                      )}
+
+                      {paymentSelection === 'wallet' && (
+                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
+                          <div>
+                            <span className="font-bold text-[#202124] block">Available Wallet Balance:</span>
+                            <span className="text-base font-black text-emerald-700">₹{walletBalance.toLocaleString()}</span>
+                          </div>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                            walletBalance >= totalEstimatedCost ? 'bg-[#FFC928] text-[#202124]' : 'bg-red-100 text-[#D71920]'
+                          }`}>
+                            {walletBalance >= totalEstimatedCost ? 'Balance Ready' : 'Needs Top-Up'}
+                          </span>
+                        </div>
+                      )}
+
+                      {paymentSelection === 'cash' && (
+                        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs">
+                          <span className="font-bold text-[#202124] block">Direct Cash on Worksite:</span>
+                          <span className="text-[10px] text-slate-600 block mt-0.5">
+                            Pay workers in cash upon shift completion after verifying End OTP.
+                          </span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Total Summary Pill - Distinct Gold & Red Banner */}

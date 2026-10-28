@@ -1,0 +1,135 @@
+{
+  "entities": {
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time push and in-app notifications dispatched to customers, employees, and administrators.",
+      "type": "object",
+      "properties": {
+        "recipientId": {
+          "type": "string",
+          "description": "Target recipient user ID or 'all' for broadcasts"
+        },
+        "recipientRole": {
+          "type": "string",
+          "enum": ["customer", "employee", "admin", "all"],
+          "description": "Target audience role"
+        },
+        "title": {
+          "type": "string",
+          "description": "Notification headline"
+        },
+        "message": {
+          "type": "string",
+          "description": "Notification message body"
+        },
+        "eventType": {
+          "type": "string",
+          "description": "Event trigger type (e.g. BOOKING_CREATED, PAYMENT_RECEIVED)"
+        },
+        "bookingId": {
+          "type": "string",
+          "description": "Associated booking identifier"
+        },
+        "orderNumber": {
+          "type": "string",
+          "description": "Associated booking order number"
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether the notification was read"
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "soundType": {
+          "type": "string",
+          "enum": ["chime", "urgent_ring", "silent"],
+          "description": "Ringtone sound style"
+        }
+      },
+      "required": ["recipientId", "recipientRole", "title", "message", "eventType", "read", "timestamp"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Labor order requirement and dispatch lifecycle",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "customerPhone": { "type": "string" },
+        "categoryId": { "type": "string" },
+        "categoryName": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "requiredWorkers": { "type": "number" },
+        "status": { "type": "string" },
+        "paymentStatus": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "totalEstimatedAmount": { "type": "number" },
+        "scheduledDate": { "type": "string" },
+        "workLocation": { "type": "object" },
+        "paymentProofScreenshot": { "type": "string" },
+        "upiTransactionRef": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["orderNumber", "customerId", "status", "paymentStatus", "createdAt"]
+    },
+    "PaymentVerification": {
+      "title": "PaymentVerification",
+      "description": "UPI screenshot payment proof submitted by employer awaiting admin verification",
+      "type": "object",
+      "properties": {
+        "bookingId": { "type": "string" },
+        "orderNumber": { "type": "string" },
+        "customerId": { "type": "string" },
+        "customerName": { "type": "string" },
+        "amount": { "type": "number" },
+        "payeeUpiId": { "type": "string" },
+        "utrRef": { "type": "string" },
+        "screenshotUrl": { "type": "string" },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "verified", "rejected"]
+        },
+        "submittedAt": { "type": "string" },
+        "reviewedAt": { "type": "string" },
+        "reviewerId": { "type": "string" },
+        "rejectionReason": { "type": "string" }
+      },
+      "required": ["bookingId", "orderNumber", "customerId", "amount", "status", "submittedAt"]
+    },
+    "DeviceToken": {
+      "title": "DeviceToken",
+      "description": "Mobile and Web push notification registration token",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userRole": { "type": "string", "enum": ["customer", "employee", "admin"] },
+        "token": { "type": "string" },
+        "platform": { "type": "string", "enum": ["web", "android", "ios"] },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["userId", "userRole", "token", "platform", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Real-time push and in-app notifications stream"
+    },
+    "/bookings/{bookingId}": {
+      "schema": "Booking",
+      "description": "Job orders and attendance fulfillment status"
+    },
+    "/payment_verifications/{verificationId}": {
+      "schema": "PaymentVerification",
+      "description": "Direct UPI QR payment screenshots awaiting admin audit"
+    },
+    "/device_tokens/{tokenId}": {
+      "schema": "DeviceToken",
+      "description": "Registered FCM tokens for ringing and mobile push dispatch"
+    }
+  }
+}

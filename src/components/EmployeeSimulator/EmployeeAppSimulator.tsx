@@ -39,7 +39,12 @@ import {
   Receipt,
 } from 'lucide-react';
 import { Booking, Worker, StatusTimelineNode } from '../../types';
-import { dataService, playNotificationSound } from '../../services/storage';
+import {
+  dataService,
+  playNotificationSound,
+  playIncomingJobRingtone,
+} from '../../services/storage';
+import { subscribeToFirebaseNotifications } from '../../services/firebase';
 
 interface EmployeeAppSimulatorProps {
   workers: Worker[];
@@ -106,6 +111,88 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
 
   // Audio / Alert Notification State
   const [activeAlertToast, setActiveAlertToast] = useState<string | null>(null);
+
+  // Incoming Job Broadcast & Ringing State
+  const [incomingJobAlert, setIncomingJobAlert] = useState<Booking | null>(null);
+  const [isRinging, setIsRinging] = useState(false);
+
+  useEffect(() => {
+    // 1. Listen for new job broadcast from customer app
+    const handleNewJobBroadcast = (e: any) => {
+      const newJob = e.detail as Booking;
+      if (newJob) {
+        setIncomingJobAlert(newJob);
+        setIsRinging(true);
+        playIncomingJobRingtone();
+        setActiveAlertToast(`🚨 NEW JOB RADAR: ${newJob.categoryName} (₹${newJob.offeredPricePerWorker})`);
+      }
+    };
+
+    window.addEventListener('manpowerlink_new_job_broadcast', handleNewJobBroadcast);
+
+    // 2. Real-time Firebase notification subscription
+    const unsubscribeFirebase = subscribeToFirebaseNotifications(
+      'employee',
+      currentWorker.id,
+      (notif) => {
+        if (notif.soundType === 'urgent_ring' || notif.eventType === 'BOOKING_CREATED') {
+          playIncomingJobRingtone();
+          setIsRinging(true);
+          setActiveAlertToast(`🚨 ${notif.title}: ${notif.message}`);
+        }
+      }
+    );
+
+    return () => {
+      window.removeEventListener('manpowerlink_new_job_broadcast', handleNewJobBroadcast);
+      unsubscribeFirebase();
+    };
+  }, [currentWorker.id]);
+
+  const handleAcceptIncomingJob = () => {
+    if (!incomingJobAlert) return;
+    setIsRinging(false);
+
+    const updatedAssigned = [
+      ...incomingJobAlert.assignedWorkers,
+      {
+        workerId: currentWorker.id,
+        workerName: currentWorker.name,
+        workerPhone: currentWorker.phone,
+        workerAvatar: currentWorker.avatar,
+        agreedRate: incomingJobAlert.offeredPricePerWorker,
+        status: 'travelling' as const,
+      },
+    ];
+
+    const updatedBooking: Booking = {
+      ...incomingJobAlert,
+      assignedWorkers: updatedAssigned,
+      acceptedWorkersCount: updatedAssigned.length,
+      status: 'EMPLOYEES_TRAVELLING',
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    dataService.updateBooking(updatedBooking);
+    setSelectedBookingId(updatedBooking.id);
+    setIncomingJobAlert(null);
+    setActiveTab('my-work');
+
+    dataService.addNotification({
+      recipientId: updatedBooking.customerId,
+      recipientRole: 'customer',
+      title: 'Worker In Transit to Worksite',
+      message: `${currentWorker.name} accepted ${updatedBooking.orderNumber} and is currently travelling to ${updatedBooking.workLocation.address}.`,
+      eventType: 'BID_ACCEPTED',
+      bookingId: updatedBooking.id,
+      orderNumber: updatedBooking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'chime',
+    });
+
+    triggerAppRingAlert(`Shift accepted! You are now travelling to ${incomingJobAlert.workLocation.address}`);
+  };
 
   // Live Location Simulation (Automatic GPS Tracking)
   const [currentGpsLocation, setCurrentGpsLocation] = useState({
@@ -311,6 +398,85 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 <Volume2 className="w-3.5 h-3.5 text-white animate-pulse" />
               </div>
               <span className="flex-1">{activeAlertToast}</span>
+            </div>
+          )}
+
+          {/* Incoming Job Broadcast & Ringing Alert Modal */}
+          {incomingJobAlert && (
+            <div className="absolute inset-0 bg-black/85 z-50 flex items-center justify-center p-3 animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl p-5 shadow-2xl max-w-xs w-full space-y-3.5 border-4 border-[#D71920] relative overflow-hidden">
+                {/* Flashing ringing badge header */}
+                <div className="flex items-center justify-between pb-2 border-b border-amber-200">
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#D71920] text-white text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 animate-pulse">
+                    <span className="w-2 h-2 rounded-full bg-[#FFC928] animate-ping" />
+                    🚨 INCOMING JOB RADAR
+                  </span>
+                  <span className="text-[10px] font-mono text-[#D71920] font-bold flex items-center gap-1">
+                    <Volume2 className="w-3.5 h-3.5 animate-bounce" />
+                    <span>RINGING</span>
+                  </span>
+                </div>
+
+                {/* Job Details */}
+                <div className="space-y-1 text-center">
+                  <span className="text-[10px] text-slate-500 font-mono font-bold block">
+                    {incomingJobAlert.orderNumber} • {incomingJobAlert.zoneName || 'Baikampady Zone'}
+                  </span>
+                  <h3 className="text-sm font-black text-[#202124] leading-snug">
+                    {incomingJobAlert.jobTitle || incomingJobAlert.categoryName}
+                  </h3>
+                  <div className="inline-block py-1 px-3 rounded-xl bg-amber-50 border border-amber-300 my-1">
+                    <span className="text-xl font-black text-[#D71920]">
+                      ₹{incomingJobAlert.offeredPricePerWorker.toLocaleString()}
+                    </span>
+                    <span className="text-[10px] text-[#A80F18] font-bold block">
+                      Per Worker (Cash / Direct UPI)
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-xs space-y-1 text-left">
+                  <div className="flex items-center gap-1.5 text-[#202124] font-bold text-[11px]">
+                    <MapPin className="w-3.5 h-3.5 text-[#D71920] shrink-0" />
+                    <span className="truncate">{incomingJobAlert.workLocation.address}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-200">
+                    <span>Shift Timing:</span>
+                    <span className="font-bold text-[#202124]">
+                      {incomingJobAlert.startTime} – {incomingJobAlert.endTime}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px] text-slate-500">
+                    <span>Slots Needed:</span>
+                    <span className="font-bold text-[#D71920]">
+                      {incomingJobAlert.acceptedWorkersCount} / {incomingJobAlert.requiredWorkers} Workers
+                    </span>
+                  </div>
+                </div>
+
+                {/* Accept & Decline Buttons */}
+                <div className="space-y-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAcceptIncomingJob}
+                    className="w-full py-3 bg-[#16834A] hover:bg-[#126b3c] text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4 text-[#FFC928]" />
+                    <span>ACCEPT JOB &amp; START TRANSIT</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIncomingJobAlert(null);
+                      setIsRinging(false);
+                    }}
+                    className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                  >
+                    Decline Shift
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -530,7 +696,19 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playIncomingJobRingtone();
+                      triggerAppRingAlert('🔔 Testing Loud Job Ringtone!');
+                    }}
+                    className="p-1.5 bg-black/30 hover:bg-black/50 text-[#FFC928] rounded-full transition-all cursor-pointer shadow-2xs"
+                    title="Test Incoming Job Ringtone"
+                  >
+                    <Volume2 className="w-3.5 h-3.5" />
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => setIsOnline(!isOnline)}
