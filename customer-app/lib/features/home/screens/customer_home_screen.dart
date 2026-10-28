@@ -5,7 +5,6 @@ import '../../../models/category_model.dart';
 import '../../../providers/app_providers.dart';
 import '../../booking/screens/create_booking_screen.dart';
 
-
 class CustomerHomeScreen extends ConsumerStatefulWidget {
   const CustomerHomeScreen({super.key});
 
@@ -61,8 +60,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.assignment), label: 'My Orders'),
-          BottomNavigationBarItem(icon: Icon(Icons.support_agent), label: 'Support'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.assignment), label: 'My Orders'),
+          BottomNavigationBarItem(
+              icon: Icon(Icons.support_agent), label: 'Support'),
           BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
@@ -94,7 +95,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                   const SizedBox(height: 4),
                   const Text(
                     'Hire verified loaders, catering servers, cleaners, and warehouse workers in Mangalore.',
-                    style: TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                    style:
+                        TextStyle(fontSize: 12, color: AppTheme.secondaryText),
                   ),
                   const SizedBox(height: 14),
                   Row(
@@ -127,10 +129,10 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
           const SizedBox(height: 20),
 
           // Categories Grid
-          Row(
+          const Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
+              Text(
                 'Service Verticals',
                 style: TextStyle(
                   fontSize: 14,
@@ -138,9 +140,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                   color: AppTheme.primaryText,
                 ),
               ),
-              Text(
+              const Text(
                 'Live Rates',
-                style: TextStyle(fontSize: 11, color: AppTheme.primaryRed, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.primaryRed,
+                    fontWeight: FontWeight.bold),
               ),
             ],
           ),
@@ -172,10 +177,12 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppTheme.primaryRed.withOpacity(0.08),
+                              color:
+                                  AppTheme.primaryRed.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.work_outline, color: AppTheme.primaryRed, size: 20),
+                            child: const Icon(Icons.work_outline,
+                                color: AppTheme.primaryRed, size: 20),
                           ),
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,12 +191,15 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                                 cat.name,
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, fontSize: 13),
                               ),
                               const SizedBox(height: 2),
                               Text(
                                 'From ₹${cat.minPrice.toInt()}',
-                                style: const TextStyle(fontSize: 11, color: AppTheme.secondaryText),
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: AppTheme.secondaryText),
                               ),
                             ],
                           ),
@@ -201,7 +211,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
               },
             ),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, _) => Center(child: Text('Error loading categories: $err')),
+            error: (err, _) =>
+                Center(child: Text('Error loading categories: $err')),
           ),
         ],
       ),
@@ -211,7 +222,8 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
   void _openBooking(CategoryModel? category, {bool isInstant = false}) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CreateBookingScreen(initialCategory: category, isInstant: isInstant),
+        builder: (_) => CreateBookingScreen(
+            initialCategory: category, isInstant: isInstant),
       ),
     );
   }

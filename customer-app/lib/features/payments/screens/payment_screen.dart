@@ -18,7 +18,8 @@ class _PaymentScreenState extends State<PaymentScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final baseCost = widget.booking.offeredPricePerWorker * widget.booking.requiredWorkers;
+    final baseCost =
+        widget.booking.offeredPricePerWorker * widget.booking.requiredWorkers;
     final platformFee = baseCost * 0.10;
     final tax = platformFee * 0.05;
     final finalAmount = baseCost + platformFee + tax;
@@ -41,12 +42,14 @@ class _PaymentScreenState extends State<PaymentScreen> {
                   children: [
                     Text(
                       widget.booking.orderNumber,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       widget.booking.categoryName,
-                      style: const TextStyle(color: AppTheme.secondaryText, fontSize: 12),
+                      style: const TextStyle(
+                          color: AppTheme.secondaryText, fontSize: 12),
                     ),
                   ],
                 ),
@@ -61,15 +64,23 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Itemized Cost Breakdown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    const Text('Itemized Cost Breakdown',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 14)),
                     const SizedBox(height: 12),
-                    _buildRow('Labor Cost (${widget.booking.requiredWorkers} workers @ ₹${widget.booking.offeredPricePerWorker.toInt()})', '₹${baseCost.toInt()}'),
-                    _buildRow('Actual Shift Duration', '${widget.booking.durationType.replaceAll('_', ' ')} (8 hrs)'),
+                    _buildRow(
+                        'Labor Cost (${widget.booking.requiredWorkers} workers @ ₹${widget.booking.offeredPricePerWorker.toInt()})',
+                        '₹${baseCost.toInt()}'),
+                    _buildRow('Actual Shift Duration',
+                        '${widget.booking.durationType.replaceAll('_', ' ')} (8 hrs)'),
                     _buildRow('Overtime Surcharge', '₹0 (0 hrs OT)'),
-                    _buildRow('Platform Service Fee (10%)', '₹${platformFee.toInt()}'),
+                    _buildRow('Platform Service Fee (10%)',
+                        '₹${platformFee.toInt()}'),
                     _buildRow('GST / Tax (5%)', '₹${tax.toInt()}'),
                     const Divider(),
-                    _buildRow('Total Settlement Amount', '₹${finalAmount.toInt()}', isBold: true),
+                    _buildRow(
+                        'Total Settlement Amount', '₹${finalAmount.toInt()}',
+                        isBold: true),
                   ],
                 ),
               ),
@@ -77,21 +88,24 @@ class _PaymentScreenState extends State<PaymentScreen> {
             const SizedBox(height: 16),
 
             // Payment Mode Selector
-            const Text('Select Payment Option:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const Text('Select Payment Option:',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
 
             RadioListTile<String>(
               value: 'online',
               groupValue: _selectedPaymentMethod,
               title: const Text('Online Payment (UPI, Cards, NetBanking)'),
-              subtitle: const Text('Secured Escrow release upon End OTP verification'),
+              subtitle: const Text(
+                  'Secured Escrow release upon End OTP verification'),
               onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
             ),
             RadioListTile<String>(
               value: 'cash',
               groupValue: _selectedPaymentMethod,
               title: const Text('Direct Cash Handover on Site'),
-              subtitle: const Text('Handed directly to assigned worker team lead'),
+              subtitle:
+                  const Text('Handed directly to assigned worker team lead'),
               onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
             ),
             const SizedBox(height: 24),
@@ -100,7 +114,7 @@ class _PaymentScreenState extends State<PaymentScreen> {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppTheme.stateSuccess.withOpacity(0.1),
+                  color: AppTheme.stateSuccess.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppTheme.stateSuccess),
                 ),
@@ -111,7 +125,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
                     Expanded(
                       child: Text(
                         'Payment receipt confirmed and recorded in platform ledger!',
-                        style: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.stateSuccess, fontSize: 12),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.stateSuccess,
+                            fontSize: 12),
                       ),
                     ),
                   ],
@@ -151,7 +168,10 @@ class _PaymentScreenState extends State<PaymentScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: TextStyle(fontSize: 12, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
           Text(
             value,
             style: TextStyle(

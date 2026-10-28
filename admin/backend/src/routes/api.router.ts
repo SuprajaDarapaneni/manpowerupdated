@@ -918,3 +918,59 @@ apiRouter.get('/admin/settings/audit-history', requireRole(['super_admin', 'admi
   res.json({ success: true, data: settingsAuditState });
 });
 
+// --- Push Notifications Hub (Employee App -> Customer App) ---
+interface BroadcastNotification {
+  id: string;
+  target: string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  timestamp: string;
+}
+
+const broadcastNotificationsState: BroadcastNotification[] = [
+  {
+    id: 'notif-seed-1',
+    target: 'all_customers',
+    title: '📢 Shift Broadcast: Baikampady Industrial Area',
+    body: 'Loading & Unloading shift scheduled for 02:00 PM today.',
+    data: { type: 'JOB_CREATED', orderNumber: '1046' },
+    timestamp: new Date().toISOString(),
+  },
+];
+
+apiRouter.post('/notifications/send', (req: Request, res: Response) => {
+  const { target, topic, notification, data } = req.body;
+  const title = notification?.title || req.body.title || 'ManPowerLink Alert';
+  const body = notification?.body || req.body.body || 'New update received.';
+
+  const newNotif: BroadcastNotification = {
+    id: `notif-${Date.now()}`,
+    target: target || topic || 'all_customers',
+    title,
+    body,
+    data: data || {},
+    timestamp: new Date().toISOString(),
+  };
+
+  broadcastNotificationsState.unshift(newNotif);
+  if (broadcastNotificationsState.length > 50) {
+    broadcastNotificationsState.pop();
+  }
+
+  console.log(`[PUSH NOTIFICATION] Dispatched to ${newNotif.target}: "${title}" - "${body}"`);
+
+  res.status(201).json({
+    success: true,
+    message: 'Notification successfully dispatched to Customer App channel.',
+    data: newNotif,
+  });
+});
+
+apiRouter.get('/notifications/recent', (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    data: broadcastNotificationsState,
+  });
+});
+

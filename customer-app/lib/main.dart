@@ -2,8 +2,25 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'firebase_options.dart';
+import 'services/fcm_service.dart';
+import 'models/location_model.dart';
+import 'widgets/location_picker_sheet.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  } catch (e) {
+    debugPrint('Firebase initialization warning: $e');
+  }
+
   runApp(const ProviderScope(child: ManPowerLinkCustomerApp()));
 }
 
@@ -87,6 +104,10 @@ class SavedWorksite {
   final String address;
   final String contactPerson;
   final String contactPhone;
+  final double latitude;
+  final double longitude;
+  final String? area;
+  final String? landmark;
 
   SavedWorksite({
     required this.id,
@@ -94,7 +115,29 @@ class SavedWorksite {
     required this.address,
     required this.contactPerson,
     required this.contactPhone,
+    this.latitude = 12.9141,
+    this.longitude = 74.8560,
+    this.area,
+    this.landmark,
   });
+
+  WorksiteLocation toWorksiteLocation() {
+    return WorksiteLocation(
+      id: id,
+      name: name,
+      address: address,
+      area: area ?? (address.contains('Baikampady') ? 'Baikampady' : (address.contains('Panambur') ? 'Panambur' : 'Mangalore')),
+      city: 'Mangalore',
+      pincode: '575011',
+      latitude: latitude,
+      longitude: longitude,
+      categoryTag: 'Custom',
+      landmark: landmark,
+      contactPerson: contactPerson,
+      contactPhone: contactPhone,
+      isGpsAutoDetected: false,
+    );
+  }
 }
 
 // Customer Auth State
@@ -310,11 +353,124 @@ class CustomerBookingsNotifier extends StateNotifier<CustomerBookingsState> {
   void addWorksite(SavedWorksite ws) {
     state = state.copyWith(worksites: [...state.worksites, ws]);
   }
+
+  void removeWorksite(String id) {
+    state = state.copyWith(
+      worksites: state.worksites.where((w) => w.id != id).toList(),
+    );
+  }
 }
 
 final customerBookingsProvider =
     StateNotifierProvider<CustomerBookingsNotifier, CustomerBookingsState>((ref) {
   return CustomerBookingsNotifier();
+});
+
+// ---------------------------------------------------------------------------
+// 1A. CUSTOMER ACTIVE LOCATION & WORKSITE STATE PROVIDER
+// ---------------------------------------------------------------------------
+class CustomerActiveLocationNotifier extends StateNotifier<WorksiteLocation> {
+  CustomerActiveLocationNotifier() : super(WorksiteLocation.defaultLocation);
+
+  void setLocation(WorksiteLocation location) {
+    state = location;
+  }
+}
+
+final customerActiveLocationProvider =
+    StateNotifierProvider<CustomerActiveLocationNotifier, WorksiteLocation>((ref) {
+  return CustomerActiveLocationNotifier();
+});
+
+// ---------------------------------------------------------------------------
+// 1B. NOTIFICATIONS STATE PROVIDER
+// ---------------------------------------------------------------------------
+class CustomerNotification {
+  final String id;
+  final String title;
+  final String body;
+  final DateTime timestamp;
+  final bool isRead;
+  final String type; // 'ORDER', 'ARRIVAL', 'START_OTP', 'END_OTP', 'PAYMENT'
+
+  CustomerNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.timestamp,
+    this.isRead = false,
+    this.type = 'ORDER',
+  });
+
+  CustomerNotification copyWith({bool? isRead}) {
+    return CustomerNotification(
+      id: id,
+      title: title,
+      body: body,
+      timestamp: timestamp,
+      isRead: isRead ?? this.isRead,
+      type: type,
+    );
+  }
+}
+
+class CustomerNotificationsNotifier extends StateNotifier<List<CustomerNotification>> {
+  CustomerNotificationsNotifier()
+      : super([
+          CustomerNotification(
+            id: 'notif-1',
+            title: '5 of 5 Workers Confirmed for Order #1045',
+            body: 'Ramesh Kumar and 4 others accepted the shift. They are on their way to Dock 4.',
+            timestamp: DateTime.now().subtract(const Duration(minutes: 15)),
+            type: 'ARRIVAL',
+          ),
+          CustomerNotification(
+            id: 'notif-2',
+            title: 'Start OTP Ready for Shift #1045',
+            body: 'Your attendance Start OTP is ready. Provide this code only when workers physically arrive at worksite.',
+            timestamp: DateTime.now().subtract(const Duration(hours: 1)),
+            type: 'START_OTP',
+          ),
+          CustomerNotification(
+            id: 'notif-3',
+            title: 'Escrow Payment Secured',
+            body: '₹10,000 for Order #1045 is held securely. It will be settled upon End OTP verification.',
+            timestamp: DateTime.now().subtract(const Duration(hours: 2)),
+            type: 'PAYMENT',
+          ),
+        ]);
+
+  void addNotification({
+    required String title,
+    required String body,
+    String type = 'ORDER',
+  }) {
+    final notif = CustomerNotification(
+      id: 'notif-${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      body: body,
+      timestamp: DateTime.now(),
+      type: type,
+    );
+    state = [notif, ...state];
+  }
+
+  void markAsRead(String id) {
+    state = state.map((n) => n.id == id ? n.copyWith(isRead: true) : n).toList();
+  }
+
+  void markAllAsRead() {
+    state = state.map((n) => n.copyWith(isRead: true)).toList();
+  }
+
+  void clearAll() {
+    state = [];
+  }
+}
+
+final customerNotificationsProvider =
+    StateNotifierProvider<CustomerNotificationsNotifier, List<CustomerNotification>>((ref) {
+  return CustomerNotificationsNotifier();
 });
 
 // Category selection helper provider for seamless Home -> Post Job flow
@@ -323,14 +479,81 @@ final preselectedCategoryProvider = StateProvider<String?>((ref) => null);
 // ---------------------------------------------------------------------------
 // 2. ROOT APP ROUTER
 // ---------------------------------------------------------------------------
-class ManPowerLinkCustomerApp extends ConsumerWidget {
+class ManPowerLinkCustomerApp extends ConsumerStatefulWidget {
   const ManPowerLinkCustomerApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ManPowerLinkCustomerApp> createState() => _ManPowerLinkCustomerAppState();
+}
+
+class _ManPowerLinkCustomerAppState extends ConsumerState<ManPowerLinkCustomerApp> {
+  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  final FCMService _fcmService = FCMService();
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeFCM();
+  }
+
+  Future<void> _initializeFCM() async {
+    final token = await _fcmService.initialize();
+    if (token != null) {
+      debugPrint('FCM Ready: $token');
+    }
+
+    _fcmService.listenToMessages(
+      onMessageReceived: (RemoteMessage message) {
+        final title = message.notification?.title ?? message.data['title'] ?? 'Shift Notification';
+        final body = message.notification?.body ?? message.data['body'] ?? 'You have a new update regarding your manpower booking.';
+        final type = message.data['type'] ?? 'ORDER';
+
+        // Add incoming push message directly to live notifications feed
+        ref.read(customerNotificationsProvider.notifier).addNotification(
+              title: title,
+              body: body,
+              type: type,
+            );
+
+        // Display floating in-app banner for foreground notification
+        _scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.notifications_active, color: Colors.white, size: 22),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                      const SizedBox(height: 2),
+                      Text(body, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: CustomerTheme.primaryRed,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      },
+      onMessageOpenedApp: (RemoteMessage message) {
+        debugPrint('FCM: Notification tapped from system tray: ${message.data}');
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(customerAuthProvider);
 
     return MaterialApp(
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       title: 'ManPowerLink Customer',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -756,12 +979,21 @@ class CustomerHomeTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final notifs = ref.watch(customerNotificationsProvider);
+    final unreadCount = notifs.where((n) => !n.isRead).length;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('ManPowerLink', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
           IconButton(
-            icon: const Icon(Icons.notifications_outlined),
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              backgroundColor: CustomerTheme.primaryYellow,
+              textColor: const Color(0xFF202124),
+              child: const Icon(Icons.notifications_outlined),
+            ),
             onPressed: () {
               Navigator.push(
                 context,
@@ -776,44 +1008,125 @@ class CustomerHomeTab extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Live GPS Status Banner (Automatic Location Detection)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
-              margin: const EdgeInsets.only(bottom: 14),
-              decoration: BoxDecoration(
-                color: CustomerTheme.primaryYellow.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: CustomerTheme.darkGold.withValues(alpha: 0.35)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.gps_fixed, color: CustomerTheme.primaryRed, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+            // Interactive Worksite & Location Banner with Location Picker
+            InkWell(
+              onTap: () async {
+                final activeLoc = ref.read(customerActiveLocationProvider);
+                final bookingsState = ref.read(customerBookingsProvider);
+                final savedWorksiteLocations = bookingsState.worksites
+                    .map((w) => w.toWorksiteLocation())
+                    .toList();
+                final picked = await LocationPickerSheet.show(
+                  context,
+                  initialLocation: activeLoc,
+                  savedWorksites: savedWorksiteLocations,
+                  onSaveNewWorksite: (newWs) {
+                    ref.read(customerBookingsProvider.notifier).addWorksite(
+                          SavedWorksite(
+                            id: newWs.id,
+                            name: newWs.name,
+                            address: newWs.address,
+                            contactPerson: newWs.contactPerson ?? 'Supervisor',
+                            contactPhone: newWs.contactPhone ?? '+91 99000 00000',
+                            latitude: newWs.latitude,
+                            longitude: newWs.longitude,
+                            area: newWs.area,
+                            landmark: newWs.landmark,
+                          ),
+                        );
+                  },
+                );
+                if (picked != null) {
+                  ref.read(customerActiveLocationProvider.notifier).setLocation(picked);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('📍 Active worksite set to: ${picked.name}'),
+                        backgroundColor: CustomerTheme.primaryRed,
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  }
+                }
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Builder(builder: (context) {
+                final activeLoc = ref.watch(customerActiveLocationProvider);
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  margin: const EdgeInsets.only(bottom: 14),
+                  decoration: BoxDecoration(
+                    color: CustomerTheme.primaryYellow.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: CustomerTheme.darkGold.withValues(alpha: 0.35)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on, color: CustomerTheme.primaryRed, size: 22),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('LIVE GPS LOCATION ACTIVE',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: CustomerTheme.darkGold)),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(color: CustomerTheme.primaryRed, borderRadius: BorderRadius.circular(4)),
-                              child: const Text('AUTO-DETECTED', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                            Row(
+                              children: [
+                                Text(
+                                  activeLoc.isGpsAutoDetected ? 'LIVE GPS PIN' : 'ACTIVE WORKSITE',
+                                  style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: CustomerTheme.darkGold),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: activeLoc.isGpsAutoDetected ? CustomerTheme.primaryRed : CustomerTheme.successGreen,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    activeLoc.isGpsAutoDetected ? 'GPS' : activeLoc.categoryTag.toUpperCase(),
+                                    style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              '${activeLoc.name} · ${activeLoc.area}',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: CustomerTheme.textPrimary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              activeLoc.address,
+                              style: const TextStyle(fontSize: 11, color: CustomerTheme.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
-                        const SizedBox(height: 1),
-                        const Text('Baikampady, Mangalore · (12.9141° N, 74.8560° E)',
-                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: CustomerTheme.textPrimary)),
-                      ],
-                    ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.black12),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.tune, size: 12, color: CustomerTheme.primaryRed),
+                            SizedBox(width: 4),
+                            Text(
+                              'Change',
+                              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: CustomerTheme.primaryRed),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const Icon(Icons.check_circle, color: CustomerTheme.darkGold, size: 16),
-                ],
-              ),
+                );
+              }),
             ),
             const Text('Hire Verified Manpower',
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: CustomerTheme.textPrimary)),
@@ -1349,11 +1662,12 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
   bool _tiffinRequired = true;
   final _tiffinController = TextEditingController(text: 'Morning Breakfast & Afternoon Lunch');
 
-  // GPS Auto-Detection State
+  // GPS & Location Picker State
   bool _isFetchingGps = false;
-  double _gpsLat = 12.9141;
-  double _gpsLng = 74.8560;
-  String _gpsAccuracy = '±4m (Satellite Lock)';
+  double _gpsLat = 12.9621;
+  double _gpsLng = 74.8214;
+  String _gpsAccuracy = 'Verified Worksite Pin';
+  WorksiteLocation? _selectedLocation;
 
   // Interactive DateTime Pickers
   DateTime _selectedDate = DateTime.now().add(const Duration(days: 1));
@@ -1366,34 +1680,126 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
   @override
   void initState() {
     super.initState();
-    _autoDetectGpsLocation();
+    final activeLoc = ref.read(customerActiveLocationProvider);
+    _selectedLocation = activeLoc;
+    _addressController.text = activeLoc.address;
+    _gpsLat = activeLoc.latitude;
+    _gpsLng = activeLoc.longitude;
+    _gpsAccuracy = activeLoc.isGpsAutoDetected ? 'Live GPS Fix' : 'Verified Worksite Pin';
+  }
+
+  Future<void> _openLocationPicker() async {
+    final bookingsState = ref.read(customerBookingsProvider);
+    final savedWorksiteLocations = bookingsState.worksites
+        .map((w) => w.toWorksiteLocation())
+        .toList();
+
+    final picked = await LocationPickerSheet.show(
+      context,
+      initialLocation: _selectedLocation,
+      savedWorksites: savedWorksiteLocations,
+      onSaveNewWorksite: (newWs) {
+        ref.read(customerBookingsProvider.notifier).addWorksite(
+              SavedWorksite(
+                id: newWs.id,
+                name: newWs.name,
+                address: newWs.address,
+                contactPerson: newWs.contactPerson ?? 'Supervisor',
+                contactPhone: newWs.contactPhone ?? '+91 99000 00000',
+                latitude: newWs.latitude,
+                longitude: newWs.longitude,
+                area: newWs.area,
+                landmark: newWs.landmark,
+              ),
+            );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _selectedLocation = picked;
+        _addressController.text = picked.address;
+        _gpsLat = picked.latitude;
+        _gpsLng = picked.longitude;
+        _gpsAccuracy = picked.isGpsAutoDetected ? 'Live GPS Fix' : 'Verified Worksite Pin';
+      });
+      ref.read(customerActiveLocationProvider.notifier).setLocation(picked);
+    }
   }
 
   Future<void> _autoDetectGpsLocation() async {
     setState(() => _isFetchingGps = true);
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (serviceEnabled) {
-        LocationPermission permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          permission = await Geolocator.requestPermission();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Device Location (GPS) is turned off. Please enable location services.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
-        if (permission == LocationPermission.whileInUse ||
-            permission == LocationPermission.always) {
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('⚠️ Location permissions are permanently denied. Please allow location in Android settings.'),
+              backgroundColor: CustomerTheme.primaryRed,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        // 1. First read cached position immediately (zero delay)
+        final lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null) {
+          _gpsLat = lastKnown.latitude;
+          _gpsLng = lastKnown.longitude;
+          _gpsAccuracy = '±${lastKnown.accuracy.toStringAsFixed(1)}m (Fused Cached Fix)';
+        }
+
+        // 2. Fetch fresh live position with balanced accuracy & 8s timeout
+        try {
           final pos = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.high,
-            timeLimit: const Duration(seconds: 4),
+            desiredAccuracy: LocationAccuracy.medium,
+            timeLimit: const Duration(seconds: 8),
           );
           _gpsLat = pos.latitude;
           _gpsLng = pos.longitude;
           _gpsAccuracy = '±${pos.accuracy.toStringAsFixed(1)}m (Live Device Fix)';
+        } catch (_) {
+          // If fresh fix timed out, we still maintain the fast cached fix
         }
       }
-    } catch (_) {}
-    _addressController.text =
-        'Live GPS Worksite Pin (${_gpsLat.toStringAsFixed(4)}° N, ${_gpsLng.toStringAsFixed(4)}° E), Industrial Zone, Mangalore';
+    } catch (e) {
+      debugPrint('GPS auto-detection error: $e');
+    }
+
+    final latStr = _gpsLat.toStringAsFixed(4);
+    final lngStr = _gpsLng.toStringAsFixed(4);
+    _addressController.text = 'Live GPS Worksite Pin ($latStr° N, $lngStr° E)';
+
     if (mounted) {
       setState(() => _isFetchingGps = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('📍 Live GPS Coordinates locked: $latStr° N, $lngStr° E ($_gpsAccuracy)'),
+          backgroundColor: CustomerTheme.successGreen,
+          duration: const Duration(seconds: 2),
+        ),
+      );
     }
   }
 
@@ -1645,7 +2051,7 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
               const SizedBox(height: 12),
             ],
 
-            // Live GPS Worksite Location Card (Zero Manual Filing)
+            // Worksite Location Card with Location Picker & GPS Pin
             Container(
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
@@ -1666,31 +2072,53 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(Icons.gps_fixed, color: CustomerTheme.primaryRed, size: 20),
-                          SizedBox(width: 8),
+                          const Icon(Icons.location_on, color: CustomerTheme.primaryRed, size: 20),
+                          const SizedBox(width: 8),
                           Text(
-                            'Live GPS Worksite Location',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: CustomerTheme.textPrimary),
+                            _selectedLocation?.name ?? 'Worksite Location',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: CustomerTheme.textPrimary),
                           ),
                         ],
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: CustomerTheme.primaryYellow.withValues(alpha: 0.25),
+                          color: (_selectedLocation?.isGpsAutoDetected == true)
+                              ? CustomerTheme.primaryYellow.withValues(alpha: 0.25)
+                              : const Color(0xFFF0FDF4),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: CustomerTheme.darkGold.withValues(alpha: 0.4)),
+                          border: Border.all(
+                            color: (_selectedLocation?.isGpsAutoDetected == true)
+                                ? CustomerTheme.darkGold.withValues(alpha: 0.4)
+                                : const Color(0xFF86EFAC),
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.check_circle, size: 12, color: CustomerTheme.darkGold),
+                            Icon(
+                              (_selectedLocation?.isGpsAutoDetected == true) ? Icons.gps_fixed : Icons.check_circle,
+                              size: 12,
+                              color: (_selectedLocation?.isGpsAutoDetected == true)
+                                  ? CustomerTheme.darkGold
+                                  : CustomerTheme.successGreen,
+                            ),
                             const SizedBox(width: 4),
                             Text(
-                              _isFetchingGps ? 'FETCHING GPS...' : 'GPS LOCKED',
-                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: CustomerTheme.darkGold),
+                              _isFetchingGps
+                                  ? 'FETCHING GPS...'
+                                  : ((_selectedLocation?.isGpsAutoDetected == true)
+                                      ? 'GPS LOCKED'
+                                      : (_selectedLocation?.categoryTag.toUpperCase() ?? 'VERIFIED HUB')),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: (_selectedLocation?.isGpsAutoDetected == true)
+                                    ? CustomerTheme.darkGold
+                                    : CustomerTheme.successGreen,
+                              ),
                             ),
                           ],
                         ),
@@ -1711,7 +2139,7 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.satellite_alt, size: 14, color: CustomerTheme.primaryRed),
+                            const Icon(Icons.map_outlined, size: 14, color: CustomerTheme.primaryRed),
                             const SizedBox(width: 6),
                             Text(
                               'Coordinates: ${_gpsLat.toStringAsFixed(4)}° N, ${_gpsLng.toStringAsFixed(4)}° E',
@@ -1728,23 +2156,71 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
                         Text(
                           _addressController.text.isNotEmpty
                               ? _addressController.text
-                              : 'Auto-fetching live satellite coordinates...',
+                              : 'Select or enter worksite address...',
                           style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: CustomerTheme.textPrimary),
                         ),
+                        if (_selectedLocation?.landmark != null) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Landmark: ${_selectedLocation!.landmark}',
+                            style: const TextStyle(fontSize: 11, color: CustomerTheme.primaryRed, fontWeight: FontWeight.w500),
+                          ),
+                        ],
                       ],
                     ),
                   ),
                   const SizedBox(height: 10),
+
+                  // Quick Switch Chips (Baikampady, Panambur, APMC Kottara, Central)
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        const Text('Quick Hubs: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: CustomerTheme.textSecondary)),
+                        ...WorksiteLocation.presetHubs.take(4).map((hub) {
+                          final isCurrent = _selectedLocation?.id == hub.id;
+                          return Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ActionChip(
+                              label: Text(hub.area, style: TextStyle(fontSize: 11, color: isCurrent ? Colors.white : CustomerTheme.textPrimary)),
+                              backgroundColor: isCurrent ? CustomerTheme.primaryRed : const Color(0xFFF1F3F5),
+                              padding: const EdgeInsets.symmetric(horizontal: 4),
+                              onPressed: () {
+                                setState(() {
+                                  _selectedLocation = hub;
+                                  _addressController.text = hub.address;
+                                  _gpsLat = hub.latitude;
+                                  _gpsLng = hub.longitude;
+                                  _gpsAccuracy = 'Verified Worksite Pin';
+                                });
+                                ref.read(customerActiveLocationProvider.notifier).setLocation(hub);
+                              },
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Action Buttons: Pick Location & Auto-Detect GPS
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Expanded(
-                        child: Text(
-                          '⚡ 100% Automatic GPS: Nearest verified workers are dispatched to this exact pin with zero manual typing.',
-                          style: TextStyle(fontSize: 11, color: CustomerTheme.textSecondary),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _openLocationPicker,
+                          icon: const Icon(Icons.edit_location_alt, size: 16),
+                          label: const Text('Pick / Change Location', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: CustomerTheme.primaryRed,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
                         ),
                       ),
-                      TextButton.icon(
+                      const SizedBox(width: 8),
+                      OutlinedButton.icon(
                         onPressed: _isFetchingGps ? null : _autoDetectGpsLocation,
                         icon: _isFetchingGps
                             ? const SizedBox(
@@ -1752,10 +2228,15 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
                                 height: 14,
                                 child: CircularProgressIndicator(strokeWidth: 2, color: CustomerTheme.primaryRed),
                               )
-                            : const Icon(Icons.refresh, size: 16, color: CustomerTheme.primaryRed),
+                            : const Icon(Icons.my_location, size: 16, color: CustomerTheme.primaryRed),
                         label: Text(
-                          _isFetchingGps ? 'Detecting...' : 'Re-Detect GPS',
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: CustomerTheme.primaryRed),
+                          _isFetchingGps ? 'Detecting...' : 'Use GPS',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: CustomerTheme.primaryRed),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          side: const BorderSide(color: CustomerTheme.primaryRed),
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
                       ),
                     ],
@@ -1763,6 +2244,7 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
                 ],
               ),
             ),
+            const SizedBox(height: 12),
             const SizedBox(height: 12),
 
             // Instructions / Notes Field (Screenshot matched)
@@ -2014,7 +2496,7 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
   void _handleBroadcast() {
     final String addr = _addressController.text.trim().isNotEmpty
         ? _addressController.text.trim()
-        : 'Live GPS Worksite Pin (${_gpsLat.toStringAsFixed(4)}° N, ${_gpsLng.toStringAsFixed(4)}° E), Industrial Zone, Mangalore';
+        : 'Live GPS Worksite Pin (${_gpsLat.toStringAsFixed(4)}° N, ${_gpsLng.toStringAsFixed(4)}° E)';
     final total = _calculateTotalBudget();
 
     if (total <= 0) {
@@ -2066,6 +2548,13 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
             latitude: _gpsLat,
             longitude: _gpsLng,
             isGpsAutoDetected: true,
+          );
+
+      // Trigger notification in Notification Feed
+      ref.read(customerNotificationsProvider.notifier).addNotification(
+            title: 'Order Broadcast Dispatched ($jobTitle)',
+            body: 'Searching $_workersCount verified workers for $_category. Live GPS pin shared with nearby employees.',
+            type: 'ORDER',
           );
 
       setState(() => _isBroadcasting = false);
@@ -2317,30 +2806,168 @@ class CustomerWorksitesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bookingsState = ref.watch(customerBookingsProvider);
+    final activeLocation = ref.watch(customerActiveLocationProvider);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Saved Worksites'),
         leading: const BackButton(),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add_location_alt_outlined),
+            tooltip: 'Add Worksite',
+            onPressed: () => _openWorksitePicker(context, ref, bookingsState),
+          ),
+        ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: bookingsState.worksites.length,
-        itemBuilder: (context, idx) {
-          final ws = bookingsState.worksites[idx];
-          return Card(
-            margin: const EdgeInsets.only(bottom: 12),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            child: ListTile(
-              leading: const Icon(Icons.warehouse, color: CustomerTheme.primaryRed),
-              title: Text(ws.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text('${ws.address}\nSupervisor: ${ws.contactPerson} (${ws.contactPhone})'),
-              isThreeLine: true,
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: CustomerTheme.primaryRed,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_location_alt),
+        label: const Text('Add New Worksite'),
+        onPressed: () => _openWorksitePicker(context, ref, bookingsState),
+      ),
+      body: bookingsState.worksites.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.warehouse_outlined, size: 48, color: Colors.black26),
+                  const SizedBox(height: 12),
+                  const Text('No Saved Worksites', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  const SizedBox(height: 6),
+                  const Text('Add warehouses or sites for 1-tap manpower booking without GPS.',
+                      style: TextStyle(color: CustomerTheme.textSecondary, fontSize: 12)),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () => _openWorksitePicker(context, ref, bookingsState),
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Worksite Now'),
+                    style: ElevatedButton.styleFrom(backgroundColor: CustomerTheme.primaryRed, foregroundColor: Colors.white),
+                  ),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
+              itemCount: bookingsState.worksites.length,
+              itemBuilder: (context, idx) {
+                final ws = bookingsState.worksites[idx];
+                final isCurrent = activeLocation.name == ws.name || activeLocation.address == ws.address;
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: isCurrent ? CustomerTheme.primaryRed : Colors.black12,
+                      width: isCurrent ? 1.5 : 1.0,
+                    ),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(12),
+                    leading: CircleAvatar(
+                      backgroundColor: isCurrent ? CustomerTheme.primaryRed : const Color(0xFFF1F3F5),
+                      foregroundColor: isCurrent ? Colors.white : CustomerTheme.primaryRed,
+                      child: const Icon(Icons.warehouse),
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(ws.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        ),
+                        if (isCurrent)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: CustomerTheme.successGreen,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text('ACTIVE', style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                          ),
+                      ],
+                    ),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 4),
+                        Text(ws.address, style: const TextStyle(fontSize: 12)),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Supervisor: ${ws.contactPerson} (${ws.contactPhone})',
+                          style: const TextStyle(fontSize: 11, color: CustomerTheme.primaryRed, fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                    trailing: PopupMenuButton<String>(
+                      icon: const Icon(Icons.more_vert, size: 20),
+                      onSelected: (val) {
+                        if (val == 'select') {
+                          ref.read(customerActiveLocationProvider.notifier).setLocation(ws.toWorksiteLocation());
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Active worksite set to ${ws.name}')),
+                          );
+                        } else if (val == 'delete') {
+                          ref.read(customerBookingsProvider.notifier).removeWorksite(ws.id);
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        const PopupMenuItem(value: 'select', child: Text('Set as Active Worksite')),
+                        const PopupMenuItem(value: 'delete', child: Text('Delete Worksite', style: TextStyle(color: Colors.red))),
+                      ],
+                    ),
+                    onTap: () {
+                      ref.read(customerActiveLocationProvider.notifier).setLocation(ws.toWorksiteLocation());
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('📍 Active worksite set to ${ws.name}'), backgroundColor: CustomerTheme.primaryRed),
+                      );
+                    },
+                  ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
+  }
+
+  void _openWorksitePicker(BuildContext context, WidgetRef ref, CustomerBookingsState bookingsState) async {
+    final picked = await LocationPickerSheet.show(
+      context,
+      savedWorksites: bookingsState.worksites.map((w) => w.toWorksiteLocation()).toList(),
+      onSaveNewWorksite: (newWs) {
+        ref.read(customerBookingsProvider.notifier).addWorksite(
+              SavedWorksite(
+                id: newWs.id,
+                name: newWs.name,
+                address: newWs.address,
+                contactPerson: newWs.contactPerson ?? 'Supervisor',
+                contactPhone: newWs.contactPhone ?? '+91 99000 00000',
+                latitude: newWs.latitude,
+                longitude: newWs.longitude,
+                area: newWs.area,
+                landmark: newWs.landmark,
+              ),
+            );
+      },
+    );
+
+    if (picked != null) {
+      if (!bookingsState.worksites.any((w) => w.name == picked.name)) {
+        ref.read(customerBookingsProvider.notifier).addWorksite(
+              SavedWorksite(
+                id: picked.id,
+                name: picked.name,
+                address: picked.address,
+                contactPerson: picked.contactPerson ?? 'Supervisor',
+                contactPhone: picked.contactPhone ?? '+91 99000 00000',
+                latitude: picked.latitude,
+                longitude: picked.longitude,
+                area: picked.area,
+                landmark: picked.landmark,
+              ),
+            );
+      }
+      ref.read(customerActiveLocationProvider.notifier).setLocation(picked);
+    }
   }
 }
 
@@ -2464,28 +3091,224 @@ class CustomerSupportScreen extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // 13. SUBPAGE: NOTIFICATIONS
 // ---------------------------------------------------------------------------
-class CustomerNotificationsScreen extends StatelessWidget {
+class CustomerNotificationsScreen extends ConsumerWidget {
   const CustomerNotificationsScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifs = ref.watch(customerNotificationsProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Shift Notifications'),
         leading: const BackButton(),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: const [
-          Card(
-            child: ListTile(
-              leading: Icon(Icons.check_circle, color: CustomerTheme.successGreen),
-              title: Text('5 of 5 Workers Confirmed for Order #1045', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-              subtitle: Text('Ramesh Kumar and 4 others have accepted the shift assignment.'),
-            ),
+        actions: [
+          IconButton(
+            tooltip: 'FCM Token & Test',
+            icon: const Icon(Icons.key_outlined, size: 20),
+            onPressed: () {
+              final token = FCMService().fcmToken ?? 'Initializing or simulated on Web/Desktop';
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Row(
+                    children: [
+                      Icon(Icons.notifications_active, color: CustomerTheme.primaryRed),
+                      SizedBox(width: 8),
+                      Text('FCM Push Token', style: TextStyle(fontSize: 16)),
+                    ],
+                  ),
+                  content: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Device Registration Token for Firebase Cloud Messaging (FCM):',
+                        style: TextStyle(fontSize: 12, color: CustomerTheme.textSecondary),
+                      ),
+                      const SizedBox(height: 10),
+                      SelectableText(
+                        token,
+                        style: const TextStyle(fontSize: 11, fontFamily: 'monospace', color: Colors.blue),
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: token));
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('FCM Token copied to clipboard!')),
+                              );
+                            },
+                            icon: const Icon(Icons.copy, size: 16),
+                            label: const Text('Copy Token'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        ref.read(customerNotificationsProvider.notifier).addNotification(
+                              title: '🔔 Test FCM Notification',
+                              body: 'Worker Ramesh Kumar (Loading & Unloading) has arrived at Dock 4.',
+                              type: 'ARRIVAL',
+                            );
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Test notification simulated and added to feed!'),
+                            backgroundColor: CustomerTheme.successGreen,
+                          ),
+                        );
+                      },
+                      child: const Text('Simulate Push'),
+                    ),
+                    ElevatedButton(
+                      onPressed: () => Navigator.pop(ctx),
+                      style: ElevatedButton.styleFrom(backgroundColor: CustomerTheme.primaryRed, foregroundColor: Colors.white),
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
+          if (notifs.isNotEmpty) ...[
+            TextButton(
+              onPressed: () {
+                ref.read(customerNotificationsProvider.notifier).markAllAsRead();
+              },
+              child: const Text('Mark Read', style: TextStyle(color: Colors.white, fontSize: 12)),
+            ),
+            IconButton(
+              tooltip: 'Clear All',
+              icon: const Icon(Icons.delete_sweep_outlined, size: 20),
+              onPressed: () {
+                ref.read(customerNotificationsProvider.notifier).clearAll();
+              },
+            ),
+          ],
         ],
       ),
+      body: notifs.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  const Text('No notifications yet',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: CustomerTheme.textSecondary)),
+                  const SizedBox(height: 6),
+                  const Text('Shift alerts and worker arrival updates will appear here.',
+                      style: TextStyle(fontSize: 13, color: CustomerTheme.textSecondary)),
+                ],
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: notifs.length,
+              itemBuilder: (context, idx) {
+                final n = notifs[idx];
+                IconData icon;
+                Color iconColor;
+                switch (n.type) {
+                  case 'ARRIVAL':
+                    icon = Icons.pin_drop;
+                    iconColor = CustomerTheme.primaryRed;
+                    break;
+                  case 'START_OTP':
+                    icon = Icons.lock_clock;
+                    iconColor = CustomerTheme.darkGold;
+                    break;
+                  case 'END_OTP':
+                    icon = Icons.verified;
+                    iconColor = CustomerTheme.successGreen;
+                    break;
+                  case 'PAYMENT':
+                    icon = Icons.account_balance_wallet;
+                    iconColor = CustomerTheme.successGreen;
+                    break;
+                  default:
+                    icon = Icons.work_outline;
+                    iconColor = CustomerTheme.primaryRed;
+                }
+
+                final diff = DateTime.now().difference(n.timestamp);
+                String timeAgo;
+                if (diff.inMinutes < 60) {
+                  timeAgo = '${diff.inMinutes}m ago';
+                } else if (diff.inHours < 24) {
+                  timeAgo = '${diff.inHours}h ago';
+                } else {
+                  timeAgo = '${diff.inDays}d ago';
+                }
+
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  elevation: n.isRead ? 0 : 2,
+                  color: n.isRead ? Colors.white : Colors.red.shade50.withValues(alpha: 0.3),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(
+                      color: n.isRead ? Colors.black12 : CustomerTheme.primaryRed.withValues(alpha: 0.4),
+                      width: n.isRead ? 0.5 : 1,
+                    ),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    leading: CircleAvatar(
+                      backgroundColor: iconColor.withValues(alpha: 0.15),
+                      child: Icon(icon, color: iconColor, size: 20),
+                    ),
+                    title: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            n.title,
+                            style: TextStyle(
+                              fontWeight: n.isRead ? FontWeight.w600 : FontWeight.bold,
+                              fontSize: 13,
+                              color: CustomerTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          timeAgo,
+                          style: const TextStyle(fontSize: 11, color: CustomerTheme.textSecondary),
+                        ),
+                      ],
+                    ),
+                    subtitle: Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        n.body,
+                        style: const TextStyle(fontSize: 12, color: CustomerTheme.textSecondary),
+                      ),
+                    ),
+                    trailing: !n.isRead
+                        ? Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: CustomerTheme.primaryRed,
+                            ),
+                          )
+                        : null,
+                    onTap: () {
+                      ref.read(customerNotificationsProvider.notifier).markAsRead(n.id);
+                    },
+                  ),
+                );
+              },
+            ),
     );
   }
 }
@@ -2503,9 +3326,9 @@ class CustomerLegalScreen extends StatelessWidget {
         title: const Text('Employer Terms & Policies'),
         leading: const BackButton(),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: const Text(
+      body: const SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Text(
           '''
 1. CONTRACTOR SERVICE AGREEMENT
 By broadcasting a booking on ManPowerLink, employers agree to provide safe industrial working conditions, mandatory safety supervision, and any promised amenities including drinking water and tiffin meals.

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../theme/app_theme.dart';
 import '../../../models/category_model.dart';
+import '../../../models/location_model.dart';
+import '../../../widgets/location_picker_sheet.dart';
 import '../../../providers/app_providers.dart';
 import 'booking_detail_screen.dart';
 
@@ -30,6 +32,7 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
   TimeOfDay _endTime = const TimeOfDay(hour: 17, minute: 0);
 
   final _addressController = TextEditingController(text: 'Dock 4, Panambur Port Corridor, Mangalore');
+  WorksiteLocation? _selectedLocation = WorksiteLocation.presetHubs[4]; // Default Panambur Dock 4
   final _descriptionController = TextEditingController(text: 'Unloading 2 shipping containers with boxed goods.');
   final _specialInstructionsController = TextEditingController(text: 'Safety boots and gloves mandatory.');
   late final TextEditingController _offeredPriceController;
@@ -238,12 +241,119 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
                   title: const Text('Worksite Details', style: TextStyle(fontWeight: FontWeight.bold)),
                   isActive: _currentStep >= 2,
                   content: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // Location Picker Trigger Card
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppTheme.primaryRed.withValues(alpha: 0.3)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.location_on, color: AppTheme.primaryRed, size: 18),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _selectedLocation?.name ?? 'Selected Worksite',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF0FDF4),
+                                    borderRadius: BorderRadius.circular(4),
+                                    border: Border.all(color: const Color(0xFF86EFAC)),
+                                  ),
+                                  child: Text(
+                                    _selectedLocation?.categoryTag.toUpperCase() ?? 'VERIFIED',
+                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _selectedLocation != null
+                                  ? '${_selectedLocation!.area} · Lat: ${_selectedLocation!.latitude.toStringAsFixed(4)}°, Lng: ${_selectedLocation!.longitude.toStringAsFixed(4)}°'
+                                  : 'Coordinates: Mangalore Service Zone',
+                              style: const TextStyle(fontSize: 11, color: AppTheme.secondaryText),
+                            ),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final picked = await LocationPickerSheet.show(
+                                    context,
+                                    initialLocation: _selectedLocation,
+                                  );
+                                  if (picked != null) {
+                                    setState(() {
+                                      _selectedLocation = picked;
+                                      _addressController.text = picked.address;
+                                    });
+                                  }
+                                },
+                                icon: const Icon(Icons.edit_location_alt, size: 16),
+                                label: const Text('Pick Location (Hubs / Search / Manual)'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppTheme.primaryRed,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(vertical: 10),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // Quick Hubs Chips
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            const Text('Quick Hubs: ', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.secondaryText)),
+                            ...WorksiteLocation.presetHubs.take(4).map((hub) {
+                              final isCurrent = _selectedLocation?.id == hub.id;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 6),
+                                child: ActionChip(
+                                  label: Text(hub.area, style: TextStyle(fontSize: 11, color: isCurrent ? Colors.white : AppTheme.primaryText)),
+                                  backgroundColor: isCurrent ? AppTheme.primaryRed : const Color(0xFFF1F3F5),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedLocation = hub;
+                                      _addressController.text = hub.address;
+                                    });
+                                  },
+                                ),
+                              );
+                            }),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
                       TextField(
                         controller: _addressController,
+                        maxLines: 2,
                         decoration: const InputDecoration(
                           labelText: 'Worksite Street Address',
-                          prefixIcon: Icon(Icons.location_on, color: AppTheme.primaryRed),
+                          prefixIcon: Icon(Icons.location_city, color: AppTheme.primaryRed),
+                          helperText: 'Editable address for on-site worker navigation',
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -381,7 +491,10 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
         'specialInstructions': _specialInstructionsController.text,
         'workLocation': {
           'address': _addressController.text,
-          'city': 'Mangalore, Karnataka',
+          'city': _selectedLocation?.city ?? 'Mangalore, Karnataka',
+          'area': _selectedLocation?.area ?? 'Panambur',
+          'latitude': _selectedLocation?.latitude ?? 12.9340,
+          'longitude': _selectedLocation?.longitude ?? 74.8140,
         },
       };
 

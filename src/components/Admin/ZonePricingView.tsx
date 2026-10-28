@@ -66,6 +66,10 @@ export const ZonePricingView: React.FC<ZonePricingViewProps> = ({ initialOtpSett
   const [newZonePincodes, setNewZonePincodes] = useState('');
   const [newZoneRadius, setNewZoneRadius] = useState(12);
   const [newZoneDesc, setNewZoneDesc] = useState('');
+  const [newZoneIsNoGps, setNewZoneIsNoGps] = useState<boolean>(false);
+  const [newZoneNoGpsReason, setNewZoneNoGpsReason] = useState<string>(
+    'Indoor / Deep basement / Port berth / Metal warehouse shielding'
+  );
 
   // Subscribe to storage
   useEffect(() => {
@@ -160,6 +164,8 @@ export const ZonePricingView: React.FC<ZonePricingViewProps> = ({ initialOtpSett
       centerCoordinates: { lat: 12.914, lng: 74.856 },
       isActive: true,
       surgeMultiplier: 1.0,
+      isNoGpsZone: newZoneIsNoGps,
+      noGpsReason: newZoneIsNoGps ? newZoneNoGpsReason.trim() : undefined,
     });
 
     // Automatically clone baseline prices to this new zone from the first zone
@@ -172,6 +178,8 @@ export const ZonePricingView: React.FC<ZonePricingViewProps> = ({ initialOtpSett
     setNewZoneCode('');
     setNewZonePincodes('');
     setNewZoneDesc('');
+    setNewZoneIsNoGps(false);
+    setNewZoneNoGpsReason('Indoor / Deep basement / Port berth / Metal warehouse shielding');
     setSelectedZoneId(created.id);
     showToast(`✓ Zone "${created.name}" created with default category pricing!`);
   };
@@ -637,9 +645,14 @@ export const ZonePricingView: React.FC<ZonePricingViewProps> = ({ initialOtpSett
                   {filteredPrices.map((row) => (
                     <tr key={row.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="py-3 px-4">
-                        <div className="font-bold text-[#202124] flex items-center gap-1.5">
+                        <div className="font-bold text-[#202124] flex items-center gap-1.5 flex-wrap">
                           <MapPin className="w-3.5 h-3.5 text-[#D71920]" />
                           <span>{row.zoneName}</span>
+                          {zones.find((z) => z.id === row.zoneId)?.isNoGpsZone && (
+                            <span className="px-1.5 py-0.2 bg-amber-100 text-amber-800 text-[9px] font-bold rounded border border-amber-300">
+                              NO-GPS
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -1056,6 +1069,39 @@ const ZonePriceSchema = new mongoose.Schema({
                     className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#D71920]"
                   />
                 </div>
+              </div>
+
+              {/* No-GPS Zone Exemption Card */}
+              <div className="p-3 bg-amber-50/70 rounded-xl border border-amber-200 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newZoneIsNoGps}
+                    onChange={(e) => setNewZoneIsNoGps(e.target.checked)}
+                    className="w-4 h-4 text-[#D71920] rounded border-slate-300 focus:ring-[#D71920] cursor-pointer"
+                  />
+                  <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                    <Compass className="w-3.5 h-3.5 text-amber-600" />
+                    Mark as No-GPS Zone (Exempt from Strict Geofencing)
+                  </span>
+                </label>
+                <p className="text-[11px] text-slate-600 pl-6 leading-relaxed">
+                  Exempts workers from strict GPS geofence locking in this zone (e.g. underground basements, port berths, metal warehouses). Attendance relies on Start/End OTP verification.
+                </p>
+                {newZoneIsNoGps && (
+                  <div className="pl-6 pt-1">
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                      Reason for GPS Exemption
+                    </label>
+                    <input
+                      type="text"
+                      value={newZoneNoGpsReason}
+                      onChange={(e) => setNewZoneNoGpsReason(e.target.value)}
+                      placeholder="e.g. Underground cold storage, metal warehouse shielding"
+                      className="w-full px-2.5 py-1.5 text-xs bg-white border border-amber-300 rounded-lg focus:outline-none focus:border-[#D71920]"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>

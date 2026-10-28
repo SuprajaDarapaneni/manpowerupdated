@@ -69,6 +69,23 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
   const [otpSettings, setOtpSettings] = useState<OtpVerificationSettings>(dataService.getOtpSettings());
   const [commissionSettings, setCommissionSettings] = useState<CommissionSettings>(dataService.getCommissionSettings());
   const [matchingSettings, setMatchingSettings] = useState<MatchingSettings>(dataService.getMatchingSettings());
+  const categories = dataService.getCategories();
+
+  const handleSaveCommission = () => {
+    dataService.setCommissionSettings(commissionSettings);
+    dataService.addSettingsAuditRecord({
+      adminId: 'admin-1',
+      adminEmail: 'admin@manpowerlink.com',
+      action: 'UPDATE_COMMISSION',
+      section: 'Payments & Commission',
+      fieldChanged: 'category_commission_rates',
+      oldValue: 'default_rates',
+      newValue: `Global: ${commissionSettings.percentageValue}%, Custom categories: ${Object.keys(commissionSettings.categoryRates || {}).length}`,
+      ipAddress: '127.0.0.1',
+    });
+    setAuditHistory(dataService.getSettingsAuditHistory());
+    showFeedback('success', 'Platform commission and category-specific commission rates saved successfully.');
+  };
 
   // 6. Audit History
   const [auditHistory, setAuditHistory] = useState<SettingsAuditRecord[]>(dataService.getSettingsAuditHistory());
@@ -1176,22 +1193,175 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
 
             {/* MODULE 8: PAYMENTS & COMMISSION */}
             {activeSection === 'payments' && (
-              <div className="space-y-4">
-                <h2 className="text-base font-bold text-[#202124]">Payment Gateway & Platform Commission</h2>
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <h2 className="text-base font-bold text-[#202124]">Payment Gateway & Platform Commission</h2>
+                    <p className="text-xs text-[#686868] mt-0.5">
+                      Configure baseline platform fees and customize commission rates separately for each worker category.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSaveCommission}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer self-start sm:self-auto"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Save Commission Settings</span>
+                  </button>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 bg-[#FFFDF8] rounded-xl border border-[#202124]/10 space-y-2">
-                    <span className="font-bold text-xs text-[#202124]">Platform Commission Rate</span>
-                    <input
-                      type="number"
-                      value={commissionSettings.percentageValue}
-                      onChange={(e) => setCommissionSettings({ ...commissionSettings, percentageValue: parseFloat(e.target.value) || 10 })}
-                      className="w-full px-3 py-1.5 bg-white border border-[#202124]/15 rounded-lg text-xs font-mono"
-                    />
-                    <span className="text-[10px] text-[#686868]">Percentage deducted on completed shifts (Current: 10%)</span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-[#202124]">Default Platform Commission Rate (Global Fallback)</span>
+                      <span className="text-xs font-mono font-bold text-[#D71920]">{commissionSettings.percentageValue}%</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        value={commissionSettings.percentageValue}
+                        onChange={(e) => setCommissionSettings({ ...commissionSettings, percentageValue: parseFloat(e.target.value) || 0 })}
+                        className="w-24 px-3 py-1.5 bg-white border border-[#202124]/15 rounded-lg text-xs font-mono font-bold"
+                      />
+                      <input
+                        type="range"
+                        min="0"
+                        max="35"
+                        value={commissionSettings.percentageValue}
+                        onChange={(e) => setCommissionSettings({ ...commissionSettings, percentageValue: parseFloat(e.target.value) || 0 })}
+                        className="flex-1 accent-[#D71920]"
+                      />
+                    </div>
+                    <span className="text-[10px] text-[#686868] block">Baseline fee deducted on completed shifts if no category-specific override is set.</span>
                   </div>
+
                   <div className="p-4 bg-[#FFFDF8] rounded-xl border border-[#202124]/10 space-y-2">
                     <span className="font-bold text-xs text-[#202124]">Enabled Settlement Providers</span>
                     <p className="text-xs text-[#202124]">Razorpay, UPI Intent, Cash at Worksite, Bank NEFT</p>
+                    <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block font-semibold">
+                      Instant T+0 Worker Daily Settlement Active
+                    </span>
+                  </div>
+                </div>
+
+                {/* Per-Category Commission Setup */}
+                <div className="p-5 bg-white rounded-xl border border-[#202124]/10 space-y-4 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-[#202124]/10 pb-3">
+                    <div>
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-[#202124]">
+                        Category-Wise Commission Rates
+                      </h3>
+                      <p className="text-[11px] text-[#686868] mt-0.5">
+                        Set custom commission percentages for each service vertical based on supply scarcity and worker margins.
+                      </p>
+                    </div>
+                    <span className="text-[11px] text-[#686868] font-medium">
+                      {categories.length} Categories Active
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-3.5">
+                    {categories.map((cat) => {
+                      const customRate = commissionSettings.categoryRates?.[cat.id];
+                      const activeRate = customRate !== undefined ? customRate : commissionSettings.percentageValue;
+                      const isCustom = customRate !== undefined;
+
+                      return (
+                        <div
+                          key={cat.id}
+                          className={`p-3.5 rounded-xl border transition-all ${
+                            isCustom
+                              ? 'bg-red-50/20 border-red-200 shadow-2xs'
+                              : 'bg-[#FFFDF8] border-[#202124]/10'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{cat.icon || '👷'}</span>
+                              <div>
+                                <span className="font-bold text-xs text-[#202124] block">{cat.name}</span>
+                                <span className="text-[10px] text-[#686868]">Base: ₹{cat.basePrice || 350}/hr or shift</span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              {isCustom ? (
+                                <span className="px-1.5 py-0.5 bg-red-100 text-[#D71920] text-[10px] font-bold rounded">
+                                  Custom
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.5 bg-neutral-100 text-[#686868] text-[10px] font-medium rounded">
+                                  Default ({commissionSettings.percentageValue}%)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="space-y-2 mt-2 pt-2 border-t border-[#202124]/5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-[11px] text-[#686868]">Commission Rate:</span>
+                              <div className="flex items-center gap-1">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max="50"
+                                  value={activeRate}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setCommissionSettings((prev) => ({
+                                      ...prev,
+                                      categoryRates: {
+                                        ...(prev.categoryRates || {}),
+                                        [cat.id]: val,
+                                      },
+                                    }));
+                                  }}
+                                  className="w-16 px-2 py-1 text-right bg-white border border-[#202124]/20 rounded text-xs font-mono font-bold text-[#D71920] focus:outline-none focus:border-[#D71920]"
+                                />
+                                <span className="text-xs font-bold text-[#202124]">%</span>
+                              </div>
+                            </div>
+
+                            <input
+                              type="range"
+                              min="0"
+                              max="35"
+                              value={activeRate}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setCommissionSettings((prev) => ({
+                                  ...prev,
+                                  categoryRates: {
+                                    ...(prev.categoryRates || {}),
+                                    [cat.id]: val,
+                                  },
+                                }));
+                              }}
+                              className="w-full accent-[#D71920] h-1.5 cursor-pointer"
+                            />
+
+                            <div className="flex items-center justify-between text-[10px] text-[#686868] pt-1">
+                              <span>Worker Receives: <strong className="text-emerald-700">{(100 - activeRate).toFixed(0)}%</strong></span>
+                              <span>Platform Cut: <strong className="text-[#D71920]">{activeRate.toFixed(0)}%</strong></span>
+                              {isCustom && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next = { ...(commissionSettings.categoryRates || {}) };
+                                    delete next[cat.id];
+                                    setCommissionSettings({ ...commissionSettings, categoryRates: next });
+                                  }}
+                                  className="text-[10px] text-neutral-400 hover:text-neutral-700 underline cursor-pointer"
+                                >
+                                  Reset to Default
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>

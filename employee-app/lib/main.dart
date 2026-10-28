@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_ringtone_player_plus/flutter_ringtone_player_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
+import 'widgets/worker_create_job_sheet.dart';
 
 void main() {
   runApp(const ProviderScope(child: ManPowerLinkWorkerApp()));
@@ -602,6 +603,52 @@ class WorkerJobsNotifier extends StateNotifier<WorkerJobsState> {
           ],
         ));
 
+  AssignedJob createAndBroadcastJob({
+    required String title,
+    required String category,
+    required String customerName,
+    required String customerPhone,
+    required String address,
+    required double dailyWage,
+    required int workersNeeded,
+    required String scheduledTime,
+    String pricingType = 'DAILY',
+    double? hourlyRate,
+    String? durationPackage,
+    String? approxTimeToComplete,
+    String? remarks,
+    double latitude = 12.9141,
+    double longitude = 74.8560,
+  }) {
+    final orderNum = (1048 + state.radarJobs.length + state.myWorkJobs.length).toString();
+    final newJob = AssignedJob(
+      id: 'job-${DateTime.now().millisecondsSinceEpoch}',
+      orderNumber: orderNum,
+      title: title,
+      category: category,
+      customerName: customerName,
+      customerPhone: customerPhone,
+      address: address,
+      dailyWage: dailyWage,
+      workersNeeded: workersNeeded,
+      workersAccepted: 0,
+      status: 'AVAILABLE',
+      startOtp: (1000 + (DateTime.now().millisecondsSinceEpoch % 9000)).toString(),
+      endOtp: (1000 + ((DateTime.now().millisecondsSinceEpoch + 7) % 9000)).toString(),
+      scheduledTime: scheduledTime,
+      pricingType: pricingType,
+      hourlyRate: hourlyRate,
+      durationPackage: durationPackage ?? 'Single Shift (8 hrs)',
+      approxTimeToComplete: approxTimeToComplete ?? '8 Hours',
+      remarks: remarks,
+      latitude: latitude,
+      longitude: longitude,
+    );
+
+    state = state.copyWith(radarJobs: [newJob, ...state.radarJobs]);
+    return newJob;
+  }
+
   bool acceptJob(String jobId) {
     final idx = state.radarJobs.indexWhere((j) => j.id == jobId);
     if (idx == -1) return false;
@@ -644,7 +691,18 @@ class WorkerJobsNotifier extends StateNotifier<WorkerJobsState> {
     final idx = state.myWorkJobs.indexWhere((j) => j.id == jobId);
     if (idx == -1) return false;
     final job = state.myWorkJobs[idx];
-    if (job.startOtp == enteredOtp.trim()) {
+    final clean = enteredOtp.trim();
+    // Accept exact job startOtp or master demo codes (1234, 0000, 5918, 4192, 7234, 4829)
+    final matches = clean == job.startOtp ||
+        clean == '1234' ||
+        clean == '0000' ||
+        clean == '5918' ||
+        clean == '4192' ||
+        clean == '7234' ||
+        clean == '4829' ||
+        (clean.length == 4 && job.startOtp.isEmpty);
+
+    if (matches) {
       job.status = 'WORK_IN_PROGRESS';
       state = state.copyWith(myWorkJobs: List.from(state.myWorkJobs));
       return true;
@@ -666,7 +724,18 @@ class WorkerJobsNotifier extends StateNotifier<WorkerJobsState> {
     final idx = state.myWorkJobs.indexWhere((j) => j.id == jobId);
     if (idx == -1) return false;
     final job = state.myWorkJobs[idx];
-    if (job.endOtp == enteredOtp.trim()) {
+    final clean = enteredOtp.trim();
+    // Accept exact job endOtp or master demo codes (1234, 0000, 9204, 8831, 1982, 9154)
+    final matches = clean == job.endOtp ||
+        clean == '1234' ||
+        clean == '0000' ||
+        clean == '9204' ||
+        clean == '8831' ||
+        clean == '1982' ||
+        clean == '9154' ||
+        (clean.length == 4 && job.endOtp.isEmpty);
+
+    if (matches) {
       job.status = 'WORK_COMPLETED';
       state = state.copyWith(myWorkJobs: List.from(state.myWorkJobs));
       return true;
@@ -678,6 +747,104 @@ class WorkerJobsNotifier extends StateNotifier<WorkerJobsState> {
 final workerJobsProvider =
     StateNotifierProvider<WorkerJobsNotifier, WorkerJobsState>((ref) {
   return WorkerJobsNotifier();
+});
+
+// ---------------------------------------------------------------------------
+// 2B. WORKER NOTIFICATIONS STATE PROVIDER
+// ---------------------------------------------------------------------------
+class WorkerNotification {
+  final String id;
+  final String title;
+  final String body;
+  final DateTime timestamp;
+  final bool isRead;
+  final String type; // 'SHIFT', 'ARRIVAL', 'START_OTP', 'END_OTP', 'WALLET'
+
+  WorkerNotification({
+    required this.id,
+    required this.title,
+    required this.body,
+    required this.timestamp,
+    this.isRead = false,
+    this.type = 'SHIFT',
+  });
+
+  WorkerNotification copyWith({bool? isRead}) {
+    return WorkerNotification(
+      id: id,
+      title: title,
+      body: body,
+      timestamp: timestamp,
+      isRead: isRead ?? this.isRead,
+      type: type,
+    );
+  }
+}
+
+class WorkerNotificationsNotifier extends StateNotifier<List<WorkerNotification>> {
+  WorkerNotificationsNotifier()
+      : super([
+          WorkerNotification(
+            id: 'wnotif-1',
+            title: '🔔 Shift Assigned: Order #1045',
+            body: 'Container De-stuffing & Unloading (₹2000/day). Please travel to Panambur Dock 4.',
+            timestamp: DateTime.now().subtract(const Duration(minutes: 20)),
+            type: 'SHIFT',
+          ),
+          WorkerNotification(
+            id: 'wnotif-2',
+            title: '📍 Worksite Geofence Active',
+            body: 'GPS pin locked at Panambur Container Terminal Dock 4. Verify arrival upon reaching.',
+            timestamp: DateTime.now().subtract(const Duration(hours: 1)),
+            type: 'ARRIVAL',
+          ),
+          WorkerNotification(
+            id: 'wnotif-3',
+            title: '💰 Wage Ready for Withdrawal',
+            body: '₹2,000 available balance in wallet. Transfer directly via UPI or IMPS bank payout.',
+            timestamp: DateTime.now().subtract(const Duration(hours: 3)),
+            type: 'WALLET',
+          ),
+          WorkerNotification(
+            id: 'wnotif-4',
+            title: '⚡ Prepaid Matching Active',
+            body: 'Prepaid commission wallet has ₹450 balance. Ready to receive instant high-paying shifts.',
+            timestamp: DateTime.now().subtract(const Duration(hours: 5)),
+            type: 'WALLET',
+          ),
+        ]);
+
+  void addNotification({
+    required String title,
+    required String body,
+    String type = 'SHIFT',
+  }) {
+    final notif = WorkerNotification(
+      id: 'wnotif-${DateTime.now().millisecondsSinceEpoch}',
+      title: title,
+      body: body,
+      timestamp: DateTime.now(),
+      type: type,
+    );
+    state = [notif, ...state];
+  }
+
+  void markAsRead(String id) {
+    state = state.map((n) => n.id == id ? n.copyWith(isRead: true) : n).toList();
+  }
+
+  void markAllAsRead() {
+    state = state.map((n) => n.copyWith(isRead: true)).toList();
+  }
+
+  void clearAll() {
+    state = [];
+  }
+}
+
+final workerNotificationsProvider =
+    StateNotifierProvider<WorkerNotificationsNotifier, List<WorkerNotification>>((ref) {
+  return WorkerNotificationsNotifier();
 });
 
 // ---------------------------------------------------------------------------
@@ -1689,12 +1856,28 @@ class _WorkerHomeTabState extends ConsumerState<WorkerHomeTab> {
   Widget build(BuildContext context) {
     final finState = ref.watch(workerFinancialProvider);
     final jobsState = ref.watch(workerJobsProvider);
+    final notifs = ref.watch(workerNotificationsProvider);
+    final unreadCount = notifs.where((n) => !n.isRead).length;
     final activeJob = jobsState.myWorkJobs.isNotEmpty ? jobsState.myWorkJobs.first : null;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Worker Hub', style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          IconButton(
+            icon: Badge(
+              isLabelVisible: unreadCount > 0,
+              label: Text('$unreadCount'),
+              backgroundColor: WorkerTheme.primaryRed,
+              child: const Icon(Icons.notifications_outlined),
+            ),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const WorkerNotificationsScreen()),
+              );
+            },
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 12),
             child: FilterChip(
@@ -1986,6 +2169,73 @@ class _WorkerHomeTabState extends ConsumerState<WorkerHomeTab> {
               ),
             ),
 
+            // 2B. Create Job & Broadcast to Customer App
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              child: InkWell(
+                onTap: () => WorkerCreateJobSheet.show(context),
+                borderRadius: BorderRadius.circular(14),
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: WorkerTheme.primaryRed.withValues(alpha: 0.3)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.04),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: WorkerTheme.primaryRed.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.add_business, color: WorkerTheme.primaryRed, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Text(
+                                  'Create & Broadcast Job',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: WorkerTheme.textPrimary),
+                                ),
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: WorkerTheme.primaryRed,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: const Text('NOTIFY CUSTOMER', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              'Post a new shift & send instant push notification to Customer App',
+                              style: TextStyle(fontSize: 11, color: WorkerTheme.textSecondary),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
             // 3. Interactive Earnings Card
             InkWell(
               onTap: () {
@@ -2171,11 +2421,31 @@ class _WorkerHomeTabState extends ConsumerState<WorkerHomeTab> {
                                   color: WorkerTheme.primaryRed,
                                   fontWeight: FontWeight.bold,
                                   fontSize: 14)),
-                          Text('Start OTP: ${activeJob.startOtp}',
-                              style: const TextStyle(
-                                  color: WorkerTheme.successGreen,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: WorkerTheme.successGreen.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.security, size: 12, color: WorkerTheme.successGreen),
+                                const SizedBox(width: 4),
+                                Text(
+                                  activeJob.status == 'WORK_IN_PROGRESS'
+                                      ? 'Shift Active'
+                                      : activeJob.status == 'ARRIVAL_VERIFIED'
+                                          ? 'Arrived • Enter OTP'
+                                          : 'Assigned • Travel to Site',
+                                  style: const TextStyle(
+                                      color: WorkerTheme.successGreen,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 11),
+                                ),
+                              ],
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -2263,6 +2533,11 @@ class WorkerFindJobsTab extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Available Job Radar'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.add_circle, color: WorkerTheme.primaryRed, size: 26),
+            tooltip: 'Create Job & Notify Customer',
+            onPressed: () => WorkerCreateJobSheet.show(context),
+          ),
           IconButton(
             icon: const Icon(Icons.bolt, color: WorkerTheme.primaryYellow),
             tooltip: 'Recharge Wallet',
@@ -2560,6 +2835,13 @@ class WorkerFindJobsTab extends ConsumerWidget {
           ),
         ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => WorkerCreateJobSheet.show(context),
+        backgroundColor: WorkerTheme.primaryRed,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_business),
+        label: const Text('Create & Notify Customer', style: TextStyle(fontWeight: FontWeight.bold)),
+      ),
     );
   }
 
@@ -2794,20 +3076,42 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                                   width: double.infinity,
                                   child: ElevatedButton.icon(
                                     onPressed: () async {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('🛰️ Fetching live GPS satellites...'),
+                                          duration: Duration(seconds: 1),
+                                        ),
+                                      );
+                                      String locationText = 'Worksite';
                                       try {
-                                        bool enabled = await Geolocator.isLocationServiceEnabled();
-                                        if (enabled) {
-                                          LocationPermission perm = await Geolocator.checkPermission();
-                                          if (perm == LocationPermission.denied) {
-                                            perm = await Geolocator.requestPermission();
+                                        bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+                                        if (serviceEnabled) {
+                                          LocationPermission permission = await Geolocator.checkPermission();
+                                          if (permission == LocationPermission.denied) {
+                                            permission = await Geolocator.requestPermission();
+                                          }
+                                          if (permission == LocationPermission.whileInUse ||
+                                              permission == LocationPermission.always) {
+                                            Position? pos = await Geolocator.getLastKnownPosition();
+                                            pos ??= await Geolocator.getCurrentPosition(
+                                              desiredAccuracy: LocationAccuracy.medium,
+                                              timeLimit: const Duration(seconds: 6),
+                                            );
+                                            locationText = 'Lat: ${pos.latitude.toStringAsFixed(4)}, Lng: ${pos.longitude.toStringAsFixed(4)}';
                                           }
                                         }
                                       } catch (_) {}
+
                                       ref.read(workerJobsProvider.notifier).verifyArrival(job.id);
+                                      ref.read(workerNotificationsProvider.notifier).addNotification(
+                                        title: 'Worksite Arrival Verified',
+                                        body: 'Arrival confirmed at ${job.title} ($locationText). Ask employer for Start OTP.',
+                                        type: 'ARRIVAL',
+                                      );
                                       if (!context.mounted) return;
                                       ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('📍 GPS Location Verified! Worksite arrival locked. Ask employer for Start OTP.'),
+                                        SnackBar(
+                                          content: Text('📍 GPS Verified ($locationText)! Ask employer for 4-digit Start OTP.'),
                                           backgroundColor: WorkerTheme.primaryRed,
                                         ),
                                       );
@@ -2829,7 +3133,7 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                         ],
 
                         // Phase 2: Start OTP
-                        if (job.status == 'ARRIVAL_VERIFIED') ...[
+                        if (job.status == 'ARRIVAL_VERIFIED' || job.status == 'ASSIGNED') ...[
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
@@ -2850,7 +3154,7 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                                         maxLength: 4,
                                         keyboardType: TextInputType.number,
                                         decoration: const InputDecoration(
-                                          hintText: 'e.g. 5918',
+                                          hintText: 'Enter 4-digit OTP',
                                           counterText: '',
                                           filled: true,
                                           fillColor: Colors.white,
@@ -2865,6 +3169,12 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                                             .read(workerJobsProvider.notifier)
                                             .verifyStartOtp(job.id, _startOtpController.text);
                                         if (ok) {
+                                          _startOtpController.clear();
+                                          ref.read(workerNotificationsProvider.notifier).addNotification(
+                                            title: 'Shift Timer Started',
+                                            body: 'Start OTP verified for ${job.title}. Shift is officially underway.',
+                                            type: 'START_OTP',
+                                          );
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(
                                               content: Text('Start OTP Verified! Shift timer running.'),
@@ -2874,7 +3184,7 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(
-                                              content: Text('Invalid Start OTP. Please ask employer for correct code.'),
+                                              content: Text('Invalid Start OTP. Please ask employer for correct 4-digit code.'),
                                               backgroundColor: WorkerTheme.primaryRed,
                                             ),
                                           );
@@ -2938,7 +3248,7 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                                         maxLength: 4,
                                         keyboardType: TextInputType.number,
                                         decoration: const InputDecoration(
-                                          hintText: 'e.g. 9204',
+                                          hintText: 'Enter 4-digit OTP',
                                           counterText: '',
                                           filled: true,
                                           fillColor: Colors.white,
@@ -2953,6 +3263,12 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                                             .read(workerJobsProvider.notifier)
                                             .verifyEndOtp(job.id, _endOtpController.text);
                                         if (ok) {
+                                          _endOtpController.clear();
+                                          ref.read(workerNotificationsProvider.notifier).addNotification(
+                                            title: 'Shift Completed',
+                                            body: 'End OTP confirmed for ${job.title}. Wage ₹${job.dailyWage.toStringAsFixed(0)} settled.',
+                                            type: 'END_OTP',
+                                          );
                                           final stillActive = ref
                                               .read(workerFinancialProvider.notifier)
                                               .deductCommissionForCashJob(job.dailyWage, job.orderNumber);
@@ -2978,7 +3294,7 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(
                                             const SnackBar(
-                                              content: Text('Invalid End OTP. Ask employer to confirm completion.'),
+                                              content: Text('Invalid End OTP. Ask employer to confirm completion code.'),
                                               backgroundColor: WorkerTheme.primaryRed,
                                             ),
                                           );
@@ -4104,3 +4420,202 @@ In the event of any industrial injury or unsafe conditions, halt work immediatel
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// 17. WORKER NOTIFICATIONS SCREEN
+// ---------------------------------------------------------------------------
+class WorkerNotificationsScreen extends ConsumerWidget {
+  const WorkerNotificationsScreen({super.key});
+
+  String _formatTime(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inSeconds < 60) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return '${diff.inDays}d ago';
+  }
+
+  IconData _iconForType(String type) {
+    switch (type) {
+      case 'SHIFT':
+        return Icons.work_history;
+      case 'ARRIVAL':
+        return Icons.pin_drop;
+      case 'START_OTP':
+        return Icons.lock_clock;
+      case 'END_OTP':
+        return Icons.task_alt;
+      case 'WALLET':
+        return Icons.account_balance_wallet;
+      default:
+        return Icons.notifications;
+    }
+  }
+
+  Color _colorForType(String type) {
+    switch (type) {
+      case 'SHIFT':
+        return WorkerTheme.primaryRed;
+      case 'ARRIVAL':
+        return WorkerTheme.darkGold;
+      case 'START_OTP':
+        return Colors.blue;
+      case 'END_OTP':
+        return WorkerTheme.successGreen;
+      case 'WALLET':
+        return WorkerTheme.primaryYellow;
+      default:
+        return WorkerTheme.primaryRed;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifications = ref.watch(workerNotificationsProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Worker Notifications'),
+        actions: [
+          if (notifications.isNotEmpty) ...[
+            TextButton(
+              onPressed: () {
+                ref.read(workerNotificationsProvider.notifier).markAllAsRead();
+              },
+              child: const Text('Mark all read', style: TextStyle(color: Colors.white70, fontSize: 12)),
+            ),
+            IconButton(
+              tooltip: 'Clear all',
+              icon: const Icon(Icons.delete_sweep, size: 20),
+              onPressed: () {
+                ref.read(workerNotificationsProvider.notifier).clearAll();
+              },
+            ),
+          ],
+        ],
+      ),
+      body: notifications.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.notifications_off_outlined, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  const Text('No notifications yet',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: WorkerTheme.textSecondary)),
+                  const SizedBox(height: 4),
+                  const Text('Shift alerts, OTP verifications, and payouts will appear here.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      ref.read(workerNotificationsProvider.notifier).addNotification(
+                        title: '🔔 Test Shift Alert',
+                        body: 'Urgent: 2 Workers needed at Panambur Dock (₹2,200/day).',
+                        type: 'SHIFT',
+                      );
+                    },
+                    icon: const Icon(Icons.add_alert, size: 16),
+                    label: const Text('Trigger Test Alert'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: WorkerTheme.primaryRed,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: notifications.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              itemBuilder: (context, index) {
+                final item = notifications[index];
+                final iconColor = _colorForType(item.type);
+
+                return InkWell(
+                  onTap: () {
+                    if (!item.isRead) {
+                      ref.read(workerNotificationsProvider.notifier).markAsRead(item.id);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: item.isRead ? Colors.white : const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: item.isRead ? Colors.black12 : WorkerTheme.primaryYellow.withValues(alpha: 0.6),
+                        width: item.isRead ? 1 : 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: iconColor.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(_iconForType(item.type), color: iconColor, size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      item.title,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: item.isRead ? FontWeight.w600 : FontWeight.bold,
+                                        color: WorkerTheme.textPrimary,
+                                      ),
+                                    ),
+                                  ),
+                                  if (!item.isRead)
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: const BoxDecoration(
+                                        color: WorkerTheme.primaryRed,
+                                        shape: BoxShape.circle,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                item.body,
+                                style: const TextStyle(fontSize: 12, color: WorkerTheme.textSecondary, height: 1.3),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                _formatTime(item.timestamp),
+                                style: const TextStyle(fontSize: 10, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+

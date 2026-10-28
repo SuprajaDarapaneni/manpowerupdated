@@ -20,13 +20,15 @@ class _ChatScreenState extends State<ChatScreen> {
   final List<Map<String, String>> _messages = [
     {
       'sender': 'Ramesh Kumar (Worker)',
-      'text': 'Hello Sir, I have arrived at Dock 4 gate. Waiting for site entry badge.',
+      'text':
+          'Hello Sir, I have arrived at Dock 4 gate. Waiting for site entry badge.',
       'time': '10:02 AM',
       'isMe': 'false',
     },
     {
       'sender': 'You',
-      'text': 'Gate supervisor has been informed. Please enter and meet Suresh at container bay.',
+      'text':
+          'Gate supervisor has been informed. Please enter and meet Suresh at container bay.',
       'time': '10:05 AM',
       'isMe': 'true',
     },
@@ -65,10 +67,11 @@ class _ChatScreenState extends State<ChatScreen> {
           // Security Notice Banner
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: AppTheme.primaryYellow.withOpacity(0.15),
+            color: AppTheme.primaryYellow.withValues(alpha: 0.15),
             child: const Row(
               children: [
-                Icon(Icons.shield_outlined, size: 16, color: AppTheme.primaryRed),
+                Icon(Icons.shield_outlined,
+                    size: 16, color: AppTheme.primaryRed),
                 SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -89,18 +92,23 @@ class _ChatScreenState extends State<ChatScreen> {
                 final msg = _messages[index];
                 final isMe = msg['isMe'] == 'true';
                 return Align(
-                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment:
+                      isMe ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 12),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.75),
                     decoration: BoxDecoration(
                       color: isMe ? AppTheme.primaryRed : Colors.white,
                       borderRadius: BorderRadius.circular(14),
                       border: isMe ? null : Border.all(color: Colors.black12),
                     ),
                     child: Column(
-                      crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                      crossAxisAlignment: isMe
+                          ? CrossAxisAlignment.end
+                          : CrossAxisAlignment.start,
                       children: [
                         Text(
                           msg['text']!,
@@ -114,7 +122,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           msg['time']!,
                           style: TextStyle(
                             fontSize: 10,
-                            color: isMe ? Colors.white70 : AppTheme.secondaryText,
+                            color:
+                                isMe ? Colors.white70 : AppTheme.secondaryText,
                           ),
                         ),
                       ],

@@ -48,7 +48,7 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: AppTheme.primaryRed.withOpacity(0.3),
+                          color: AppTheme.primaryRed.withValues(alpha: 0.3),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
@@ -106,7 +106,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                         const SizedBox(height: 16),
                         const Text(
                           'Mobile Phone',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
                         TextField(
@@ -119,7 +120,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                         const SizedBox(height: 14),
                         const Text(
                           'Password',
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 6),
                         TextField(
@@ -138,7 +140,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                                 ? const SizedBox(
                                     height: 20,
                                     width: 20,
-                                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 2),
                                   )
                                 : const Text('Continue to Marketplace'),
                           ),
@@ -151,7 +154,8 @@ class _CustomerLoginScreenState extends State<CustomerLoginScreen> {
                 const Center(
                   child: Text(
                     'Connected to Central Backend API v1',
-                    style: TextStyle(fontSize: 11, color: AppTheme.secondaryText),
+                    style:
+                        TextStyle(fontSize: 11, color: AppTheme.secondaryText),
                   ),
                 ),
               ],

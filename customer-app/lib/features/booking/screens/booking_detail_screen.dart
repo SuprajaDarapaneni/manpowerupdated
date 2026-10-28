@@ -18,7 +18,8 @@ class BookingDetailScreen extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<BookingDetailScreen> createState() => _BookingDetailScreenState();
+  ConsumerState<BookingDetailScreen> createState() =>
+      _BookingDetailScreenState();
 }
 
 class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
@@ -75,14 +76,16 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
           address: 'Dock 4, Panambur Port Corridor',
           city: 'Mangalore, Karnataka',
         );
-    _raisePriceController.text = (_booking.offeredPricePerWorker + 200).toInt().toString();
+    _raisePriceController.text =
+        (_booking.offeredPricePerWorker + 200).toInt().toString();
   }
 
   void _showRaisePriceDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Raise Offered Rate', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text('Raise Offered Rate',
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -103,12 +106,15 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () async {
               Navigator.of(ctx).pop();
               setState(() => _isUpdating = true);
-              final newPrice = double.tryParse(_raisePriceController.text) ?? _booking.offeredPricePerWorker;
+              final newPrice = double.tryParse(_raisePriceController.text) ??
+                  _booking.offeredPricePerWorker;
               try {
                 await ref.read(bookingRepositoryProvider).raiseBookingPrice(
                       _booking.id,
@@ -118,7 +124,9 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                 if (mounted) {
                   setState(() => _isUpdating = false);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Offer revised and broadcast to nearby workers!')),
+                    const SnackBar(
+                        content: Text(
+                            'Offer revised and broadcast to nearby workers!')),
                   );
                 }
               } catch (e) {
@@ -128,7 +136,10 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
               }
             },
             child: _isUpdating
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : const Text('Confirm Price Update'),
           ),
         ],
@@ -148,7 +159,9 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => ChatScreen(bookingId: _booking.id, orderNumber: _booking.orderNumber),
+                  builder: (_) => ChatScreen(
+                      bookingId: _booking.id,
+                      orderNumber: _booking.orderNumber),
                 ),
               );
             },
@@ -170,16 +183,23 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_booking.categoryName, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text(_booking.categoryName,
+                            style: const TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppTheme.primaryYellow.withOpacity(0.2),
+                            color:
+                                AppTheme.primaryYellow.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             _booking.status.replaceAll('_', ' '),
-                            style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AppTheme.primaryText),
+                            style: const TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.primaryText),
                           ),
                         ),
                       ],
@@ -187,16 +207,20 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                     const SizedBox(height: 8),
                     Text(
                       '${_booking.scheduledDate} · ${_booking.startTime} - ${_booking.endTime}',
-                      style: const TextStyle(fontSize: 12, color: AppTheme.secondaryText),
+                      style: const TextStyle(
+                          fontSize: 12, color: AppTheme.secondaryText),
                     ),
                     const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text('Filled Capacity: ${_booking.acceptedWorkersCount} / ${_booking.requiredWorkers} Workers'),
+                        Text(
+                            'Filled Capacity: ${_booking.acceptedWorkersCount} / ${_booking.requiredWorkers} Workers'),
                         Text(
                           '₹${_booking.offeredPricePerWorker.toInt()} / worker',
-                          style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primaryRed),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppTheme.primaryRed),
                         ),
                       ],
                     ),
@@ -216,7 +240,10 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                   children: [
                     const Text(
                       'Worksite Security & Attendance Codes',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AppTheme.primaryRed),
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.primaryRed),
                     ),
                     const SizedBox(height: 10),
                     Row(
@@ -231,13 +258,23 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                             ),
                             child: Column(
                               children: [
-                                const Text('START WORK OTP', style: TextStyle(fontSize: 10, color: AppTheme.secondaryText)),
+                                const Text('START WORK OTP',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        color: AppTheme.secondaryText)),
                                 const SizedBox(height: 4),
                                 Text(
                                   _booking.startOtp,
-                                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 3, color: AppTheme.primaryRed),
+                                  style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 3,
+                                      color: AppTheme.primaryRed),
                                 ),
-                                const Text('Give upon worker arrival', style: TextStyle(fontSize: 9, color: AppTheme.secondaryText)),
+                                const Text('Give upon worker arrival',
+                                    style: TextStyle(
+                                        fontSize: 9,
+                                        color: AppTheme.secondaryText)),
                               ],
                             ),
                           ),
@@ -253,13 +290,23 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                             ),
                             child: Column(
                               children: [
-                                const Text('END WORK OTP', style: TextStyle(fontSize: 10, color: AppTheme.secondaryText)),
+                                const Text('END WORK OTP',
+                                    style: TextStyle(
+                                        fontSize: 10,
+                                        color: AppTheme.secondaryText)),
                                 const SizedBox(height: 4),
                                 Text(
                                   _booking.endOtp,
-                                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: 3, color: AppTheme.primaryText),
+                                  style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 3,
+                                      color: AppTheme.primaryText),
                                 ),
-                                const Text('Provide upon shift completion', style: TextStyle(fontSize: 9, color: AppTheme.secondaryText)),
+                                const Text('Provide upon shift completion',
+                                    style: TextStyle(
+                                        fontSize: 9,
+                                        color: AppTheme.secondaryText)),
                               ],
                             ),
                           ),
@@ -278,7 +325,9 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                 icon: const Icon(Icons.trending_up, color: AppTheme.primaryRed),
                 label: const Text('Raise Offer Rate to Accelerate Hiring'),
                 style: OutlinedButton.styleFrom(
-                  minimumSize: const Duration(milliseconds: 10) == Duration.zero ? Size.zero : const Size.fromHeight(48),
+                  minimumSize: const Duration(milliseconds: 10) == Duration.zero
+                      ? Size.zero
+                      : const Size.fromHeight(48),
                   side: const BorderSide(color: AppTheme.primaryRed),
                 ),
                 onPressed: _showRaisePriceDialog,
@@ -286,7 +335,8 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
             const SizedBox(height: 14),
 
             // Bids & Assigned Workers List
-            const Text('Assigned Workers & Incoming Bids', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+            const Text('Assigned Workers & Incoming Bids',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
 
             ..._booking.assignedWorkers.map((w) => Card(
@@ -295,9 +345,14 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                       backgroundColor: AppTheme.primaryRed,
                       child: Icon(Icons.person, color: Colors.white, size: 20),
                     ),
-                    title: Text(w.workerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    subtitle: Text('Status: ${w.status} · Agreed: ₹${w.agreedRate.toInt()}', style: const TextStyle(fontSize: 11)),
-                    trailing: const Icon(Icons.check_circle, color: AppTheme.stateSuccess),
+                    title: Text(w.workerName,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 13)),
+                    subtitle: Text(
+                        'Status: ${w.status} · Agreed: ₹${w.agreedRate.toInt()}',
+                        style: const TextStyle(fontSize: 11)),
+                    trailing: const Icon(Icons.check_circle,
+                        color: AppTheme.stateSuccess),
                   ),
                 )),
 
@@ -312,7 +367,8 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                     label: const Text('Payment & Receipt'),
                     onPressed: () {
                       Navigator.of(context).push(
-                        MaterialPageRoute(builder: (_) => PaymentScreen(booking: _booking)),
+                        MaterialPageRoute(
+                            builder: (_) => PaymentScreen(booking: _booking)),
                       );
                     },
                   ),
@@ -327,7 +383,9 @@ class _BookingDetailScreenState extends ConsumerState<BookingDetailScreen> {
                         MaterialPageRoute(
                           builder: (_) => RateWorkerScreen(
                             bookingId: _booking.id,
-                            workerName: _booking.assignedWorkers.firstOrNull?.workerName ?? 'Ramesh Kumar',
+                            workerName: _booking
+                                    .assignedWorkers.firstOrNull?.workerName ??
+                                'Ramesh Kumar',
                           ),
                         ),
                       );

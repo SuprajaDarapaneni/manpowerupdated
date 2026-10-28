@@ -246,6 +246,7 @@ export interface CommissionSettings {
   fixedValue: number;
   payer: 'customer' | 'worker' | 'split';
   taxRate: number;
+  categoryRates?: Record<string, number>;
 }
 
 export interface OtpVerificationSettings {
