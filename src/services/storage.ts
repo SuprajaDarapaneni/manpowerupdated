@@ -1544,7 +1544,7 @@ class DataService {
       primaryColor: '#D71920',
       secondaryColor: '#FFC928',
       darkBgColor: '#1E1F23',
-      mainLogoUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb18f156b?auto=format&fit=crop&w=400&q=80',
+      mainLogoUrl: '',
       appIconUrl: '',
       splashLogoUrl: '',
       lightLogoUrl: '',
@@ -1556,7 +1556,7 @@ class DataService {
 
   public setBrandingSettings(branding: BrandingSettings): void {
     this.setItem('manpowerlink_branding_v1', branding);
-    this.logAudit('Branding Updated', `App: ${branding.appName}, Tagline: ${branding.tagline}`);
+    this.logAudit('Branding Updated', `App: ${branding.appName}, Logo: ${branding.mainLogoUrl ? 'Custom Logo Applied' : 'Default Icon'}`);
   }
 
   // --- General Company Settings ---

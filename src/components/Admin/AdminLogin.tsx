@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, Mail, ShieldAlert, ArrowRight, CheckCircle2, Smartphone } from 'lucide-react';
 import { dataService } from '../../services/storage';
 
@@ -15,6 +15,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
   onOpenPreview,
   showPreviews = false,
 }) => {
+  const [branding, setBranding] = useState(() => dataService.getBrandingSettings());
   const [email, setEmail] = useState('admin@manpowerlink.com');
   const [password, setPassword] = useState('Admin@2026Secure');
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +25,12 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('dev') === 'true';
   });
+
+  useEffect(() => {
+    return dataService.subscribe(() => {
+      setBranding(dataService.getBrandingSettings());
+    });
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,14 +67,27 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
       <div className="w-full max-w-md">
         {/* Brand Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-[#D71920] text-white font-black text-2xl shadow-lg mb-3">
-            M
-          </div>
+          {branding.mainLogoUrl ? (
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white p-1.5 shadow-lg mb-3 border-2 border-[#FFC928] overflow-hidden">
+              <img
+                src={branding.mainLogoUrl}
+                alt={branding.appName || 'Logo'}
+                className="w-full h-full object-contain"
+              />
+            </div>
+          ) : (
+            <div
+              className="inline-flex items-center justify-center w-14 h-14 rounded-2xl text-white font-black text-2xl shadow-lg mb-3 border border-[#FFC928]"
+              style={{ backgroundColor: branding.primaryColor || '#D71920' }}
+            >
+              {branding.appName?.charAt(0) || 'M'}
+            </div>
+          )}
           <h1 className="text-2xl font-bold tracking-tight text-[#202124]">
-            ManPower<span className="text-[#D71920]">Link</span> Admin
+            {branding.appName || 'ManPowerLink'} <span style={{ color: branding.primaryColor || '#D71920' }}>Admin</span>
           </h1>
           <p className="text-xs text-[#686868] mt-1">
-            Enterprise Temporary Manpower Marketplace Management
+            {branding.tagline || 'Enterprise Temporary Manpower Marketplace Management'}
           </p>
         </div>
 
@@ -207,22 +227,10 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
           </div>
         </div>
 
-        {/* Footer with subtle developer unlock on triple-click */}
+        {/* Production Footer for Client Delivery */}
         <div className="mt-6 text-center">
-          <p
-            onClick={() => {
-              const next = devClicks + 1;
-              setDevClicks(next);
-              if (next >= 3) {
-                setDevClicks(0);
-                setDevUnlocked((prev) => !prev);
-                if (onDevToggle) onDevToggle();
-              }
-            }}
-            className="text-[10px] text-[#686868]/60 cursor-default select-none transition-colors hover:text-[#686868]"
-            title="Production Environment (Click 3x for Developer Preview Tools)"
-          >
-            © 2026 ManPowerLink Technologies Inc. v1.0.0
+          <p className="text-[10px] text-[#686868]/70 select-none">
+            © 2026 {branding.appName || 'ManPowerLink'} Technologies Inc. • Enterprise Platform v1.0.0
           </p>
         </div>
       </div>

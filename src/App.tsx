@@ -437,8 +437,7 @@ export default function App() {
           <AdminLogin
             onSuccess={() => setAdminAuth(dataService.getAdminAuth())}
             showPreviews={isDevMode}
-            onDevToggle={() => setIsDevMode((prev) => !prev)}
-            onOpenPreview={(target) => navigateTo(target)}
+            onOpenPreview={isDevMode ? (target) => navigateTo(target) : undefined}
           />
         </div>
       </div>

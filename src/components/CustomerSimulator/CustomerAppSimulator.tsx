@@ -121,6 +121,15 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   workers,
   bookings,
 }) => {
+  // Branding State
+  const [branding, setBranding] = useState(() => dataService.getBrandingSettings());
+
+  useEffect(() => {
+    return dataService.subscribe(() => {
+      setBranding(dataService.getBrandingSettings());
+    });
+  }, []);
+
   // Authentication State
   const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [authScreen, setAuthScreen] = useState<CustomerAuthScreen>('sign-in');
@@ -1154,11 +1163,20 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
           {!isAuthenticated ? (
             <div className="flex-1 flex flex-col bg-[#FFFDF8] overflow-y-auto p-5">
               <div className="text-center mt-3 mb-5">
-                <div className="w-12 h-12 rounded-2xl bg-[#D71920] text-white flex items-center justify-center font-black text-xl mx-auto shadow-md mb-2">
-                  M
-                </div>
+                {branding.mainLogoUrl ? (
+                  <div className="w-14 h-14 rounded-2xl bg-white p-1 shadow-md mb-2 mx-auto border-2 border-[#FFC928] overflow-hidden flex items-center justify-center">
+                    <img src={branding.mainLogoUrl} alt={branding.appName || 'Logo'} className="w-full h-full object-contain" />
+                  </div>
+                ) : (
+                  <div
+                    className="w-12 h-12 rounded-2xl text-white flex items-center justify-center font-black text-xl mx-auto shadow-md mb-2 border border-[#FFC928]"
+                    style={{ backgroundColor: branding.primaryColor || '#D71920' }}
+                  >
+                    {branding.appName?.charAt(0) || 'M'}
+                  </div>
+                )}
                 <h1 className="text-lg font-bold text-[#202124]">
-                  ManPower<span className="text-[#D71920]">Link</span>
+                  {branding.appName || 'ManPowerLink'}
                 </h1>
                 <p className="text-[11px] font-bold text-[#D71920] uppercase tracking-wider">
                   Customer App
@@ -1380,13 +1398,19 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       <span className="text-[11px] font-bold pr-1">Back</span>
                     </button>
                   ) : (
-                    <div className="w-7 h-7 rounded-lg bg-white text-[#D71920] font-black flex items-center justify-center text-xs shadow-xs">
-                      M
-                    </div>
+                    branding.mainLogoUrl ? (
+                      <div className="w-7 h-7 rounded-lg bg-white p-0.5 shadow-xs overflow-hidden shrink-0 flex items-center justify-center">
+                        <img src={branding.mainLogoUrl} alt={branding.appName || 'Logo'} className="w-full h-full object-contain" />
+                      </div>
+                    ) : (
+                      <div className="w-7 h-7 rounded-lg bg-white text-[#D71920] font-black flex items-center justify-center text-xs shadow-xs shrink-0">
+                        {branding.appName?.charAt(0) || 'M'}
+                      </div>
+                    )
                   )}
                   <div>
                     <h2 className="font-bold text-xs leading-tight">
-                      {activeTab === 'home' && 'ManPowerLink'}
+                      {activeTab === 'home' && (branding.appName || 'ManPowerLink')}
                       {activeTab === 'post-job' && 'Post Job Order'}
                       {activeTab === 'bookings' && 'Orders & Live Bids'}
                       {activeTab === 'messages' && 'Worksite Chat'}

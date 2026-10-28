@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
   Layers,
@@ -16,6 +16,7 @@ import {
   MapPin,
   X,
 } from 'lucide-react';
+import { dataService } from '../../services/storage';
 
 export type AdminTab =
   | 'dashboard'
@@ -64,6 +65,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   isOpenMobile = false,
   onCloseMobile,
 }) => {
+  const [branding, setBranding] = useState(() => dataService.getBrandingSettings());
+
+  useEffect(() => {
+    return dataService.subscribe(() => {
+      setBranding(dataService.getBrandingSettings());
+    });
+  }, []);
+
   const opsNavItems = [
     { id: 'dashboard' as AdminTab, label: 'Dashboard', icon: LayoutDashboard },
     { id: 'categories' as AdminTab, label: 'Service Categories', icon: Layers },
@@ -113,16 +122,31 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       >
         {/* Brand Header with Close Button on Mobile */}
         <div className="h-16 px-5 flex items-center justify-between border-b border-white/10 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-[#D71920] flex items-center justify-center font-extrabold text-white shadow-sm border border-[#FFC928]">
-              M
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-bold text-base tracking-tight text-white">ManPowerLink</span>
-                <span className="w-2 h-2 rounded-full bg-[#FFC928]" title="Admin Active" />
+          <div className="flex items-center gap-3 min-w-0">
+            {branding.mainLogoUrl ? (
+              <div className="w-8 h-8 rounded-lg bg-white p-0.5 shadow-sm border border-[#FFC928] overflow-hidden shrink-0 flex items-center justify-center">
+                <img
+                  src={branding.mainLogoUrl}
+                  alt={branding.appName || 'Logo'}
+                  className="w-full h-full object-contain"
+                />
               </div>
-              <p className="text-[10px] text-white/50 tracking-wider uppercase font-mono">
+            ) : (
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center font-extrabold text-white shadow-sm border border-[#FFC928] shrink-0"
+                style={{ backgroundColor: branding.primaryColor || '#D71920' }}
+              >
+                {branding.appName?.charAt(0) || 'M'}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="font-bold text-base tracking-tight text-white truncate max-w-[130px]">
+                  {branding.appName || 'ManPowerLink'}
+                </span>
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: branding.secondaryColor || '#FFC928' }} title="Admin Active" />
+              </div>
+              <p className="text-[10px] text-white/50 tracking-wider uppercase font-mono truncate">
                 Admin Portal
               </p>
             </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Settings,
   Palette,
@@ -50,6 +50,8 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
   // 1. Branding State
   const [branding, setBranding] = useState<BrandingSettings>(dataService.getBrandingSettings());
   const [brandingPreviewMode, setBrandingPreviewMode] = useState(false);
+  const logoFileInputRef = useRef<HTMLInputElement>(null);
+  const appIconFileInputRef = useRef<HTMLInputElement>(null);
 
   // 2. General Company State
   const [general, setGeneral] = useState<GeneralCompanySettings>(dataService.getGeneralSettings());
@@ -148,16 +150,44 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
     showFeedback('success', `Legal Document ${updated.title} saved as ${nextStatus.toUpperCase()} (${nextVersion}).`);
   };
 
-  // Mock Upload Handler with strict validation
-  const handleMockAssetUpload = (assetKey: keyof BrandingSettings, label: string) => {
-    const mockUrls = [
-      'https://images.unsplash.com/photo-1541888946425-d0fbb18f156b?auto=format&fit=crop&w=400&q=80',
-      'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=400&q=80',
-      'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=400&q=80',
-    ];
-    const picked = mockUrls[Math.floor(Math.random() * mockUrls.length)];
-    setBranding({ ...branding, [assetKey]: picked });
-    showFeedback('info', `${label} validated (PNG/WebP, <5MB) and uploaded to secure cloud storage.`);
+  // Real File Upload Handler (reads image file as Base64 Data URL)
+  const handleRealFileUpload = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    assetKey: keyof BrandingSettings,
+    label: string
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      showFeedback('error', 'Please upload a valid image file (PNG, JPG, SVG, WebP).');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      showFeedback('error', 'Image size exceeds 5MB limit. Please choose a smaller image.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64Url = event.target?.result as string;
+      if (base64Url) {
+        const updated = { ...branding, [assetKey]: base64Url };
+        setBranding(updated);
+        dataService.setBrandingSettings(updated);
+        showFeedback('success', `${label} uploaded and applied across all views!`);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveAsset = (assetKey: keyof BrandingSettings, label: string) => {
+    const updated = { ...branding, [assetKey]: '' };
+    setBranding(updated);
+    dataService.setBrandingSettings(updated);
+    showFeedback('info', `${label} removed. Reverted to default brand badge.`);
   };
 
   const sections = [
@@ -422,48 +452,166 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                     </div>
 
                     {/* Logo & Asset Upload Grid */}
-                    <div className="space-y-3">
-                      <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">App Assets & Logo Store</h3>
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">App Assets & Logo Store</h3>
+                          <p className="text-[11px] text-[#686868]">Upload logo file or paste image URL. Applies immediately across all panels.</p>
+                        </div>
+                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                          Live Global Sync
+                        </span>
+                      </div>
+
+                      {/* Hidden File Inputs */}
+                      <input
+                        type="file"
+                        ref={logoFileInputRef}
+                        accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                        onChange={(e) => handleRealFileUpload(e, 'mainLogoUrl', 'Primary Company Logo')}
+                        className="hidden"
+                      />
+                      <input
+                        type="file"
+                        ref={appIconFileInputRef}
+                        accept="image/png, image/jpeg, image/svg+xml, image/webp"
+                        onChange={(e) => handleRealFileUpload(e, 'appIconUrl', 'Square App Icon')}
+                        className="hidden"
+                      />
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-4 bg-white border border-[#202124]/10 rounded-xl space-y-2">
+                        {/* 1. Primary Company Logo */}
+                        <div className="p-4 bg-white border border-[#202124]/10 rounded-2xl space-y-3 shadow-2xs">
                           <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-[#202124]">Primary Company Logo</span>
-                            <span className="text-[10px] text-[#686868]">PNG / WebP (512x512)</span>
+                            <div>
+                              <span className="text-xs font-bold text-[#202124] block">Primary Company Logo</span>
+                              <span className="text-[10px] text-[#686868]">PNG, JPG, SVG or WebP</span>
+                            </div>
+                            {branding.mainLogoUrl && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAsset('mainLogoUrl', 'Primary Company Logo')}
+                                className="text-[10px] font-bold text-[#D71920] hover:underline cursor-pointer"
+                              >
+                                Remove Logo
+                              </button>
+                            )}
                           </div>
+
                           <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-[#FFFDF8] rounded-xl border border-dashed border-[#202124]/20 flex items-center justify-center overflow-hidden">
+                            <div className="w-14 h-14 bg-[#1E1F23] rounded-xl border border-white/10 flex items-center justify-center overflow-hidden shrink-0 shadow-inner p-1">
                               {branding.mainLogoUrl ? (
-                                <img src={branding.mainLogoUrl} alt="Logo" className="w-full h-full object-cover" />
+                                <img
+                                  src={branding.mainLogoUrl}
+                                  alt="Company Logo Preview"
+                                  className="w-full h-full object-contain"
+                                />
                               ) : (
-                                <Palette className="w-5 h-5 text-slate-400" />
+                                <div className="text-center">
+                                  <div className="w-8 h-8 rounded-lg bg-[#D71920] text-white font-black flex items-center justify-center text-xs mx-auto border border-[#FFC928]">
+                                    {branding.appName?.charAt(0) || 'M'}
+                                  </div>
+                                  <span className="text-[9px] text-white/50 block mt-0.5">Default</span>
+                                </div>
                               )}
                             </div>
-                            <button
-                              onClick={() => handleMockAssetUpload('mainLogoUrl', 'Primary Company Logo')}
-                              className="px-3 py-1.5 border border-[#202124]/20 rounded-lg text-xs font-semibold text-[#202124] hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Upload className="w-3.5 h-3.5" />
-                              Upload Asset
-                            </button>
+
+                            <div className="flex-1 space-y-2">
+                              <button
+                                type="button"
+                                onClick={() => logoFileInputRef.current?.click()}
+                                className="w-full py-1.5 px-3 bg-[#D71920] hover:bg-[#A80F18] text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                              >
+                                <Upload className="w-3.5 h-3.5 text-[#FFC928]" />
+                                <span>Choose Image File from PC</span>
+                              </button>
+
+                              <div className="relative">
+                                <input
+                                  type="url"
+                                  placeholder="Or paste web image link (https://...)"
+                                  value={branding.mainLogoUrl}
+                                  onChange={(e) => {
+                                    const updated = { ...branding, mainLogoUrl: e.target.value };
+                                    setBranding(updated);
+                                    dataService.setBrandingSettings(updated);
+                                  }}
+                                  className="w-full px-2.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded-lg text-[#202124] focus:outline-none focus:border-[#D71920]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
+                            <span>Reflects in: Sidebar, Login & Headers</span>
+                            <span className="font-mono text-[#D71920] font-bold">
+                              {branding.mainLogoUrl ? '✓ Custom Logo Active' : 'Default Letter Badge'}
+                            </span>
                           </div>
                         </div>
 
-                        <div className="p-4 bg-white border border-[#202124]/10 rounded-xl space-y-2">
+                        {/* 2. Square App Icon */}
+                        <div className="p-4 bg-white border border-[#202124]/10 rounded-2xl space-y-3 shadow-2xs">
                           <div className="flex justify-between items-center">
-                            <span className="text-xs font-bold text-[#202124]">Square App Icon</span>
-                            <span className="text-[10px] text-[#686868]">PNG (1024x1024)</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 bg-[#FFFDF8] rounded-xl border border-dashed border-[#202124]/20 flex items-center justify-center">
-                              <Smartphone className="w-5 h-5 text-slate-400" />
+                            <div>
+                              <span className="text-xs font-bold text-[#202124] block">Square App Icon (Mobile & Favicon)</span>
+                              <span className="text-[10px] text-[#686868]">1024x1024 Recommended</span>
                             </div>
-                            <button
-                              onClick={() => handleMockAssetUpload('appIconUrl', 'Square App Icon')}
-                              className="px-3 py-1.5 border border-[#202124]/20 rounded-lg text-xs font-semibold text-[#202124] hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
-                            >
-                              <Upload className="w-3.5 h-3.5" />
-                              Upload Icon
-                            </button>
+                            {branding.appIconUrl && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAsset('appIconUrl', 'Square App Icon')}
+                                className="text-[10px] font-bold text-[#D71920] hover:underline cursor-pointer"
+                              >
+                                Remove Icon
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-3">
+                            <div className="w-14 h-14 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-center overflow-hidden shrink-0 shadow-inner p-1">
+                              {branding.appIconUrl ? (
+                                <img
+                                  src={branding.appIconUrl}
+                                  alt="Square App Icon"
+                                  className="w-full h-full object-contain rounded-lg"
+                                />
+                              ) : (
+                                <Smartphone className="w-6 h-6 text-amber-600" />
+                              )}
+                            </div>
+
+                            <div className="flex-1 space-y-2">
+                              <button
+                                type="button"
+                                onClick={() => appIconFileInputRef.current?.click()}
+                                className="w-full py-1.5 px-3 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer border border-amber-300"
+                              >
+                                <Upload className="w-3.5 h-3.5 text-[#D71920]" />
+                                <span>Choose App Icon File</span>
+                              </button>
+
+                              <div className="relative">
+                                <input
+                                  type="url"
+                                  placeholder="Or paste app icon URL (https://...)"
+                                  value={branding.appIconUrl}
+                                  onChange={(e) => {
+                                    const updated = { ...branding, appIconUrl: e.target.value };
+                                    setBranding(updated);
+                                    dataService.setBrandingSettings(updated);
+                                  }}
+                                  className="w-full px-2.5 py-1 text-[11px] bg-slate-50 border border-slate-200 rounded-lg text-[#202124] focus:outline-none focus:border-[#D71920]"
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-500">
+                            <span>Reflects in: Mobile Simulators & PWA</span>
+                            <span className="font-mono text-emerald-700 font-bold">
+                              {branding.appIconUrl ? '✓ App Icon Set' : 'Default Icon'}
+                            </span>
                           </div>
                         </div>
                       </div>
@@ -1072,8 +1220,12 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
 
             {/* MODULE 10: MAINTENANCE & APP UPDATES */}
             {activeSection === 'maintenance' && (
-              <div className="space-y-4">
-                <h2 className="text-base font-bold text-[#202124]">Maintenance Mode</h2>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-base font-bold text-[#202124]">Maintenance & App Environment Controls</h2>
+                  <p className="text-xs text-[#686868] mt-0.5">Control live platform uptime, maintenance states, and access isolated apps for testing.</p>
+                </div>
+
                 <div className="p-4 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between">
                   <div>
                     <span className="font-bold text-xs text-amber-900">Activate Marketplace Maintenance Mode</span>
@@ -1085,6 +1237,77 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                     onChange={(e) => setRemoteConfig({ ...remoteConfig, maintenanceMode: e.target.checked })}
                     className="w-5 h-5 accent-[#D71920]"
                   />
+                </div>
+
+                {/* Standalone Separate Apps for Developer Cross-Check */}
+                <div className="p-5 bg-[#FFFDF8] rounded-xl border border-[#202124]/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-xs text-[#202124] uppercase tracking-wider block">
+                        Isolated Standalone Apps Cross-Check
+                      </span>
+                      <p className="text-[11px] text-[#686868]">
+                        The Customer and Employee apps are completely separated from the Admin Dashboard. Test each in isolation:
+                      </p>
+                    </div>
+                    <span className="px-2 py-0.5 text-[10px] font-bold bg-[#FFC928]/30 text-[#A80F18] rounded">
+                      Separate Codebases
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+                    <a
+                      href="?preview=customer"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 bg-white rounded-xl border border-[#202124]/10 hover:border-[#D71920] transition-colors flex flex-col justify-between group shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-[#202124] group-hover:text-[#D71920]">Customer App</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-[#686868] group-hover:text-[#D71920]" />
+                      </div>
+                      <p className="text-[10px] text-[#686868]">Employer job posting, UPI wallet, worker selection</p>
+                    </a>
+
+                    <a
+                      href="?preview=employee"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 bg-white rounded-xl border border-[#202124]/10 hover:border-[#D71920] transition-colors flex flex-col justify-between group shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-[#202124] group-hover:text-[#D71920]">Employee App</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-[#686868] group-hover:text-[#D71920]" />
+                      </div>
+                      <p className="text-[10px] text-[#686868]">Worker radar job alerts, OTP check-in, payout ledger</p>
+                    </a>
+
+                    <a
+                      href="?preview=dual"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 bg-white rounded-xl border border-[#202124]/10 hover:border-[#D71920] transition-colors flex flex-col justify-between group shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-[#202124] group-hover:text-[#D71920]">Dual Split View</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-[#686868] group-hover:text-[#D71920]" />
+                      </div>
+                      <p className="text-[10px] text-[#686868]">Side-by-side interactive 10-step simulation</p>
+                    </a>
+
+                    <a
+                      href="?preview=handover"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-3 bg-white rounded-xl border border-[#202124]/10 hover:border-[#D71920] transition-colors flex flex-col justify-between group shadow-2xs"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-[#202124] group-hover:text-[#D71920]">Handover ZIPs</span>
+                        <ExternalLink className="w-3.5 h-3.5 text-[#686868] group-hover:text-[#D71920]" />
+                      </div>
+                      <p className="text-[10px] text-[#686868]">Download isolated Flutter, Node.js & Admin codebases</p>
+                    </a>
+                  </div>
                 </div>
               </div>
             )}

@@ -28,10 +28,11 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   onToggleMobileSidebar,
 }) => {
   const adminAuth = dataService.getAdminAuth();
+  const [branding, setBranding] = useState(() => dataService.getBrandingSettings());
   const [showPreviewMenu, setShowPreviewMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
+  // Close dropdown on outside click and listen to storage branding updates
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -39,7 +40,13 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
-    return () => document.removeEventListener('mousedown', handleOutsideClick);
+    const unsubscribe = dataService.subscribe(() => {
+      setBranding(dataService.getBrandingSettings());
+    });
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      unsubscribe();
+    };
   }, []);
 
   return (
@@ -57,7 +64,16 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
           </button>
         )}
         <div className="flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm text-[#686868]">
-          <span className="font-semibold text-[#D71920]">ManPowerLink</span>
+          {branding.mainLogoUrl ? (
+            <img
+              src={branding.mainLogoUrl}
+              alt={branding.appName || 'Logo'}
+              className="w-5 h-5 rounded object-contain shrink-0"
+            />
+          ) : null}
+          <span className="font-semibold" style={{ color: branding.primaryColor || '#D71920' }}>
+            {branding.appName || 'ManPowerLink'}
+          </span>
           <span>/</span>
           <span className="font-medium text-[#202124] truncate max-w-[130px] sm:max-w-none">{currentTabName}</span>
         </div>
