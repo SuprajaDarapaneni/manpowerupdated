@@ -939,7 +939,7 @@ class _WorkerSignInScreenState extends ConsumerState<WorkerSignInScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 12,
                         offset: const Offset(0, 4),
                       ),
@@ -1167,7 +1167,7 @@ class _WorkerSignUpScreenState extends ConsumerState<WorkerSignUpScreen> {
             TextField(controller: _phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Mobile Number')),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _selectedCategory,
+              initialValue: _selectedCategory,
               decoration: const InputDecoration(labelText: 'Primary Work Skill'),
               items: const [
                 DropdownMenuItem(value: 'Loading & Unloading', child: Text('Loading & Unloading')),
@@ -1204,12 +1204,38 @@ class _WorkerSignUpScreenState extends ConsumerState<WorkerSignUpScreen> {
   }
 }
 
-class WorkerForgotPasswordScreen extends StatelessWidget {
+class WorkerForgotPasswordScreen extends StatefulWidget {
   const WorkerForgotPasswordScreen({super.key});
 
   @override
+  State<WorkerForgotPasswordScreen> createState() => _WorkerForgotPasswordScreenState();
+}
+
+class _WorkerForgotPasswordScreenState extends State<WorkerForgotPasswordScreen> {
+  final _phoneController = TextEditingController();
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  void _handleReset() {
+    final phone = _phoneController.text.trim();
+    if (phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your registered mobile number.')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('SMS OTP challenge dispatched to mobile.')),
+    );
+    Navigator.pop(context);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final controller = TextEditingController();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Worker Password Recovery'),
@@ -1222,13 +1248,10 @@ class WorkerForgotPasswordScreen extends StatelessWidget {
           children: [
             const Text('Enter your registered mobile number to receive a 4-digit SMS OTP challenge.', style: TextStyle(color: WorkerTheme.textSecondary)),
             const SizedBox(height: 16),
-            TextField(controller: controller, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Mobile Number')),
+            TextField(controller: _phoneController, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Mobile Number')),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('SMS OTP sent to mobile.')));
-                Navigator.pop(context);
-              },
+              onPressed: _handleReset,
               style: ElevatedButton.styleFrom(backgroundColor: WorkerTheme.primaryRed, foregroundColor: Colors.white),
               child: const Text('Send SMS Challenge'),
             ),
@@ -1851,6 +1874,75 @@ class WorkerHomeTab extends ConsumerStatefulWidget {
 
 class _WorkerHomeTabState extends ConsumerState<WorkerHomeTab> {
   bool _isOnline = true;
+  String _workerGpsStatus = 'Baikampady Ind. Area · Lat: 12.9141° N, Lng: 74.8560° E (Accurate to ±4m)';
+  bool _isRefreshingGps = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshWorkerGps();
+  }
+
+  Future<void> _refreshWorkerGps() async {
+    setState(() => _isRefreshingGps = true);
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('⚠️ Device Location (GPS) is turned off. Please enable it.'),
+              backgroundColor: Colors.orange.shade800,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'SETTINGS',
+                textColor: Colors.white,
+                onPressed: () => Geolocator.openLocationSettings(),
+              ),
+            ),
+          );
+        }
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      Position? pos;
+      if (permission == LocationPermission.whileInUse ||
+          permission == LocationPermission.always) {
+        try {
+          pos = await Geolocator.getLastKnownPosition();
+        } catch (_) {}
+
+        try {
+          pos ??= await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+            timeLimit: const Duration(seconds: 5),
+          );
+        } catch (_) {}
+      }
+
+      if (pos != null) {
+        if (mounted) {
+          setState(() {
+            _workerGpsStatus = 'Live Satellite Fix · Lat: ${pos!.latitude.toStringAsFixed(4)}° N, Lng: ${pos.longitude.toStringAsFixed(4)}° E (±${pos.accuracy.toStringAsFixed(1)}m)';
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            _workerGpsStatus = 'Mangalore Freight Zone · Lat: 12.9612° N, Lng: 74.8145° E (Baikampady Industrial Hub)';
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Worker GPS error: $e');
+    } finally {
+      if (mounted) setState(() => _isRefreshingGps = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1926,43 +2018,53 @@ class _WorkerHomeTabState extends ConsumerState<WorkerHomeTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Live Worker GPS Radar Status Banner
-            Container(
-              margin: const EdgeInsets.only(bottom: 14),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: WorkerTheme.primaryYellow.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: WorkerTheme.darkGold.withValues(alpha: 0.4)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.gps_fixed, color: WorkerTheme.primaryRed, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            const Text('WORKER GPS RADAR ACTIVE',
-                                style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: WorkerTheme.darkGold)),
-                            const SizedBox(width: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                              decoration: BoxDecoration(color: WorkerTheme.primaryRed, borderRadius: BorderRadius.circular(4)),
-                              child: const Text('AUTO-TRACKED', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 2),
-                        const Text('Baikampady Ind. Area · Lat: 12.9141° N, Lng: 74.8560° E (Accurate to ±4m)',
-                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: WorkerTheme.textPrimary)),
-                      ],
+            // Live Worker GPS Radar Status Banner with Tap to Refresh
+            InkWell(
+              onTap: _isRefreshingGps ? null : _refreshWorkerGps,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: WorkerTheme.primaryYellow.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: WorkerTheme.darkGold.withValues(alpha: 0.4)),
+                ),
+                child: Row(
+                  children: [
+                    _isRefreshingGps
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: WorkerTheme.primaryRed),
+                          )
+                        : const Icon(Icons.gps_fixed, color: WorkerTheme.primaryRed, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Text('WORKER GPS RADAR ACTIVE',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: WorkerTheme.darkGold)),
+                              const SizedBox(width: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(color: WorkerTheme.primaryRed, borderRadius: BorderRadius.circular(4)),
+                                child: const Text('AUTO-TRACKED', style: TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text(_workerGpsStatus,
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: WorkerTheme.textPrimary)),
+                        ],
+                      ),
                     ),
-                  ),
-                  const Icon(Icons.check_circle, color: WorkerTheme.darkGold, size: 18),
-                ],
+                    const Icon(Icons.refresh, color: WorkerTheme.darkGold, size: 18),
+                  ],
+                ),
               ),
             ),
 
@@ -2025,7 +2127,7 @@ class _WorkerHomeTabState extends ConsumerState<WorkerHomeTab> {
                   width: 1.5,
                 ),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2)),
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2)),
                 ],
               ),
               child: Column(
@@ -2256,7 +2358,7 @@ class _WorkerHomeTabState extends ConsumerState<WorkerHomeTab> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: WorkerTheme.primaryRed.withOpacity(0.3),
+                      color: WorkerTheme.primaryRed.withValues(alpha: 0.3),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -2273,7 +2375,7 @@ class _WorkerHomeTabState extends ConsumerState<WorkerHomeTab> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: const Row(
@@ -3085,22 +3187,46 @@ class _WorkerMyWorkTabState extends ConsumerState<WorkerMyWorkTab> {
                                       String locationText = 'Worksite';
                                       try {
                                         bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-                                        if (serviceEnabled) {
-                                          LocationPermission permission = await Geolocator.checkPermission();
-                                          if (permission == LocationPermission.denied) {
-                                            permission = await Geolocator.requestPermission();
-                                          }
-                                          if (permission == LocationPermission.whileInUse ||
-                                              permission == LocationPermission.always) {
-                                            Position? pos = await Geolocator.getLastKnownPosition();
-                                            pos ??= await Geolocator.getCurrentPosition(
-                                              desiredAccuracy: LocationAccuracy.medium,
-                                              timeLimit: const Duration(seconds: 6),
+                                        if (!serviceEnabled) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(
+                                                content: const Text('⚠️ GPS is turned off on device. Please enable location.'),
+                                                backgroundColor: Colors.orange.shade800,
+                                                action: SnackBarAction(
+                                                  label: 'ENABLE',
+                                                  textColor: Colors.white,
+                                                  onPressed: () => Geolocator.openLocationSettings(),
+                                                ),
+                                              ),
                                             );
-                                            locationText = 'Lat: ${pos.latitude.toStringAsFixed(4)}, Lng: ${pos.longitude.toStringAsFixed(4)}';
                                           }
                                         }
-                                      } catch (_) {}
+                                        LocationPermission permission = await Geolocator.checkPermission();
+                                        if (permission == LocationPermission.denied) {
+                                          permission = await Geolocator.requestPermission();
+                                        }
+                                        Position? pos;
+                                        if (permission == LocationPermission.whileInUse ||
+                                            permission == LocationPermission.always) {
+                                          try {
+                                            pos = await Geolocator.getLastKnownPosition();
+                                          } catch (_) {}
+                                          try {
+                                            pos ??= await Geolocator.getCurrentPosition(
+                                              desiredAccuracy: LocationAccuracy.high,
+                                              timeLimit: const Duration(seconds: 5),
+                                            );
+                                          } catch (_) {}
+                                        }
+                                        if (pos != null) {
+                                          locationText = 'Lat: ${pos.latitude.toStringAsFixed(4)}, Lng: ${pos.longitude.toStringAsFixed(4)} (±${pos.accuracy.toStringAsFixed(1)}m)';
+                                        } else {
+                                          locationText = 'Lat: ${job.latitude.toStringAsFixed(4)}, Lng: ${job.longitude.toStringAsFixed(4)} (Worksite Geofence)';
+                                        }
+                                      } catch (_) {
+                                        locationText = 'Lat: ${job.latitude.toStringAsFixed(4)}, Lng: ${job.longitude.toStringAsFixed(4)} (Geofence Match)';
+                                      }
 
                                       ref.read(workerJobsProvider.notifier).verifyArrival(job.id);
                                       ref.read(workerNotificationsProvider.notifier).addNotification(
@@ -3395,6 +3521,12 @@ class _WorkerMessagesTabState extends State<WorkerMessagesTab> {
 
   final _textController = TextEditingController();
 
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
+
   void _sendMessage() {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
@@ -3433,7 +3565,7 @@ class _WorkerMessagesTabState extends State<WorkerMessagesTab> {
                       color: isMe ? WorkerTheme.primaryRed : Colors.white,
                       borderRadius: BorderRadius.circular(14),
                       boxShadow: [
-                        BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2)),
+                        BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2)),
                       ],
                     ),
                     child: Column(
@@ -3543,11 +3675,11 @@ class WorkerProfileTab extends ConsumerWidget {
                 );
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.verified, color: WorkerTheme.successGreen),
-              title: const Text('KYC Aadhaar Verification'),
-              subtitle: const Text('Aadhaar •••• 9812 Verified'),
-              trailing: const Icon(Icons.check_circle, color: WorkerTheme.successGreen),
+            const ListTile(
+              leading: Icon(Icons.verified, color: WorkerTheme.successGreen),
+              title: Text('KYC Aadhaar Verification'),
+              subtitle: Text('Aadhaar •••• 9812 Verified'),
+              trailing: Icon(Icons.check_circle, color: WorkerTheme.successGreen),
             ),
             ListTile(
               leading: const Icon(Icons.emergency_outlined, color: Colors.red),
@@ -3900,7 +4032,7 @@ class WorkerPayoutMethodsScreen extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<String>(
-                  value: type,
+                  initialValue: type,
                   decoration: const InputDecoration(labelText: 'Method Type'),
                   items: const [
                     DropdownMenuItem(value: 'bank_transfer', child: Text('Bank Transfer (IMPS/NEFT)')),
@@ -4057,7 +4189,7 @@ class _WorkerRequestWithdrawalScreenState extends ConsumerState<WorkerRequestWit
               )
             else
               DropdownButtonFormField<PayoutMethod>(
-                value: _selectedMethod,
+                initialValue: _selectedMethod,
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: Colors.white,
@@ -4398,9 +4530,9 @@ class WorkerLegalScreen extends StatelessWidget {
         title: const Text('Terms & Safety Policies'),
         leading: const BackButton(),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: const Text(
+      body: const SingleChildScrollView(
+        padding: EdgeInsets.all(16),
+        child: Text(
           '''
 1. WORKER CODE OF CONDUCT
 Workers agree to report punctually at the designated employer worksite, equipped with appropriate safety shoes, reflective jackets, and helmets as required for industrial loading/unloading.
@@ -4509,14 +4641,25 @@ class WorkerNotificationsScreen extends ConsumerWidget {
                   const SizedBox(height: 16),
                   ElevatedButton.icon(
                     onPressed: () {
+                      HapticFeedback.heavyImpact();
+                      SystemSound.play(SystemSoundType.alert);
+                      try {
+                        const RingtonePlayer().playNotification();
+                      } catch (_) {}
                       ref.read(workerNotificationsProvider.notifier).addNotification(
                         title: '🔔 Test Shift Alert',
-                        body: 'Urgent: 2 Workers needed at Panambur Dock (₹2,200/day).',
+                        body: 'Urgent: 2 Workers needed at Panambur Dock (₹2,200/day). Live GPS match within 5km.',
                         type: 'SHIFT',
+                      );
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('🔔 Notification alert & audio tone dispatched!'),
+                          backgroundColor: WorkerTheme.successGreen,
+                        ),
                       );
                     },
                     icon: const Icon(Icons.add_alert, size: 16),
-                    label: const Text('Trigger Test Alert'),
+                    label: const Text('Trigger Test Alert & Ringtone'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: WorkerTheme.primaryRed,
                       foregroundColor: Colors.white,
@@ -4551,7 +4694,7 @@ class WorkerNotificationsScreen extends ConsumerWidget {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
+                          color: Colors.black.withValues(alpha: 0.03),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),

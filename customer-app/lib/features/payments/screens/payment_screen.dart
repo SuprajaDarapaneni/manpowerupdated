@@ -92,21 +92,27 @@ class _PaymentScreenState extends State<PaymentScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
             const SizedBox(height: 8),
 
-            RadioListTile<String>(
-              value: 'online',
+            RadioGroup<String>(
               groupValue: _selectedPaymentMethod,
-              title: const Text('Online Payment (UPI, Cards, NetBanking)'),
-              subtitle: const Text(
-                  'Secured Escrow release upon End OTP verification'),
-              onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
-            ),
-            RadioListTile<String>(
-              value: 'cash',
-              groupValue: _selectedPaymentMethod,
-              title: const Text('Direct Cash Handover on Site'),
-              subtitle:
-                  const Text('Handed directly to assigned worker team lead'),
-              onChanged: (val) => setState(() => _selectedPaymentMethod = val!),
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedPaymentMethod = val);
+              },
+              child: const Column(
+                children: [
+                  RadioListTile<String>(
+                    value: 'online',
+                    title: Text('Online Payment (UPI, Cards, NetBanking)'),
+                    subtitle: Text(
+                        'Secured Escrow release upon End OTP verification'),
+                  ),
+                  RadioListTile<String>(
+                    value: 'cash',
+                    title: Text('Direct Cash Handover on Site'),
+                    subtitle:
+                        Text('Handed directly to assigned worker team lead'),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 

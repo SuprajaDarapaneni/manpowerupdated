@@ -140,9 +140,9 @@ class _CustomerHomeScreenState extends ConsumerState<CustomerHomeScreen> {
                   color: AppTheme.primaryText,
                 ),
               ),
-              const Text(
+              Text(
                 'Live Rates',
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 11,
                     color: AppTheme.primaryRed,
                     fontWeight: FontWeight.bold),

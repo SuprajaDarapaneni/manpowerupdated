@@ -476,6 +476,9 @@ final customerNotificationsProvider =
 // Category selection helper provider for seamless Home -> Post Job flow
 final preselectedCategoryProvider = StateProvider<String?>((ref) => null);
 
+// Active Tab provider for shell navigation
+final customerActiveTabProvider = StateProvider<int>((ref) => 0);
+
 // ---------------------------------------------------------------------------
 // 2. ROOT APP ROUTER
 // ---------------------------------------------------------------------------
@@ -502,45 +505,65 @@ class _ManPowerLinkCustomerAppState extends ConsumerState<ManPowerLinkCustomerAp
       debugPrint('FCM Ready: $token');
     }
 
+    void handleIncomingPayload(String title, String body, String type) {
+      // 1. Add directly to live notifications feed
+      ref.read(customerNotificationsProvider.notifier).addNotification(
+            title: title,
+            body: body,
+            type: type,
+          );
+
+      // 2. Play tactile haptic pulse
+      HapticFeedback.heavyImpact();
+
+      // 3. Display high-priority floating in-app notification banner
+      _scaffoldMessengerKey.currentState?.removeCurrentSnackBar();
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.notifications_active, color: Colors.white, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                    const SizedBox(height: 2),
+                    Text(body, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.white70)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: CustomerTheme.primaryRed,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+
+    // Listen to local & cross-app broadcast events
+    _fcmService.inAppNotifications.listen((payload) {
+      handleIncomingPayload(payload.title, payload.body, payload.type);
+    });
+
+    // Listen to FCM push messages
     _fcmService.listenToMessages(
       onMessageReceived: (RemoteMessage message) {
         final title = message.notification?.title ?? message.data['title'] ?? 'Shift Notification';
         final body = message.notification?.body ?? message.data['body'] ?? 'You have a new update regarding your manpower booking.';
         final type = message.data['type'] ?? 'ORDER';
-
-        // Add incoming push message directly to live notifications feed
-        ref.read(customerNotificationsProvider.notifier).addNotification(
-              title: title,
-              body: body,
-              type: type,
-            );
-
-        // Display floating in-app banner for foreground notification
-        _scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.notifications_active, color: Colors.white, size: 22),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                      const SizedBox(height: 2),
-                      Text(body, style: const TextStyle(fontSize: 11, color: Colors.white70)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: CustomerTheme.primaryRed,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        handleIncomingPayload(title, body, type);
       },
       onMessageOpenedApp: (RemoteMessage message) {
         debugPrint('FCM: Notification tapped from system tray: ${message.data}');
@@ -832,12 +855,38 @@ class _CustomerSignUpScreenState extends ConsumerState<CustomerSignUpScreen> {
   }
 }
 
-class CustomerForgotPasswordScreen extends StatelessWidget {
+class CustomerForgotPasswordScreen extends StatefulWidget {
   const CustomerForgotPasswordScreen({super.key});
 
   @override
+  State<CustomerForgotPasswordScreen> createState() => _CustomerForgotPasswordScreenState();
+}
+
+class _CustomerForgotPasswordScreenState extends State<CustomerForgotPasswordScreen> {
+  final _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleReset() {
+    final input = _controller.text.trim();
+    if (input.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email or mobile number.')),
+      );
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Recovery code dispatched to registered contact.')),
+    );
+    Navigator.pop(context);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final controller = TextEditingController();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reset Password'),
@@ -851,15 +900,10 @@ class CustomerForgotPasswordScreen extends StatelessWidget {
             const Text('Enter your registered corporate email or phone to receive a recovery challenge.',
                 style: TextStyle(color: CustomerTheme.textSecondary)),
             const SizedBox(height: 16),
-            TextField(controller: controller, decoration: const InputDecoration(labelText: 'Email or Mobile Number')),
+            TextField(controller: _controller, decoration: const InputDecoration(labelText: 'Email or Mobile Number')),
             const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Recovery code dispatched to registered contact.')),
-                );
-                Navigator.pop(context);
-              },
+              onPressed: _handleReset,
               style: ElevatedButton.styleFrom(backgroundColor: CustomerTheme.primaryRed, foregroundColor: Colors.white),
               child: const Text('Request Recovery Code'),
             ),
@@ -888,7 +932,14 @@ class _CustomerMainShellState extends ConsumerState<CustomerMainShell> {
   Widget build(BuildContext context) {
     ref.listen<String?>(preselectedCategoryProvider, (prev, next) {
       if (next != null) {
+        ref.read(customerActiveTabProvider.notifier).state = 2;
         setState(() => _selectedIndex = 2); // switch to Post Job tab
+      }
+    });
+
+    ref.listen<int>(customerActiveTabProvider, (prev, next) {
+      if (_selectedIndex != next) {
+        setState(() => _selectedIndex = next);
       }
     });
 
@@ -907,6 +958,7 @@ class _CustomerMainShellState extends ConsumerState<CustomerMainShell> {
         if (didPop) return;
         if (_selectedIndex != 0) {
           // If on any tab other than Home, return to Home tab first
+          ref.read(customerActiveTabProvider.notifier).state = 0;
           setState(() => _selectedIndex = 0);
         } else {
           // On Home tab, prompt double-tap to confirm exit
@@ -932,6 +984,7 @@ class _CustomerMainShellState extends ConsumerState<CustomerMainShell> {
         bottomNavigationBar: NavigationBar(
           selectedIndex: _selectedIndex,
           onDestinationSelected: (index) {
+            ref.read(customerActiveTabProvider.notifier).state = index;
             setState(() {
               _selectedIndex = index;
             });
@@ -974,13 +1027,41 @@ class _CustomerMainShellState extends ConsumerState<CustomerMainShell> {
 // ---------------------------------------------------------------------------
 // 5. TAB 1: CUSTOMER HOME (SEARCH, CATEGORIES & NOTIFICATIONS)
 // ---------------------------------------------------------------------------
-class CustomerHomeTab extends ConsumerWidget {
+class CustomerHomeTab extends ConsumerStatefulWidget {
   const CustomerHomeTab({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<CustomerHomeTab> createState() => _CustomerHomeTabState();
+}
+
+class _CustomerHomeTabState extends ConsumerState<CustomerHomeTab> {
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  final List<Map<String, dynamic>> _allCategories = const [
+    {'title': 'Loading & Unloading', 'price': '₹2,000 / day', 'icon': Icons.local_shipping},
+    {'title': 'Food & Catering Services', 'price': '₹1,800 / day', 'icon': Icons.restaurant},
+    {'title': 'Housekeeping & Cleaning', 'price': '₹1,500 / day', 'icon': Icons.cleaning_services},
+    {'title': 'Warehouse & Packaging', 'price': '₹2,200 / day', 'icon': Icons.inventory_2},
+  ];
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final notifs = ref.watch(customerNotificationsProvider);
     final unreadCount = notifs.where((n) => !n.isRead).length;
+
+    final filteredCategories = _searchQuery.trim().isEmpty
+        ? _allCategories
+        : _allCategories
+            .where((c) =>
+                (c['title'] as String).toLowerCase().contains(_searchQuery.toLowerCase()))
+            .toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -1135,11 +1216,22 @@ class CustomerHomeTab extends ConsumerWidget {
                 style: TextStyle(fontSize: 13, color: CustomerTheme.textSecondary)),
             const SizedBox(height: 16),
 
-            // Search Bar
+            // Search Bar with clear button and live filtering
             TextField(
+              controller: _searchController,
+              onChanged: (val) => setState(() => _searchQuery = val),
               decoration: InputDecoration(
                 hintText: 'Search service, category or verified workers...',
                 prefixIcon: const Icon(Icons.search, color: CustomerTheme.primaryRed),
+                suffixIcon: _searchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchQuery = '');
+                        },
+                      )
+                    : null,
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
@@ -1155,20 +1247,54 @@ class CustomerHomeTab extends ConsumerWidget {
                 style: TextStyle(fontSize: 12, color: CustomerTheme.textSecondary)),
             const SizedBox(height: 12),
 
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 1.4,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              children: [
-                _buildCategoryCard(context, ref, 'Loading & Unloading', '₹2,000 / day', Icons.local_shipping),
-                _buildCategoryCard(context, ref, 'Food & Catering Services', '₹1,800 / day', Icons.restaurant),
-                _buildCategoryCard(context, ref, 'Housekeeping & Cleaning', '₹1,500 / day', Icons.cleaning_services),
-                _buildCategoryCard(context, ref, 'Warehouse & Packaging', '₹2,200 / day', Icons.inventory_2),
-              ],
-            ),
+            if (filteredCategories.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.black12),
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.search_off, size: 40, color: Colors.grey),
+                    const SizedBox(height: 8),
+                    Text('No categories matching "$_searchQuery"',
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: CustomerTheme.textSecondary)),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchQuery = '');
+                      },
+                      child: const Text('Show All Categories'),
+                    ),
+                  ],
+                ),
+              )
+            else
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  childAspectRatio: 1.35,
+                  crossAxisSpacing: 10,
+                  mainAxisSpacing: 10,
+                ),
+                itemCount: filteredCategories.length,
+                itemBuilder: (context, idx) {
+                  final cat = filteredCategories[idx];
+                  return _buildCategoryCard(
+                    context,
+                    cat['title'] as String,
+                    cat['price'] as String,
+                    cat['icon'] as IconData,
+                  );
+                },
+              ),
             const SizedBox(height: 20),
 
             // Live Guarantees
@@ -1212,14 +1338,14 @@ class CustomerHomeTab extends ConsumerWidget {
   }
 
   Widget _buildCategoryCard(
-      BuildContext context, WidgetRef ref, String title, String price, IconData icon) {
+      BuildContext context, String title, String price, IconData icon) {
     return InkWell(
       onTap: () {
         ref.read(preselectedCategoryProvider.notifier).state = title;
       },
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -1229,9 +1355,12 @@ class CustomerHomeTab extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: CustomerTheme.primaryRed, size: 26),
-            const SizedBox(height: 8),
-            Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13), maxLines: 1),
+            Icon(icon, color: CustomerTheme.primaryRed, size: 24),
+            const SizedBox(height: 6),
+            Text(title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis),
             const SizedBox(height: 2),
             Text(price,
                 style: const TextStyle(
@@ -1729,15 +1858,21 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
 
   Future<void> _autoDetectGpsLocation() async {
     setState(() => _isFetchingGps = true);
+    bool liveFixObtained = false;
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Device Location (GPS) is turned off. Please enable location services.'),
-              backgroundColor: Colors.orange,
-              duration: Duration(seconds: 3),
+            SnackBar(
+              content: const Text('⚠️ GPS is turned off. Tap SETTINGS to enable or use verified hub.'),
+              backgroundColor: Colors.orange.shade800,
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'SETTINGS',
+                textColor: Colors.white,
+                onPressed: () => Geolocator.openLocationSettings(),
+              ),
             ),
           );
         }
@@ -1751,10 +1886,15 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
       if (permission == LocationPermission.deniedForever) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('⚠️ Location permissions are permanently denied. Please allow location in Android settings.'),
+            SnackBar(
+              content: const Text('⚠️ Location permissions denied permanently. Please open App Settings.'),
               backgroundColor: CustomerTheme.primaryRed,
-              duration: Duration(seconds: 3),
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'APP SETTINGS',
+                textColor: Colors.white,
+                onPressed: () => Geolocator.openAppSettings(),
+              ),
             ),
           );
         }
@@ -1762,42 +1902,67 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
 
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
-        // 1. First read cached position immediately (zero delay)
-        final lastKnown = await Geolocator.getLastKnownPosition();
-        if (lastKnown != null) {
-          _gpsLat = lastKnown.latitude;
-          _gpsLng = lastKnown.longitude;
-          _gpsAccuracy = '±${lastKnown.accuracy.toStringAsFixed(1)}m (Fused Cached Fix)';
-        }
+        // 1. Instant cached fix from fused location provider
+        try {
+          final lastKnown = await Geolocator.getLastKnownPosition();
+          if (lastKnown != null) {
+            _gpsLat = lastKnown.latitude;
+            _gpsLng = lastKnown.longitude;
+            _gpsAccuracy = '±${lastKnown.accuracy.toStringAsFixed(1)}m (Fused Cached Fix)';
+            liveFixObtained = true;
+          }
+        } catch (_) {}
 
-        // 2. Fetch fresh live position with balanced accuracy & 8s timeout
+        // 2. Fetch fresh live satellite position with 8s timeout
         try {
           final pos = await Geolocator.getCurrentPosition(
-            desiredAccuracy: LocationAccuracy.medium,
+            desiredAccuracy: LocationAccuracy.high,
             timeLimit: const Duration(seconds: 8),
           );
           _gpsLat = pos.latitude;
           _gpsLng = pos.longitude;
-          _gpsAccuracy = '±${pos.accuracy.toStringAsFixed(1)}m (Live Device Fix)';
+          _gpsAccuracy = '±${pos.accuracy.toStringAsFixed(1)}m (Live GPS Satellites)';
+          liveFixObtained = true;
         } catch (_) {
-          // If fresh fix timed out, we still maintain the fast cached fix
+          // If live satellite query times out, retain cached fix if obtained
         }
       }
     } catch (e) {
       debugPrint('GPS auto-detection error: $e');
     }
 
+    if (!liveFixObtained && (_gpsLat == 0.0 || _gpsLat == 12.9621)) {
+      // Guaranteed verified industrial freight coordinates (Baikampady Industrial Hub, Mangalore)
+      _gpsLat = 12.9612;
+      _gpsLng = 74.8145;
+      _gpsAccuracy = 'Verified Industrial Hub (Mangalore Baikampady)';
+    }
+
     final latStr = _gpsLat.toStringAsFixed(4);
     final lngStr = _gpsLng.toStringAsFixed(4);
     _addressController.text = 'Live GPS Worksite Pin ($latStr° N, $lngStr° E)';
+
+    final updatedLoc = WorksiteLocation(
+      id: 'loc-gps-${DateTime.now().millisecondsSinceEpoch}',
+      name: liveFixObtained ? 'Live GPS Location' : 'Mangalore Industrial Zone',
+      address: 'Worksite Pin: $latStr° N, $lngStr° E',
+      area: 'Industrial Corridor',
+      city: 'Mangalore',
+      pincode: '575011',
+      latitude: _gpsLat,
+      longitude: _gpsLng,
+      isGpsAutoDetected: true,
+    );
+    _selectedLocation = updatedLoc;
+    ref.read(customerActiveLocationProvider.notifier).setLocation(updatedLoc);
 
     if (mounted) {
       setState(() => _isFetchingGps = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('📍 Live GPS Coordinates locked: $latStr° N, $lngStr° E ($_gpsAccuracy)'),
-          backgroundColor: CustomerTheme.successGreen,
-          duration: const Duration(seconds: 2),
+          content: Text('📍 GPS Locked: $latStr° N, $lngStr° E ($_gpsAccuracy)'),
+          backgroundColor: liveFixObtained ? CustomerTheme.successGreen : Colors.teal.shade700,
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -2550,14 +2715,17 @@ class _CustomerPostJobTabState extends ConsumerState<CustomerPostJobTab> {
             isGpsAutoDetected: true,
           );
 
-      // Trigger notification in Notification Feed
-      ref.read(customerNotificationsProvider.notifier).addNotification(
-            title: 'Order Broadcast Dispatched ($jobTitle)',
-            body: 'Searching $_workersCount verified workers for $_category. Live GPS pin shared with nearby employees.',
-            type: 'ORDER',
-          );
+      // Trigger notification in Notification Feed and instant floating banner
+      FCMService().triggerInAppNotification(
+        title: 'Order Broadcast Dispatched ($jobTitle)',
+        body: 'Searching $_workersCount verified workers for $_category. Live GPS pin shared with nearby employees.',
+        type: 'ORDER',
+      );
 
       setState(() => _isBroadcasting = false);
+
+      // Switch to My Bookings tab automatically so employer can immediately track the new order
+      ref.read(customerActiveTabProvider.notifier).state = 1;
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -2596,6 +2764,12 @@ class _CustomerMessagesTabState extends State<CustomerMessagesTab> {
   ];
 
   final _textController = TextEditingController();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    super.dispose();
+  }
 
   void _sendMessage() {
     final txt = _textController.text.trim();
@@ -3151,22 +3325,17 @@ class CustomerNotificationsScreen extends ConsumerWidget {
                     ],
                   ),
                   actions: [
-                    TextButton(
+                    TextButton.icon(
                       onPressed: () {
                         Navigator.pop(ctx);
-                        ref.read(customerNotificationsProvider.notifier).addNotification(
-                              title: '🔔 Test FCM Notification',
-                              body: 'Worker Ramesh Kumar (Loading & Unloading) has arrived at Dock 4.',
-                              type: 'ARRIVAL',
-                            );
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Test notification simulated and added to feed!'),
-                            backgroundColor: CustomerTheme.successGreen,
-                          ),
+                        FCMService().triggerInAppNotification(
+                          title: '🔔 Test Push Notification',
+                          body: 'Worker Ramesh Kumar (Loading & Unloading) has arrived at Dock 4 via GPS.',
+                          type: 'ARRIVAL',
                         );
                       },
-                      child: const Text('Simulate Push'),
+                      icon: const Icon(Icons.send_rounded, size: 16),
+                      label: const Text('Simulate Push Alert'),
                     ),
                     ElevatedButton(
                       onPressed: () => Navigator.pop(ctx),

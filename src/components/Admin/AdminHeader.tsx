@@ -30,13 +30,19 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   const adminAuth = dataService.getAdminAuth();
   const [branding, setBranding] = useState(() => dataService.getBrandingSettings());
   const [showPreviewMenu, setShowPreviewMenu] = useState(false);
+  const [showNotifMenu, setShowNotifMenu] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(3);
   const menuRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click and listen to storage branding updates
+  // Close dropdowns on outside click and listen to storage branding updates
   useEffect(() => {
     const handleOutsideClick = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowPreviewMenu(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+        setShowNotifMenu(false);
       }
     };
     document.addEventListener('mousedown', handleOutsideClick);
@@ -179,14 +185,68 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
           </div>
         )}
 
-        <button
-          type="button"
-          title="System Notifications"
-          className="p-2 text-[#686868] hover:text-[#D71920] hover:bg-neutral-100 rounded-lg transition-colors relative cursor-pointer"
-        >
-          <Bell className="w-4 h-4" />
-          <span className="w-2 h-2 rounded-full bg-[#D71920] absolute top-1.5 right-1.5 ring-2 ring-white" />
-        </button>
+        {/* Notifications Dropdown */}
+        <div className="relative" ref={notifRef}>
+          <button
+            type="button"
+            title="System & GPS Notifications"
+            onClick={() => setShowNotifMenu(!showNotifMenu)}
+            className="p-2 text-[#686868] hover:text-[#D71920] hover:bg-neutral-100 rounded-lg transition-colors relative cursor-pointer"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && (
+              <span className="w-2 h-2 rounded-full bg-[#D71920] absolute top-1.5 right-1.5 ring-2 ring-white" />
+            )}
+          </button>
+
+          {showNotifMenu && (
+            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-[#202124]/10 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="px-3.5 py-2 border-b border-slate-100 flex items-center justify-between">
+                <span className="text-xs font-bold text-[#202124]">Real-Time Notifications & GPS Alerts</span>
+                {unreadCount > 0 && (
+                  <button
+                    onClick={() => setUnreadCount(0)}
+                    className="text-[10px] text-[#D71920] hover:underline font-bold cursor-pointer"
+                  >
+                    Mark read
+                  </button>
+                )}
+              </div>
+              <div className="divide-y divide-slate-100 max-h-72 overflow-y-auto">
+                <div className="p-3 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-1.5 text-emerald-700 text-[11px] font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>📍 GPS Arrival Verified</span>
+                  </div>
+                  <p className="text-xs text-[#202124] font-medium mt-0.5">
+                    Worker Ramesh Kumar reached NMPT Dock 4 (Lat: 12.9348° N, Lng: 74.8080° E).
+                  </p>
+                  <span className="text-[10px] text-slate-400">2 mins ago</span>
+                </div>
+                <div className="p-3 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-1.5 text-[#D71920] text-[11px] font-bold">
+                    <span className="w-2 h-2 rounded-full bg-[#D71920]" />
+                    <span>⚡ Order Broadcast Active</span>
+                  </div>
+                  <p className="text-xs text-[#202124] font-medium mt-0.5">
+                    Order #1045 dispatched to 45 nearby workers in Mangalore corridor.
+                  </p>
+                  <span className="text-[10px] text-slate-400">14 mins ago</span>
+                </div>
+                <div className="p-3 hover:bg-slate-50 transition-colors">
+                  <div className="flex items-center gap-1.5 text-blue-700 text-[11px] font-bold">
+                    <span className="w-2 h-2 rounded-full bg-blue-500" />
+                    <span>💰 Payment Escrow Secured</span>
+                  </div>
+                  <p className="text-xs text-[#202124] font-medium mt-0.5">
+                    ₹10,000 for Order #1045 locked in platform escrow ledger.
+                  </p>
+                  <span className="text-[10px] text-slate-400">1 hour ago</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="h-6 w-[1px] bg-[#202124]/10 hidden sm:block" />
 

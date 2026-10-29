@@ -71,6 +71,12 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
   const [matchingSettings, setMatchingSettings] = useState<MatchingSettings>(dataService.getMatchingSettings());
   const categories = dataService.getCategories();
 
+  // 6. Notification Broadcast State
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastAudience, setBroadcastAudience] = useState<'all' | 'customers' | 'workers'>('all');
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+
   const handleSaveCommission = () => {
     dataService.setCommissionSettings(commissionSettings);
     dataService.addSettingsAuditRecord({
@@ -1484,18 +1490,165 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
 
             {/* MODULE 11: NOTIFICATIONS */}
             {activeSection === 'notifications' && (
-              <div className="space-y-4">
-                <h2 className="text-base font-bold text-[#202124]">Notification Broadcasts</h2>
-                <div className="space-y-2">
-                  {remoteConfig.announcements.map((ann) => (
-                    <div key={ann.id} className="p-3 bg-[#FFFDF8] rounded-xl border border-[#202124]/10 flex justify-between items-center text-xs">
-                      <div>
-                        <span className="font-bold text-[#202124]">{ann.title}</span>
-                        <p className="text-[#686868]">{ann.message}</p>
-                      </div>
-                      <span className="px-2 py-0.5 bg-[#FFC928]/30 text-[#A80F18] rounded-md font-bold text-[10px] uppercase">{ann.audience}</span>
+              <div className="space-y-6">
+                <div>
+                  <h2 className="text-base font-bold text-[#202124]">Mobile App Push Notifications & Broadcast Hub</h2>
+                  <p className="text-xs text-[#686868]">
+                    Send instant high-priority push notifications and in-app alert banners to Customer and Worker mobile apps.
+                  </p>
+                </div>
+
+                {/* Live Gateway & GPS Geofence Status */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-xs font-bold text-emerald-900">FCM Push Gateway</span>
                     </div>
-                  ))}
+                    <p className="text-[11px] text-emerald-700 mt-1 font-mono">Status: Connected (future-audio-ndpgw)</p>
+                  </div>
+                  <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                      <span className="text-xs font-bold text-amber-900">Live Satellite GPS Hub</span>
+                    </div>
+                    <p className="text-[11px] text-amber-700 mt-1 font-mono">Mangalore Baikampady (12.9612, 74.8145)</p>
+                  </div>
+                  <div className="p-3.5 bg-blue-50 rounded-xl border border-blue-200">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                      <span className="text-xs font-bold text-blue-900">Broadcast Channels</span>
+                    </div>
+                    <p className="text-[11px] text-blue-700 mt-1 font-mono">Topics: all_customers, all_workers</p>
+                  </div>
+                </div>
+
+                {/* Dispatch Form */}
+                <div className="p-5 bg-white rounded-xl border border-[#202124]/10 shadow-xs space-y-4">
+                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-sm font-bold text-[#202124]">Compose & Dispatch Live Broadcast</h3>
+                      <p className="text-xs text-[#686868]">Pushes notification to all registered Android/iOS app devices.</p>
+                    </div>
+                    <span className="px-2.5 py-1 bg-[#D71920]/10 text-[#D71920] font-bold text-xs rounded-full">Instant FCM</span>
+                  </div>
+
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      if (!broadcastTitle.trim() || !broadcastMessage.trim()) return;
+                      setIsSendingBroadcast(true);
+
+                      const newAnnouncement = {
+                        id: `ann-${Date.now()}`,
+                        title: broadcastTitle.trim(),
+                        message: broadcastMessage.trim(),
+                        audience: broadcastAudience,
+                        active: true,
+                        createdAt: new Date().toISOString(),
+                      };
+
+                      const updatedAnnouncements = [newAnnouncement, ...remoteConfig.announcements];
+                      const updatedRemote = {
+                        ...remoteConfig,
+                        announcements: updatedAnnouncements,
+                      };
+
+                      dataService.setMobileAppRemoteConfig(updatedRemote);
+                      setRemoteConfig(updatedRemote);
+
+                      dataService.addSettingsAuditRecord({
+                        adminId: 'admin-1',
+                        adminEmail: 'admin@manpowerlink.com',
+                        action: 'BROADCAST_NOTIFICATION',
+                        section: 'Notification Templates',
+                        fieldChanged: 'mobile_broadcast',
+                        oldValue: 'none',
+                        newValue: `${broadcastTitle} (${broadcastAudience})`,
+                        ipAddress: '127.0.0.1',
+                      });
+                      setAuditHistory(dataService.getSettingsAuditHistory());
+
+                      setIsSendingBroadcast(false);
+                      setBroadcastTitle('');
+                      setBroadcastMessage('');
+                      showFeedback('success', `Push notification broadcasted to ${broadcastAudience === 'all' ? 'All Apps' : broadcastAudience === 'customers' ? 'Customer App' : 'Worker App'}!`);
+                    }}
+                    className="space-y-3"
+                  >
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs font-bold text-[#202124] mb-1">Notification Title *</label>
+                        <input
+                          type="text"
+                          required
+                          value={broadcastTitle}
+                          onChange={(e) => setBroadcastTitle(e.target.value)}
+                          placeholder="e.g. 📢 Urgent Manpower Requirement: 5 Workers at Baikampady"
+                          className="w-full px-3 py-2 bg-[#FFFDF8] border border-[#202124]/15 rounded-lg text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-[#202124] mb-1">Target Audience *</label>
+                        <select
+                          value={broadcastAudience}
+                          onChange={(e) => setBroadcastAudience(e.target.value as 'all' | 'customers' | 'workers')}
+                          className="w-full px-3 py-2 bg-[#FFFDF8] border border-[#202124]/15 rounded-lg text-xs font-bold text-[#202124]"
+                        >
+                          <option value="all">All Apps (Customers & Workers)</option>
+                          <option value="customers">Customers / Employers Only</option>
+                          <option value="workers">Workers / Employees Only</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#202124] mb-1">Message Body *</label>
+                      <textarea
+                        required
+                        rows={2}
+                        value={broadcastMessage}
+                        onChange={(e) => setBroadcastMessage(e.target.value)}
+                        placeholder="e.g. Loading and moving crew required immediately at Baikampady Industrial Gate 2. ₹2,200/day daily rate."
+                        className="w-full px-3 py-2 bg-[#FFFDF8] border border-[#202124]/15 rounded-lg text-xs"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] text-[#686868]">Pushes sound, vibration, and banner on device.</span>
+                      <button
+                        type="submit"
+                        disabled={isSendingBroadcast || !broadcastTitle.trim() || !broadcastMessage.trim()}
+                        className="px-5 py-2 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        <Bell className="w-3.5 h-3.5" />
+                        <span>{isSendingBroadcast ? 'Dispatching Push...' : 'Send Live Push Broadcast'}</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Active Broadcasts History */}
+                <div>
+                  <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider mb-2">Active Mobile Broadcast History</h3>
+                  <div className="space-y-2">
+                    {remoteConfig.announcements.map((ann) => (
+                      <div key={ann.id} className="p-3 bg-[#FFFDF8] rounded-xl border border-[#202124]/10 flex justify-between items-center text-xs">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-[#202124]">{ann.title}</span>
+                            <span className="px-2 py-0.5 bg-[#FFC928]/30 text-[#A80F18] rounded font-bold text-[10px] uppercase">
+                              {ann.audience}
+                            </span>
+                          </div>
+                          <p className="text-[#686868] mt-0.5">{ann.message}</p>
+                        </div>
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Active Broadcast
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}

@@ -28,8 +28,8 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
   int _requiredWorkers = 2;
   String _durationType = 'full_day';
   DateTime _scheduledDate = DateTime.now().add(const Duration(days: 1));
-  TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
-  TimeOfDay _endTime = const TimeOfDay(hour: 17, minute: 0);
+  final TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
+  final TimeOfDay _endTime = const TimeOfDay(hour: 17, minute: 0);
 
   final _addressController = TextEditingController(text: 'Dock 4, Panambur Port Corridor, Mangalore');
   WorksiteLocation? _selectedLocation = WorksiteLocation.presetHubs[4]; // Default Panambur Dock 4
@@ -122,7 +122,7 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       DropdownButtonFormField<CategoryModel>(
-                        value: _selectedCategory,
+                        initialValue: _selectedCategory,
                         decoration: const InputDecoration(labelText: 'Select Vertical'),
                         items: categories
                             .map((c) => DropdownMenuItem(value: c, child: Text(c.name)))
@@ -178,7 +178,7 @@ class _CreateBookingScreenState extends ConsumerState<CreateBookingScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       DropdownButtonFormField<String>(
-                        value: _durationType,
+                        initialValue: _durationType,
                         decoration: const InputDecoration(labelText: 'Duration Type'),
                         items: const [
                           DropdownMenuItem(value: 'full_day', child: Text('Full Day (8 Hours)')),
