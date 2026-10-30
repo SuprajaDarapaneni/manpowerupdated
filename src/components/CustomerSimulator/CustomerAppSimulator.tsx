@@ -133,6 +133,11 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   useEffect(() => {
     return dataService.subscribe(() => {
       setBranding(dataService.getBrandingSettings());
+      const c = dataService.getCustomer('c-1');
+      if (c) {
+        setCustomer(c);
+        setWalletBalance(c.walletBalance ?? 0);
+      }
     });
   }, []);
 
@@ -249,6 +254,13 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   const [paymentSelection, setPaymentSelection] = useState<'wallet' | 'upi_qr' | 'cash'>('upi_qr');
   const [showDirectQrPaymentModal, setShowDirectQrPaymentModal] = useState(false);
   const [directPaymentUtr, setDirectPaymentUtr] = useState('');
+
+  // Auto-switch away from cash if category requires online payment only
+  useEffect(() => {
+    if (selectedCategory?.requiresOnlinePaymentOnly && paymentSelection === 'cash') {
+      setPaymentSelection('upi_qr');
+    }
+  }, [selectedCategory, paymentSelection]);
 
   // Payment Proof Screenshot Upload State
   const [paymentScreenshotUrl, setPaymentScreenshotUrl] = useState<string | null>(null);
@@ -2376,16 +2388,42 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPaymentSelection('cash')}
-                          className={`py-1.5 rounded-xl cursor-pointer transition-all ${
-                            paymentSelection === 'cash'
-                              ? 'bg-[#D71920] text-white shadow-xs'
-                              : 'text-slate-600 hover:text-black'
+                          disabled={Boolean(selectedCategory.requiresOnlinePaymentOnly)}
+                          onClick={() => {
+                            if (selectedCategory.requiresOnlinePaymentOnly) {
+                              triggerAppRingAlert(`🛡️ Online payment is mandatory for ${selectedCategory.name}. Worksite cash is disabled.`);
+                              return;
+                            }
+                            setPaymentSelection('cash');
+                          }}
+                          className={`py-1.5 rounded-xl transition-all flex items-center justify-center gap-1 ${
+                            selectedCategory.requiresOnlinePaymentOnly
+                              ? 'opacity-40 cursor-not-allowed bg-slate-200/80 text-slate-400'
+                              : paymentSelection === 'cash'
+                              ? 'bg-[#D71920] text-white shadow-xs cursor-pointer'
+                              : 'text-slate-600 hover:text-black cursor-pointer'
                           }`}
+                          title={selectedCategory.requiresOnlinePaymentOnly ? 'Cash payments are disabled for this category' : 'Pay cash on worksite'}
                         >
-                          Worksite Cash
+                          {selectedCategory.requiresOnlinePaymentOnly && <Lock className="w-3 h-3 text-[#D71920]" />}
+                          <span>Worksite Cash</span>
                         </button>
                       </div>
+
+                      {/* Mandatory Online Payment Banner if Category requires it */}
+                      {selectedCategory.requiresOnlinePaymentOnly && (
+                        <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2 text-xs text-[#D71920]">
+                          <ShieldCheck className="w-4 h-4 shrink-0 text-[#D71920]" />
+                          <div>
+                            <span className="font-black block leading-tight">
+                              🛡️ Online Payment Mandatory for {selectedCategory.name}
+                            </span>
+                            <span className="text-[10px] text-slate-600 block mt-0.5">
+                              Platform safety & turnkey verification require payment via UPI QR or Prepaid Wallet. Worksite cash is disabled.
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {paymentSelection === 'upi_qr' && (
                         <div className="space-y-3 pt-1">
@@ -2717,27 +2755,48 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       </div>
 
                       {/* Recent transactions list */}
-                      <div className="pt-2 border-t border-white/10 space-y-1.5">
-                        <span className="text-[10px] font-bold text-white/70 block uppercase tracking-wider">
-                          Recent Wallet Activity
-                        </span>
+                      <div className="pt-2 border-t border-white/10 space-y-2">
+                        <div className="flex items-center justify-between text-[10px] font-bold text-white/70 uppercase tracking-wider">
+                          <span>Wallet Transactions Ledger</span>
+                          <span className="text-[9px] text-[#FFC928] font-normal">Real-Time Sync</span>
+                        </div>
                         {(customer?.walletTransactions || [
                           {
                             id: 'ctx-1',
+                            transactionId: 'TXN-TOP-428919',
                             type: 'credit',
                             amount: 15000,
+                            comments: 'Initial Wallet Balance Top-up',
                             description: 'Wallet Top-up via PhonePe UPI QR',
                             timestamp: '14 Oct 2026, 04:30 PM',
                           },
-                        ]).slice(0, 3).map((tx) => (
-                          <div key={tx.id} className="flex items-center justify-between text-[11px] py-1 border-b border-white/5 last:border-0">
-                            <div>
-                              <span className="font-semibold text-white/90 block leading-tight">{tx.description}</span>
-                              <span className="text-[9px] text-white/50 font-mono">{tx.timestamp}</span>
+                        ]).slice(0, 4).map((tx) => (
+                          <div key={tx.id} className="p-2 rounded-xl bg-white/5 border border-white/10 text-[11px] space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-mono text-[9px] text-[#FFC928] font-semibold">
+                                {tx.transactionId || tx.id}
+                              </span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                tx.type === 'credit'
+                                  ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                              }`}>
+                                {tx.type === 'credit' ? 'CREDIT' : 'DEBIT'}
+                              </span>
                             </div>
-                            <span className={`font-mono font-bold ${tx.type === 'credit' ? 'text-emerald-400' : 'text-[#FFC928]'}`}>
-                              {tx.type === 'credit' ? '+' : '-'}₹{tx.amount.toLocaleString()}
-                            </span>
+                            <div className="flex items-baseline justify-between">
+                              <span className="text-white/90 text-[10px] font-medium leading-tight truncate max-w-[190px]">
+                                {tx.comments || tx.description}
+                              </span>
+                              <span className={`font-mono font-bold text-xs shrink-0 ${
+                                tx.type === 'credit' ? 'text-emerald-400' : 'text-rose-400'
+                              }`}>
+                                {tx.type === 'credit' ? '+' : '-'}₹{tx.amount.toLocaleString()}
+                              </span>
+                            </div>
+                            <div className="text-[9px] text-white/40 font-mono">
+                              {tx.timestamp}
+                            </div>
                           </div>
                         ))}
                       </div>

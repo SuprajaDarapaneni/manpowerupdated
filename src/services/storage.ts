@@ -510,14 +510,12 @@ class DataService {
   public getCategories(): ServiceCategory[] {
     const raw = this.getItem<ServiceCategory[]>(STORAGE_KEYS.CATEGORIES, initialCategories);
     return raw.map((c) => {
-      if (!c.bannerUrl) {
-        const init = initialCategories.find((ic) => ic.id === c.id || ic.slug === c.slug);
-        return {
-          ...c,
-          bannerUrl: init?.bannerUrl || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=80',
-        };
-      }
-      return c;
+      const init = initialCategories.find((ic) => ic.id === c.id || ic.slug === c.slug);
+      return {
+        ...c,
+        bannerUrl: c.bannerUrl || init?.bannerUrl || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=80',
+        requiresOnlinePaymentOnly: c.requiresOnlinePaymentOnly !== undefined ? c.requiresOnlinePaymentOnly : (init?.requiresOnlinePaymentOnly ?? false),
+      };
     });
   }
 
@@ -709,6 +707,84 @@ class DataService {
     this.logAudit('Customer Wallet Debited', `${customer.name} debited ₹${amount} for: ${purpose}. Remaining balance: ₹${newBal}`);
     playNotificationSound();
     return { success: true, newBalance: newBal };
+  }
+
+  // Admin issues refund to Employer Wallet
+  public issueCustomerRefund(
+    customerId: string,
+    amount: number,
+    comments: string,
+    customTxnId?: string
+  ): { success: boolean; newBalance: number; transaction?: any; error?: string } {
+    const customers = this.getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return { success: false, newBalance: 0, error: 'Customer not found' };
+
+    const currentBal = customer.walletBalance || 0;
+    const newBal = currentBal + amount;
+    const txnId = customTxnId?.trim() || `TXN-REF-${Date.now().toString().slice(-6)}`;
+
+    const newTx = {
+      id: `ctx-${Date.now()}`,
+      transactionId: txnId,
+      type: 'credit' as const,
+      amount,
+      comments: comments.trim() || 'Refund issued by Platform Administrator',
+      description: comments.trim() || 'Refund issued by Platform Administrator',
+      timestamp: new Date().toLocaleString(),
+      category: 'refund' as const,
+      adminNote: 'Admin Refund Credit',
+    };
+
+    const updatedCustomer: Customer = {
+      ...customer,
+      walletBalance: newBal,
+      walletTransactions: [newTx, ...(customer.walletTransactions || [])],
+    };
+
+    this.updateCustomer(updatedCustomer);
+    this.logAudit('Employer Refund Issued', `Refunded ₹${amount} to ${customer.name}. Txn ID: ${txnId}. Reason: ${newTx.comments}`);
+    playNotificationSound();
+    return { success: true, newBalance: newBal, transaction: newTx };
+  }
+
+  // Admin debits penalty from Employer Wallet
+  public applyCustomerPenaltyDebit(
+    customerId: string,
+    amount: number,
+    comments: string,
+    customTxnId?: string
+  ): { success: boolean; newBalance: number; transaction?: any; error?: string } {
+    const customers = this.getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return { success: false, newBalance: 0, error: 'Customer not found' };
+
+    const currentBal = customer.walletBalance || 0;
+    const newBal = Math.max(0, currentBal - amount);
+    const txnId = customTxnId?.trim() || `TXN-PEN-${Date.now().toString().slice(-6)}`;
+
+    const newTx = {
+      id: `ctx-${Date.now()}`,
+      transactionId: txnId,
+      type: 'debit' as const,
+      amount,
+      comments: comments.trim() || 'Penalty / Compliance charge deducted by Admin',
+      description: comments.trim() || 'Penalty / Compliance charge deducted by Admin',
+      timestamp: new Date().toLocaleString(),
+      category: 'penalty' as const,
+      adminNote: 'Admin Penalty Deduction',
+    };
+
+    const updatedCustomer: Customer = {
+      ...customer,
+      walletBalance: newBal,
+      walletTransactions: [newTx, ...(customer.walletTransactions || [])],
+    };
+
+    this.updateCustomer(updatedCustomer);
+    this.logAudit('Employer Penalty Debited', `Debited ₹${amount} penalty from ${customer.name}. Txn ID: ${txnId}. Comments: ${newTx.comments}`);
+    playNotificationSound();
+    return { success: true, newBalance: newBal, transaction: newTx };
   }
 
   // ==========================================

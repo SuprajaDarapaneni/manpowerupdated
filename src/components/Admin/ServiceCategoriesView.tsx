@@ -81,6 +81,7 @@ export const ServiceCategoriesView: React.FC<ServiceCategoriesViewProps> = ({ ca
         overtimeMultiplier: Number(formData.overtimeMultiplier) || 1.5,
         requiredSkills: formData.requiredSkills || ['General Support'],
         dynamicFields: formData.dynamicFields,
+        requiresOnlinePaymentOnly: formData.requiresOnlinePaymentOnly ?? false,
       });
     }
 
@@ -158,6 +159,16 @@ export const ServiceCategoriesView: React.FC<ServiceCategoriesViewProps> = ({ ca
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-sm font-bold text-[#202124]">{cat.name}</h3>
+                    {cat.requiresOnlinePaymentOnly ? (
+                      <span className="px-2 py-0.5 text-[10px] font-bold bg-red-100 text-[#D71920] border border-red-200 rounded-md flex items-center gap-1">
+                        <Shield className="w-3 h-3 text-[#D71920]" />
+                        <span>Online Payment Only</span>
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-md">
+                        Cash & Online
+                      </span>
+                    )}
                     {cat.dynamicFields?.isFoodTiffin && (
                       <span className="px-2 py-0.5 text-[10px] font-semibold bg-[#FFC928]/30 text-[#A80F18] rounded-md">
                         Dynamic Tiffin / Meal Rules
@@ -411,6 +422,30 @@ export const ServiceCategoriesView: React.FC<ServiceCategoriesViewProps> = ({ ca
                 </label>
                 <p className="text-[11px] text-[#686868]">
                   When enabled, customer booking screens will automatically render Morning Tiffin, Lunch, Evening Tea, and People Count questions.
+                </p>
+              </div>
+
+              {/* Mandatory Online Payment Only Toggle */}
+              <div className="p-4 bg-linear-to-r from-red-50 to-amber-50 border border-red-200 rounded-xl space-y-1.5 mt-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.requiresOnlinePaymentOnly ?? false}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        requiresOnlinePaymentOnly: e.target.checked,
+                      })
+                    }
+                    className="rounded text-[#D71920] focus:ring-[#D71920]"
+                  />
+                  <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                    <Shield className="w-3.5 h-3.5 text-[#D71920]" />
+                    <span>Require Online Payment Only (Employers must pay online)</span>
+                  </span>
+                </label>
+                <p className="text-[11px] text-[#686868] pl-6 leading-relaxed">
+                  Employers booking this category cannot choose "Worksite Cash". They must pay online via UPI QR & Screenshot Proof or Prepaid Wallet.
                 </p>
               </div>
 
