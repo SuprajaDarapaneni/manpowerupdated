@@ -697,6 +697,11 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    Auto-Ring
+                  </span>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -806,25 +811,61 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                       </span>
                     </div>
 
-                    {bookings.map((b) => (
-                      <div
-                        key={b.id}
-                        className="p-3.5 bg-white rounded-3xl border border-slate-200 space-y-2.5 shadow-2xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-bold text-xs text-[#202124]">{b.orderNumber}</span>
-                          <span className="text-[10px] px-2.5 py-0.5 rounded-md font-bold bg-[#FFC928]/40 text-[#A80F18]">
-                            {b.durationType.replace('_', ' ').toUpperCase()}
-                          </span>
-                        </div>
+                    {bookings.map((b) => {
+                      const lower = (b.categoryName || '').toLowerCase();
+                      const banner = lower.includes('cater') || lower.includes('food')
+                        ? 'https://images.unsplash.com/photo-1555244162-803834f70033?auto=format&fit=crop&w=600&q=80'
+                        : lower.includes('construct') || lower.includes('mason')
+                        ? 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=600&q=80'
+                        : lower.includes('clean')
+                        ? 'https://images.unsplash.com/photo-1581578731548-c64695cc6952?auto=format&fit=crop&w=600&q=80'
+                        : lower.includes('event')
+                        ? 'https://images.unsplash.com/photo-1511578314322-379afb476865?auto=format&fit=crop&w=600&q=80'
+                        : 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=600&q=80';
 
-                        <div>
-                          <h4 className="text-xs font-bold text-[#202124]">{b.jobTitle || b.categoryName}</h4>
-                          <p className="text-[10px] text-[#686868] mt-0.5 flex items-center gap-1">
-                            <MapPin className="w-3 h-3 text-[#D71920]" />
-                            <span>{b.workLocation.address}</span>
-                          </p>
-                        </div>
+                      return (
+                        <div
+                          key={b.id}
+                          className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-all space-y-2.5 p-3"
+                        >
+                          {/* Photo Banner Header */}
+                          <div className="relative h-24 rounded-2xl overflow-hidden -mx-0.5 -mt-0.5">
+                            <img
+                              src={banner}
+                              alt={b.categoryName}
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-transparent" />
+                            
+                            {/* Top Badges */}
+                            <div className="absolute top-2 inset-x-2.5 flex items-center justify-between">
+                              <span className="font-mono font-bold text-[10px] text-white bg-black/60 px-2 py-0.5 rounded-md backdrop-blur-xs">
+                                {b.orderNumber}
+                              </span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-md font-bold bg-[#FFC928] text-[#202124] shadow-xs">
+                                {b.durationType.replace('_', ' ').toUpperCase()}
+                              </span>
+                            </div>
+
+                            {/* Bottom Wage Pill on Banner */}
+                            <div className="absolute bottom-2 inset-x-2.5 flex items-end justify-between">
+                              <div>
+                                <span className="text-white text-xs font-black block leading-tight drop-shadow-sm">
+                                  {b.jobTitle || b.categoryName}
+                                </span>
+                              </div>
+                              <div className="bg-[#D71920] text-white px-2.5 py-1 rounded-xl font-black text-xs shadow-md border border-[#FFC928]/50">
+                                ₹{b.offeredPricePerWorker}/worker
+                              </div>
+                            </div>
+                          </div>
+
+                          <div>
+                            <p className="text-[10px] text-[#686868] mt-0.5 flex items-center gap-1 font-semibold">
+                              <MapPin className="w-3.5 h-3.5 text-[#D71920] shrink-0" />
+                              <span className="truncate">{b.workLocation.address}</span>
+                            </p>
+                          </div>
 
                         {/* Employer Remarks & Worksite Instructions */}
                         {(b.remarks || b.specialInstructions) && (
@@ -881,7 +922,8 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                           </button>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   </div>
                 )}
 

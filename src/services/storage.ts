@@ -310,13 +310,42 @@ export const initialZonePrices: ZoneCategoryPrice[] = [
 
 export type ViewMode = 'admin-only' | 'interactive-hub';
 
-// Web Audio API Ringtone / Chime Synthesizer
-export const playNotificationSound = () => {
+// Persistent Shared Web Audio Context Manager (Unlocks on first user interaction)
+let sharedAudioCtx: AudioContext | null = null;
+
+export const unlockAudioEngine = () => {
   if (typeof window === 'undefined') return;
   try {
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    if (!sharedAudioCtx) {
+      sharedAudioCtx = new AudioContextClass();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+  } catch {
+    // Ignore audio permission errors until user gesture
+  }
+};
+
+// Global automatic unlock on first touch/click/key anywhere in viewport
+if (typeof window !== 'undefined') {
+  const unlockEvents = ['click', 'touchstart', 'pointerdown', 'keydown'];
+  const handleFirstInteraction = () => {
+    unlockAudioEngine();
+    unlockEvents.forEach((ev) => window.removeEventListener(ev, handleFirstInteraction));
+  };
+  unlockEvents.forEach((ev) => window.addEventListener(ev, handleFirstInteraction, { passive: true }));
+}
+
+// Web Audio API Ringtone / Chime Synthesizer
+export const playNotificationSound = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    unlockAudioEngine();
+    if (!sharedAudioCtx) return;
+    const ctx = sharedAudioCtx;
     const now = ctx.currentTime;
     
     // Play a friendly two-tone mobile ring chime
@@ -343,9 +372,16 @@ export const playNotificationSound = () => {
 export const playIncomingJobRingtone = () => {
   if (typeof window === 'undefined') return;
   try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    // Haptic vibration feedback for mobile devices
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([400, 150, 400, 150, 600]);
+      } catch {}
+    }
+
+    unlockAudioEngine();
+    if (!sharedAudioCtx) return;
+    const ctx = sharedAudioCtx;
     const now = ctx.currentTime;
 
     // Create 3 bursts of dual-frequency rings (high-urgency taxi/gig incoming call)
@@ -362,8 +398,8 @@ export const playIncomingJobRingtone = () => {
       osc2.frequency.setValueAtTime(1050, burstStart);
 
       gain.gain.setValueAtTime(0, burstStart);
-      gain.gain.linearRampToValueAtTime(0.35, burstStart + 0.05);
-      gain.gain.setValueAtTime(0.35, burstStart + 0.35);
+      gain.gain.linearRampToValueAtTime(0.4, burstStart + 0.05);
+      gain.gain.setValueAtTime(0.4, burstStart + 0.35);
       gain.gain.exponentialRampToValueAtTime(0.001, burstStart + 0.5);
 
       osc1.connect(gain);
@@ -472,7 +508,17 @@ class DataService {
 
   // Categories
   public getCategories(): ServiceCategory[] {
-    return this.getItem(STORAGE_KEYS.CATEGORIES, initialCategories);
+    const raw = this.getItem<ServiceCategory[]>(STORAGE_KEYS.CATEGORIES, initialCategories);
+    return raw.map((c) => {
+      if (!c.bannerUrl) {
+        const init = initialCategories.find((ic) => ic.id === c.id || ic.slug === c.slug);
+        return {
+          ...c,
+          bannerUrl: init?.bannerUrl || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=80',
+        };
+      }
+      return c;
+    });
   }
 
   public setCategories(categories: ServiceCategory[]): void {

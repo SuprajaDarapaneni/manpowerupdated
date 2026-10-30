@@ -1288,7 +1288,7 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                               <span className="text-base">{cat.icon || '👷'}</span>
                               <div>
                                 <span className="font-bold text-xs text-[#202124] block">{cat.name}</span>
-                                <span className="text-[10px] text-[#686868]">Base: ₹{cat.basePrice || 350}/hr or shift</span>
+                                <span className="text-[10px] text-[#686868]">Base: ₹{cat.hourlyRate || cat.minPrice || 350}/hr or shift</span>
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5">
@@ -1543,9 +1543,9 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
                         id: `ann-${Date.now()}`,
                         title: broadcastTitle.trim(),
                         message: broadcastMessage.trim(),
-                        audience: broadcastAudience,
-                        active: true,
-                        createdAt: new Date().toISOString(),
+                        audience: (broadcastAudience === 'customers' ? 'customer' : broadcastAudience === 'workers' ? 'employee' : 'all') as 'all' | 'customer' | 'employee',
+                        isActive: true,
+                        type: 'info' as const,
                       };
 
                       const updatedAnnouncements = [newAnnouncement, ...remoteConfig.announcements];

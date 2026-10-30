@@ -25,6 +25,7 @@ import {
   Sparkles,
   ArrowRight,
   ChevronRight,
+  ChevronDown,
   Filter,
   Plus,
   Minus,
@@ -1494,10 +1495,18 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       {activeTab === 'messages' && 'Worksite Chat'}
                       {activeTab === 'profile' && 'Customer Profile'}
                     </h2>
-                    <p className="text-[10px] text-white/80 leading-tight flex items-center gap-1">
-                      <MapPin className="w-2.5 h-2.5 text-[#FFC928]" />
-                      <span>Mangalore Port Corridor</span>
-                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddressPickerModal(true)}
+                      className="text-[10px] text-white/95 hover:text-white leading-tight flex items-center gap-1 bg-black/20 hover:bg-black/30 px-2 py-0.5 rounded-lg transition-all cursor-pointer text-left shadow-2xs border border-white/10"
+                      title="Tap to change Worksite GPS Location"
+                    >
+                      <MapPin className="w-2.5 h-2.5 text-[#FFC928] shrink-0" />
+                      <span className="truncate max-w-[120px] font-bold">
+                        {jobLocation ? jobLocation.split(',')[0].replace('Live GPS Worksite Pin', 'Worksite Pin') : 'Mangalore Port'}
+                      </span>
+                      <ChevronDown className="w-2.5 h-2.5 text-[#FFC928] shrink-0" />
+                    </button>
                   </div>
                 </div>
 
@@ -1578,23 +1587,43 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                           <span>Add Custom</span>
                         </button>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {categories.slice(0, 6).map((cat) => (
-                          <div
-                            key={cat.id}
-                            onClick={() => {
-                              setSelectedCategory(cat);
-                              setPricePerHourPerHead(cat.hourlyRate || Math.round(cat.fullDayRate / 8) || 250);
-                              setActiveTab('post-job');
-                            }}
-                            className="p-3 bg-white rounded-2xl border border-slate-200 hover:border-[#D71920] transition-all cursor-pointer shadow-2xs hover:shadow-sm"
-                          >
-                            <span className="text-xs font-bold text-[#202124] block">{cat.name}</span>
-                            <span className="text-[10px] text-[#D71920] font-bold mt-1 block">
-                              ₹{cat.fullDayRate} / day
-                            </span>
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-2 gap-2.5">
+                        {categories.slice(0, 6).map((cat) => {
+                          const banner = cat.bannerUrl || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=400&q=80';
+                          return (
+                            <div
+                              key={cat.id}
+                              onClick={() => {
+                                setSelectedCategory(cat);
+                                setPricePerHourPerHead(cat.hourlyRate || Math.round(cat.fullDayRate / 8) || 250);
+                                setActiveTab('post-job');
+                              }}
+                              className="group relative h-28 rounded-2xl overflow-hidden shadow-xs hover:shadow-md transition-all cursor-pointer border border-slate-200 hover:border-[#D71920] active:scale-98 flex flex-col justify-end p-2.5"
+                            >
+                              {/* Background Banner Photo */}
+                              <img
+                                src={banner}
+                                alt={cat.name}
+                                className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              {/* Dark Gradient Overlay */}
+                              <div className="absolute inset-0 bg-linear-to-t from-black/85 via-black/40 to-transparent" />
+
+                              {/* Content Info */}
+                              <div className="relative z-10 space-y-0.5">
+                                <span className="text-[9px] font-bold bg-[#FFC928] text-[#202124] px-1.5 py-0.5 rounded shadow-2xs inline-block">
+                                  ₹{cat.fullDayRate}/day
+                                </span>
+                                <h4 className="text-xs font-black text-white leading-tight line-clamp-1 drop-shadow-sm">
+                                  {cat.name}
+                                </h4>
+                                <span className="text-[9px] text-amber-200 font-semibold block">
+                                  ₹{cat.hourlyRate || 250}/hr • On-Demand
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -2825,6 +2854,26 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   </span>
                 </button>
               </div>
+
+              {/* Worksite GPS & Address Picker Modal (Exact MongoRide 2-Mode Flow) */}
+              {showAddressPickerModal && (
+                <div className="absolute inset-0 z-50 bg-black/60 backdrop-blur-xs flex flex-col justify-end p-0 animate-in fade-in duration-150">
+                  <div className="bg-white w-full rounded-t-3xl max-h-[92%] overflow-hidden shadow-2xl flex flex-col">
+                    <EmbeddedLocationFetcher
+                      initialAddress={jobLocation}
+                      onLocationSelected={(loc) => {
+                        setJobLocation(loc.address);
+                        setGpsCoordinates({ lat: loc.latitude, lng: loc.longitude });
+                        setIsGpsAutoFilled(true);
+                        setShowAddressPickerModal(false);
+                        triggerAppRingAlert(`Worksite location applied: ${loc.address}`);
+                      }}
+                      onClose={() => setShowAddressPickerModal(false)}
+                      title="Worksite Address & GPS Pin Picker"
+                    />
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

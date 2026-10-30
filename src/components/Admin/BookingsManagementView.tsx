@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { Booking, WorkerBid } from '../../types';
 import { dataService } from '../../services/storage';
+import { EmbeddedLocationFetcher } from '../Common/EmbeddedLocationFetcher';
 
 interface BookingsManagementViewProps {
   bookings: Booking[];
@@ -880,30 +881,32 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
                 </div>
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block font-semibold text-[#202124]">
-                    Worksite Address & GPS Geofence <span className="text-[#D71920]">*</span>
+              {/* Worksite Address & GPS Location Picker Section */}
+              <div className="p-3.5 bg-neutral-50 rounded-2xl border-2 border-[#FFC928] space-y-2.5 shadow-2xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="block font-bold text-[#202124] text-xs flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4 text-[#D71920]" />
+                    <span>Worksite Address &amp; GPS Geofence Location <span className="text-[#D71920]">*</span></span>
                   </label>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={handleDetectLiveGps}
                       disabled={isDetectingGps}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-[#D71920] bg-red-50 hover:bg-red-100 rounded border border-red-200 transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-[#D71920] hover:bg-[#A80F18] rounded-xl shadow-xs transition-all cursor-pointer"
                       title="Fetch precise GPS coordinates from device"
                     >
-                      <LocateFixed className={`w-3.5 h-3.5 ${isDetectingGps ? 'animate-spin' : ''}`} />
-                      <span>{isDetectingGps ? 'Detecting GPS...' : 'Detect Live GPS'}</span>
+                      <LocateFixed className={`w-3.5 h-3.5 text-[#FFC928] ${isDetectingGps ? 'animate-spin' : ''}`} />
+                      <span>{isDetectingGps ? 'Detecting Live GPS...' : 'Auto-Detect Live GPS'}</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowGpsPicker(true)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-bold text-[#202124] bg-neutral-100 hover:bg-neutral-200 rounded border border-neutral-300 transition-colors cursor-pointer"
-                      title="Pick industrial/warehouse GPS hub"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#202124] bg-[#FFC928] hover:bg-[#E5A900] rounded-xl shadow-xs transition-all cursor-pointer border border-amber-300"
+                      title="Open visual map & radar pin picker"
                     >
-                      <Compass className="w-3.5 h-3.5 text-[#E68A00]" />
-                      <span>GPS Location Picker</span>
+                      <Compass className="w-3.5 h-3.5 text-[#D71920]" />
+                      <span>Interactive GPS Map &amp; Radar</span>
                     </button>
                   </div>
                 </div>
@@ -914,32 +917,77 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     placeholder="e.g. Mangalore Port Warehouse, Gate 4"
-                    className="w-full pl-9 pr-3 py-2 bg-[#FFFDF8] border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920]"
+                    className="w-full pl-9 pr-3 py-2 bg-white border border-[#202124]/15 rounded-xl font-semibold text-xs focus:outline-none focus:border-[#D71920] focus:ring-1 focus:ring-[#D71920]"
                     required
                   />
-                  <MapPin className="w-4 h-4 text-[#D71920] absolute left-3 top-3 pointer-events-none" />
+                  <MapPin className="w-4 h-4 text-[#D71920] absolute left-3 top-2.5 pointer-events-none" />
                 </div>
 
-                {/* GPS Verified Status Badge */}
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 p-2.5 bg-[#F8F9FA] border border-[#202124]/10 rounded-lg text-xs">
+                {/* 1-Click Quick Select Verified Industrial Hubs */}
+                <div>
+                  <span className="text-[10px] font-bold text-[#686868] uppercase tracking-wider block mb-1.5">
+                    1-Click Select Mangalore Freight &amp; Port Hubs:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {verifiedGpsHubs.map((hub) => {
+                      const isSelected = formData.address.includes(hub.name) || (formData.latitude === hub.lat && formData.longitude === hub.lng);
+                      return (
+                        <button
+                          key={hub.name}
+                          type="button"
+                          onClick={() => {
+                            setFormData((prev) => ({
+                              ...prev,
+                              address: `${hub.name}, ${hub.address}`,
+                              latitude: hub.lat,
+                              longitude: hub.lng,
+                              isGpsVerified: true,
+                            }));
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                            isSelected
+                              ? 'bg-[#D71920] text-white shadow-xs'
+                              : 'bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-100 hover:border-[#D71920]'
+                          }`}
+                        >
+                          <MapPin className={`w-3 h-3 ${isSelected ? 'text-[#FFC928]' : 'text-[#D71920]'}`} />
+                          <span>{hub.name}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* GPS Verified Status Badge & Google Maps Link */}
+                <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-white border border-amber-200 rounded-xl text-xs">
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black tracking-wider uppercase ${
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black tracking-wider uppercase ${
                       formData.isGpsVerified ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'
                     }`}>
-                      <Navigation className="w-3 h-3" />
-                      {formData.isGpsVerified ? 'GPS Geofenced' : 'Approximate'}
+                      <Navigation className="w-3 h-3 text-emerald-600" />
+                      {formData.isGpsVerified ? 'GPS Geofenced (±4m)' : 'Approximate Coordinates'}
                     </span>
-                    <span className="font-mono text-[#333] text-[11px]">
+                    <span className="font-mono text-[#202124] text-[11px]">
                       Lat: <strong>{formData.latitude.toFixed(4)}° N</strong>, Lng: <strong>{formData.longitude.toFixed(4)}° E</strong>
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowGpsPicker(true)}
-                    className="text-[11px] text-[#D71920] font-bold hover:underline"
-                  >
-                    Adjust GPS Coords
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <a
+                      href={`https://maps.google.com/?q=${formData.latitude},${formData.longitude}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[11px] text-[#D71920] font-bold hover:underline flex items-center gap-1"
+                    >
+                      <span>↗ Open in Google Maps</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setShowGpsPicker(true)}
+                      className="text-[11px] text-amber-800 font-bold hover:underline"
+                    >
+                      Fine-Tune
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -978,105 +1026,41 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
 
       {/* GPS Location Picker Modal */}
       {showGpsPicker && (
-        <div className="fixed inset-0 z-60 bg-black/60 flex items-center justify-center p-4 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-60 bg-black/75 flex items-center justify-center p-3 sm:p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[92vh] border-2 border-[#FFC928]">
             <div className="p-4 border-b border-neutral-200 flex items-center justify-between bg-neutral-50">
               <div className="flex items-center gap-2">
                 <Compass className="w-5 h-5 text-[#D71920]" />
                 <div>
-                  <h3 className="font-bold text-sm text-[#202124]">GPS Location Picker & Geofence Pin</h3>
-                  <p className="text-[11px] text-[#686868]">Select verified worksite hub or enter custom latitude & longitude</p>
+                  <h3 className="font-bold text-sm text-[#202124]">Interactive Worksite GPS Location Picker</h3>
+                  <p className="text-[11px] text-[#686868]">Live radar map, device GPS sensor &amp; verified Mangalore industrial hubs</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowGpsPicker(false)}
-                className="p-1 rounded-lg hover:bg-neutral-200 text-[#686868] hover:text-[#202124] cursor-pointer"
+                className="p-1.5 rounded-xl hover:bg-neutral-200 text-[#686868] hover:text-[#202124] cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 space-y-4 overflow-y-auto">
-              <div>
-                <label className="text-xs font-bold text-[#202124] block mb-1">
-                  1-Click Select Verified Industrial / Port Hub
-                </label>
-                <div className="space-y-2">
-                  {verifiedGpsHubs.map((hub) => (
-                    <div
-                      key={hub.name}
-                      onClick={() => {
-                        setFormData((prev) => ({
-                          ...prev,
-                          address: hub.name,
-                          latitude: hub.lat,
-                          longitude: hub.lng,
-                          isGpsVerified: true,
-                        }));
-                        setShowGpsPicker(false);
-                      }}
-                      className="p-2.5 rounded-xl border border-neutral-200 hover:border-[#D71920] hover:bg-red-50/40 cursor-pointer transition-all flex items-start justify-between gap-3 group"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <MapPin className="w-4 h-4 text-[#D71920] shrink-0 mt-0.5 group-hover:scale-110 transition-transform" />
-                        <div>
-                          <div className="text-xs font-bold text-[#202124] group-hover:text-[#D71920]">{hub.name}</div>
-                          <div className="text-[11px] text-[#686868]">{hub.zone}</div>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-[10px] font-mono px-2 py-0.5 bg-neutral-100 rounded text-neutral-700 font-semibold">
-                          {hub.lat.toFixed(4)}, {hub.lng.toFixed(4)}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-neutral-200">
-                <label className="text-xs font-bold text-[#202124] block mb-2">
-                  Or Fine-Tune Custom Coordinates (Decimal Degrees)
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] text-[#686868] block mb-1">Latitude (°N)</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      value={formData.latitude}
-                      onChange={(e) => setFormData({ ...formData, latitude: parseFloat(e.target.value) || 12.914, isGpsVerified: true })}
-                      className="w-full px-3 py-1.5 text-xs font-mono bg-[#FFFDF8] border border-neutral-300 rounded-lg focus:outline-none focus:border-[#D71920]"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-[#686868] block mb-1">Longitude (°E)</label>
-                    <input
-                      type="number"
-                      step="0.0001"
-                      value={formData.longitude}
-                      onChange={(e) => setFormData({ ...formData, longitude: parseFloat(e.target.value) || 74.856, isGpsVerified: true })}
-                      className="w-full px-3 py-1.5 text-xs font-mono bg-[#FFFDF8] border border-neutral-300 rounded-lg focus:outline-none focus:border-[#D71920]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-[11px] text-amber-900 flex items-start gap-2">
-                <Navigation className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
-                <span>Worker mobile app will verify check-in geofence within 100 meters of this exact GPS coordinate.</span>
-              </div>
-            </div>
-
-            <div className="p-3 border-t border-neutral-200 bg-neutral-50 flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setShowGpsPicker(false)}
-                className="px-4 py-1.5 bg-[#D71920] text-white text-xs font-bold rounded-lg hover:bg-[#A80F18] transition-colors"
-              >
-                Apply GPS Coordinates
-              </button>
+            <div className="p-4 overflow-y-auto">
+              <EmbeddedLocationFetcher
+                initialAddress={formData.address}
+                isEmbedded={true}
+                title="Worksite Dispatch GPS Radar &amp; Geofence Locator"
+                onLocationSelected={(loc) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    address: loc.address,
+                    latitude: loc.latitude,
+                    longitude: loc.longitude,
+                    isGpsVerified: true,
+                  }));
+                  setShowGpsPicker(false);
+                }}
+              />
             </div>
           </div>
         </div>

@@ -49,3 +49,21 @@ To review each application separately without exposing them to the client in the
 - **All-in-One Testing Hub**: Add `?dev=true` to the URL.
 
 Each separate preview includes a discreet **"Admin Dashboard"** button to easily switch back.
+
+---
+
+## 3. MongoRide to ManPowerLink Domain Mapping
+
+The platform operates on the same core dispatch, matching, and multi-tier commission architecture as **MongoRide**, adapted from ride-hailing to temporary industrial & commercial workforce management:
+
+| MongoRide Concept | ManPowerLink Concept | Description & Implementation |
+| :--- | :--- | :--- |
+| **Service Location** | **Service Location (Worksite GPS)** | HTML5 high-accuracy GPS coordinates (`latitude`, `longitude`, `±accuracy`), interactive radar map canvas, reverse-geocoded industrial landmarks. |
+| **Zone** | **Service Zone** | Geofenced dispatch zones (`ZONE-BAIK-01`, `ZONE-PNMB-02`) with km radii, pincodes, zone-specific rate overrides, and No-GPS exemption flags. |
+| **Vehicle Types** | **Service Category** | Standardized workforce verticals: Catering & Food, Loading Logistics, Construction & Masonry, Cleaning, Security, Event Staff. |
+| **Customer (Rider)** | **Customer / Employer** | Posts job shifts (hourly or turnkey package), funds order via UPI QR or Wallet, holds Start OTP. |
+| **Driver** | **Employee / Worker** | Receives radar ringtone alerts, bids or accepts shifts, arrives on-site, verifies Start/End OTPs, receives net wallet payout. |
+| **Driver Documents** | **Employee Documents (KYC)** | Aadhaar Card (Front/Back), PAN Card, Police Clearance Certificate, Trade/Skill licenses, Bank/UPI account. |
+| **Ride Fare & Surge** | **Shift Rate & Pricing** | Hourly rates, 8h full day, 4h half day, overtime multipliers, and turnkey lump-sum packages. |
+| **Commission Model** | **Platform Fee & Commission** | Flexible split model: charged to **Employee** (deducted from wages), **Employer** (surcharge), or **Split** (both), calculated as **Percentage** (e.g. 10%) or **Fixed fee** (e.g. ₹50). |
+

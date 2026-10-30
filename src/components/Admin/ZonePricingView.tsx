@@ -1000,6 +1000,37 @@ const ZonePriceSchema = new mongoose.Schema({
             </div>
 
             <form onSubmit={handleCreateZone} className="space-y-3">
+              {/* 1-Click Preset Hub Selector */}
+              <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200">
+                <span className="text-[10px] font-bold text-amber-900 uppercase tracking-wider block mb-1.5">
+                  1-Click Fill from Mangalore Port &amp; Industrial Belts:
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { name: 'Baikampady Industrial Hub', code: 'ZONE-BAIK-01', pins: '575011, 575010', rad: 12 },
+                    { name: 'Panambur Container Terminal', code: 'ZONE-PNMB-02', pins: '575010, 575019', rad: 10 },
+                    { name: 'Surathkal Logistics Belt', code: 'ZONE-SRTK-03', pins: '575014, 575025', rad: 15 },
+                    { name: 'Hampankatta City Central', code: 'ZONE-HMPN-04', pins: '575001, 575002', rad: 8 },
+                  ].map((p) => (
+                    <button
+                      key={p.code}
+                      type="button"
+                      onClick={() => {
+                        setNewZoneName(p.name);
+                        setNewZoneCode(p.code);
+                        setNewZonePincodes(p.pins);
+                        setNewZoneRadius(p.rad);
+                        setNewZoneCity('Mangalore');
+                        setNewZoneDesc(`High-density manpower deployment corridor: ${p.name}`);
+                      }}
+                      className="px-2 py-1 rounded bg-white hover:bg-amber-100 text-[#D71920] border border-amber-300 text-[10px] font-bold shadow-2xs transition-all cursor-pointer"
+                    >
+                      + {p.name.split(' ')[0]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="text-xs font-bold text-[#202124] block mb-1">
                   Zone Name *

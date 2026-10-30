@@ -42,6 +42,7 @@ export interface ServiceCategory {
   slug: string;
   description: string;
   icon: string;
+  bannerUrl?: string;
   isActive: boolean;
   minPrice: number;
   maxPrice: number;
