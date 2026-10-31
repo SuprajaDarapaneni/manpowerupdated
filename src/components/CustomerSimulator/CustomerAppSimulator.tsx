@@ -58,6 +58,7 @@ import {
 } from '../../services/storage';
 import { EmbeddedLocationFetcher } from '../Common/EmbeddedLocationFetcher';
 import { savePaymentProofToFirebase } from '../../services/firebase';
+import { BookingWizard } from '../../apps/customer/BookingWizard';
 
 interface CustomerAppSimulatorProps {
   categories: ServiceCategory[];
@@ -246,6 +247,10 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
 
   // Additional Remarks / Notes Field
   const [remarks, setRemarks] = useState('Requires safety boots and gloves. Entrance via Gate 4 at dock warehouse.');
+
+  // Step-by-Step Booking Wizard State (1: Location -> 2: Category -> 3: Workers -> 4: Work Type -> 5: Date/Time -> 6: Price & Post)
+  const [bookingWizardStep, setBookingWizardStep] = useState<number>(1);
+  const [isFetchingLocationCategories, setIsFetchingLocationCategories] = useState(false);
 
   // Address Picker Modal State
   const [showAddressPickerModal, setShowAddressPickerModal] = useState(false);
@@ -685,6 +690,14 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       }).catch((err) => console.warn('Firebase payment proof sync warning:', err));
     }
 
+    // Dispatch broadcast event for Employee simulator to ring and open incoming modal
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('manpowerlink_new_job_broadcast', { detail: newBooking })
+      );
+    }
+    playIncomingJobRingtone();
+
     setActiveBookingId(newBooking.id);
     setSelectedBookingForTimeline(newBooking);
     navigateToTab('bookings');
@@ -693,7 +706,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
         ? `🔔 Order #${newBooking.orderNumber} Submitted! Payment screenshot submitted. Awaiting Admin verification.`
         : walletDebited
         ? `🔔 Order #${newBooking.orderNumber} Booked! ₹${totalEstimatedCost.toLocaleString()} debited from wallet.`
-        : `🔔 Order #${newBooking.orderNumber} Published! Workers notified.`
+        : `🔔 Order #${newBooking.orderNumber} Published! Workers notified & radar ringing.`
     );
   };
 
@@ -1500,29 +1513,55 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     )
                   )}
                   <div>
-                    <h2 className="font-bold text-xs leading-tight">
-                      {activeTab === 'home' && (branding.appName || 'ManPowerLink')}
-                      {activeTab === 'post-job' && 'Post Job Order'}
-                      {activeTab === 'bookings' && 'Orders & Live Bids'}
-                      {activeTab === 'messages' && 'Worksite Chat'}
-                      {activeTab === 'profile' && 'Customer Profile'}
-                    </h2>
-                    <button
-                      type="button"
-                      onClick={() => setShowAddressPickerModal(true)}
-                      className="text-[10px] text-white/95 hover:text-white leading-tight flex items-center gap-1 bg-black/20 hover:bg-black/30 px-2 py-0.5 rounded-lg transition-all cursor-pointer text-left shadow-2xs border border-white/10"
-                      title="Tap to change Worksite GPS Location"
-                    >
-                      <MapPin className="w-2.5 h-2.5 text-[#FFC928] shrink-0" />
-                      <span className="truncate max-w-[120px] font-bold">
-                        {jobLocation ? jobLocation.split(',')[0].replace('Live GPS Worksite Pin', 'Worksite Pin') : 'Mangalore Port'}
-                      </span>
-                      <ChevronDown className="w-2.5 h-2.5 text-[#FFC928] shrink-0" />
-                    </button>
+                    {activeTab === 'home' ? (
+                      <div>
+                        <h2 className="font-black text-xs leading-tight text-white flex items-center gap-1">
+                          <span>Hello, Ravi</span>
+                          <span>👋</span>
+                        </h2>
+                        <p className="text-[10px] text-white/90 leading-tight">
+                          Book Manpower for Your Work
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <h2 className="font-bold text-xs leading-tight">
+                          {activeTab === 'post-job' && 'Post Job Order'}
+                          {activeTab === 'bookings' && 'Orders & Live Bids'}
+                          {activeTab === 'messages' && 'Worksite Chat'}
+                          {activeTab === 'profile' && 'Customer Profile'}
+                        </h2>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddressPickerModal(true)}
+                          className="text-[10px] text-white/95 hover:text-white leading-tight flex items-center gap-1 bg-black/20 hover:bg-black/30 px-2 py-0.5 rounded-lg transition-all cursor-pointer text-left shadow-2xs border border-white/10"
+                          title="Tap to change Worksite GPS Location"
+                        >
+                          <MapPin className="w-2.5 h-2.5 text-[#FFC928] shrink-0" />
+                          <span className="truncate max-w-[120px] font-bold">
+                            {jobLocation ? jobLocation.split(',')[0].replace('Live GPS Worksite Pin', 'Worksite Pin') : 'Udupi, Karnataka'}
+                          </span>
+                          <ChevronDown className="w-2.5 h-2.5 text-[#FFC928] shrink-0" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  {/* Notification Bell with Badge (Matching Screen 1) */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => triggerAppRingAlert('🔔 1 active order broadcast in progress')}
+                      className="p-1.5 bg-white/15 hover:bg-white/25 text-white rounded-xl transition-colors cursor-pointer"
+                      title="Notifications"
+                    >
+                      <Bell className="w-4 h-4 text-white" />
+                      <span className="w-2 h-2 rounded-full bg-[#FFC928] absolute top-1 right-1 ring-1 ring-[#D71920]" />
+                    </button>
+                  </div>
+
                   {/* Customer Wallet Balance Chip */}
                   <button
                     type="button"
@@ -1534,30 +1573,128 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     <span>₹{walletBalance.toLocaleString()}</span>
                     <span className="text-[9px] bg-[#FFC928] text-[#202124] px-1 rounded font-black">+</span>
                   </button>
-
-                  <button
-                    onClick={() => triggerAppRingAlert('🔔 Audible notification tone tested!')}
-                    title="Test Ringtone"
-                    className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               </div>
 
               {/* Scrollable Screen Content Body */}
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* 1. HOME TAB */}
+                {/* 1. HOME TAB (MATCHING EXACT SCREEN 1 IN USER IMAGE) */}
                 {activeTab === 'home' && (
-                  <div className="space-y-4">
-                    {/* Search Field */}
-                    <div className="relative">
-                      <Search className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        placeholder="Search workers, catering, loaders..."
-                        className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-[#202124]/10 rounded-xl shadow-2xs focus:outline-none focus:border-[#D71920]"
-                      />
+                  <div className="space-y-3.5 animate-fadeIn">
+                    {/* Hero Card: Hire Temporary Workers for Any Work (Screen 1) */}
+                    <div className="bg-linear-to-r from-[#FFF3D4] via-[#FFE5A3] to-[#FFD573] p-4 rounded-3xl border-2 border-[#FFC928] shadow-sm relative overflow-hidden">
+                      <div className="pr-16 space-y-2">
+                        <h3 className="text-sm font-black text-[#202124] leading-tight">
+                          Hire Temporary Workers for Any Work
+                        </h3>
+                        <div className="space-y-1 text-xs font-bold text-[#202124]">
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                              ✓
+                            </span>
+                            <span>Verified Workers</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                              ✓
+                            </span>
+                            <span>Flexible Timing</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="w-4 h-4 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px] font-bold">
+                              ✓
+                            </span>
+                            <span>Multiple Categories</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Workers Illustration Avatar Stack */}
+                      <div className="absolute -bottom-1 -right-1 flex items-end pointer-events-none pr-1">
+                        <div className="flex -space-x-3">
+                          <img
+                            src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80"
+                            alt="Worker 1"
+                            className="w-12 h-12 rounded-full border-2 border-white object-cover shadow-md"
+                          />
+                          <img
+                            src="https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&q=80"
+                            alt="Worker 2"
+                            className="w-12 h-12 rounded-full border-2 border-white object-cover shadow-md"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Big Yellow Action Button: Post a Job / Hire Workers (Screen 1 in image) */}
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('post-job')}
+                      className="w-full py-4 px-4 bg-[#FFC928] hover:bg-[#E5A900] active:scale-[0.99] text-[#D71920] rounded-3xl shadow-md border-2 border-[#D71920] transition-all cursor-pointer flex flex-col items-center justify-center gap-1 group"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-[#D71920] text-white flex items-center justify-center shadow-xs group-hover:scale-110 transition-transform">
+                        <Plus className="w-5 h-5 stroke-[3]" />
+                      </div>
+                      <span className="text-base font-black tracking-wide text-[#D71920]">
+                        Post a Job
+                      </span>
+                      <span className="text-xs font-bold text-[#202124]">
+                        Hire Workers
+                      </span>
+                    </button>
+
+                    {/* 3 Quick Action Cards (Screen 1 in image) */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {/* 1. My Jobs (3 Active) */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('bookings')}
+                        className="p-3 bg-white hover:bg-amber-50/50 rounded-2xl border border-slate-200 shadow-2xs flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer group"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-red-50 text-[#D71920] flex items-center justify-center border border-red-100 group-hover:scale-105 transition-transform">
+                          <Calendar className="w-5 h-5" />
+                        </div>
+                        <span className="text-[11px] font-black text-[#202124] leading-tight">
+                          My Jobs
+                        </span>
+                        <span className="text-[9px] font-bold text-[#D71920] bg-red-50 px-1.5 py-0.5 rounded-full">
+                          (3 Active)
+                        </span>
+                      </button>
+
+                      {/* 2. Calendar */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('bookings')}
+                        className="p-3 bg-white hover:bg-amber-50/50 rounded-2xl border border-slate-200 shadow-2xs flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer group"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center border border-blue-100 group-hover:scale-105 transition-transform">
+                          <CalendarDays className="w-5 h-5" />
+                        </div>
+                        <span className="text-[11px] font-black text-[#202124] leading-tight">
+                          Calendar
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-medium">
+                          Schedule
+                        </span>
+                      </button>
+
+                      {/* 3. Reports */}
+                      <button
+                        type="button"
+                        onClick={() => triggerAppRingAlert('📊 Showing monthly staffing overview')}
+                        className="p-3 bg-white hover:bg-amber-50/50 rounded-2xl border border-slate-200 shadow-2xs flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer group"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center border border-emerald-100 group-hover:scale-105 transition-transform">
+                          <Sparkles className="w-5 h-5" />
+                        </div>
+                        <span className="text-[11px] font-black text-[#202124] leading-tight">
+                          Reports
+                        </span>
+                        <span className="text-[9px] text-slate-500 font-medium">
+                          Overview
+                        </span>
+                      </button>
                     </div>
 
                     {/* Active Booking Reminder Banner */}
@@ -1578,7 +1715,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                             setSelectedBookingForTimeline(activeBooking);
                             setActiveTab('bookings');
                           }}
-                          className="px-3 py-1.5 bg-[#D71920] text-white text-[11px] font-bold rounded-xl shadow-xs"
+                          className="px-3 py-1.5 bg-[#D71920] text-white text-[11px] font-bold rounded-xl shadow-xs cursor-pointer"
                         >
                           View Status
                         </button>
@@ -1852,801 +1989,69 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   </div>
                 )}
 
-                {/* 3. POST A JOB TAB (EXACTLY MATCHING USER SCREENSHOTS WITH DECORATED MULTI-COLOR UI) */}
-                {activeTab === 'post-job' && (
-                  <div className="space-y-4">
-                    {/* Header Banner */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h2 className="text-base font-extrabold text-[#202124]">Post New Job Order</h2>
-                        <p className="text-[11px] text-[#686868]">On-Demand Workforce Broadcast</p>
-                      </div>
-                      <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2.5 py-1 rounded-full font-bold">
-                        Direct Cash / UPI
-                      </span>
-                    </div>
-
-                    {/* Step indicator bar - Red and Yellow Dual Progress */}
-                    <div className="w-full h-2 bg-amber-100 rounded-full overflow-hidden border border-amber-200">
-                      <div className="w-3/4 h-full bg-linear-to-r from-[#D71920] via-[#E5A900] to-[#FFC928] rounded-full" />
-                    </div>
-
-                    {/* Section 0: Select Service Zone (Dynamic Pricing Linkage) */}
-                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#FFC928] shadow-xs space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-[#D71920]" />
-                          <span>Select Operational Service Zone *</span>
-                        </label>
-                        <span className="text-[10px] bg-[#FFC928] text-[#202124] font-bold px-2 py-0.5 rounded">
-                          Zone Pricing
-                        </span>
-                      </div>
-                      <select
-                        value={selectedZoneId}
-                        onChange={(e) => {
-                          const zId = e.target.value;
-                          setSelectedZoneId(zId);
-                          const zonePrice = dataService.getPriceForZoneAndCategory(zId, selectedCategory.id);
-                          if (zonePrice) {
-                            setPricePerHourPerHead(zonePrice.hourlyRate);
-                            setCustomPackageRate(zonePrice.fullDayRate);
-                          }
-                          const zoneObj = serviceZones.find((z) => z.id === zId);
-                          if (zoneObj) {
-                            setJobLocation(`${zoneObj.name}, ${zoneObj.city}`);
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-xs bg-amber-50/50 border border-amber-300 rounded-xl focus:outline-none focus:border-[#FFC928] font-bold text-[#202124] cursor-pointer"
-                      >
-                        {serviceZones.map((z) => (
-                          <option key={z.id} value={z.id}>
-                            📍 {z.name} ({z.code}) – {z.city}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Section 1: Select Service Category Chips */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-amber-200/80 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-[#D71920]" />
-                          <span>Select Service Category</span>
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => setShowAddCategoryModal(true)}
-                          className="text-[11px] font-bold text-[#D71920] hover:text-[#A80F18] flex items-center gap-0.5 cursor-pointer bg-amber-50 px-2 py-0.5 rounded-lg border border-amber-200"
-                        >
-                          <Plus className="w-3 h-3 text-[#D71920]" />
-                          <span>Add Custom</span>
-                        </button>
-                      </div>
-
-                      {/* Selectable category chips */}
-                      <div className="flex flex-wrap gap-1.5">
-                        {categories.map((cat) => {
-                          const isSelected = selectedCategory.id === cat.id;
-                          return (
-                            <button
-                              key={cat.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedCategory(cat);
-                                setPricePerHourPerHead(cat.hourlyRate || Math.round(cat.fullDayRate / 8) || 250);
-                              }}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
-                                isSelected
-                                  ? 'bg-[#D71920] text-white shadow-xs font-bold border-2 border-[#FFC928]'
-                                  : 'bg-amber-50/50 border border-amber-200/70 text-[#202124] hover:bg-amber-100/70 hover:border-[#FFC928]'
-                              }`}
-                            >
-                              {isSelected && <Check className="w-3.5 h-3.5 text-[#FFC928]" />}
-                              <span>{cat.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    {/* Section 2: Job Requirement Title (Balanced Red & Yellow border & warm input) */}
-                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#FFC928] shadow-xs space-y-1.5 focus-within:ring-2 focus-within:ring-[#FFC928]/40 transition-all">
-                      <label className="text-xs font-bold text-[#202124] flex items-center justify-between">
-                        <span className="flex items-center gap-1.5">
-                          <Briefcase className="w-3.5 h-3.5 text-[#D71920]" />
-                          <span>Job Requirement Title *</span>
-                        </span>
-                        <span className="text-[10px] font-bold bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-md">
-                          Required
-                        </span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={jobTitle}
-                        onChange={(e) => setJobTitle(e.target.value)}
-                        placeholder="e.g. Loading and moving warehouse crates"
-                        className="w-full px-3 py-2 text-xs bg-amber-50/40 border border-amber-200/80 rounded-xl focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/30 font-semibold text-[#202124]"
-                      />
-                    </div>
-
-                    {/* Section 3: Pricing Model Choice (Hourly vs Full Package) */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-amber-200/80 shadow-2xs space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#202124]">Choose Pricing & Duration Model</label>
-                        <span className="text-[10px] font-bold text-[#202124] bg-[#FFC928] px-2 py-0.5 rounded-md">
-                          {pricingModel === 'hourly' ? 'Hourly Basis' : 'Turnkey Package'}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 bg-amber-50/80 p-1 rounded-2xl border border-amber-200/60">
-                        <button
-                          type="button"
-                          onClick={() => setPricingModel('hourly')}
-                          className={`py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            pricingModel === 'hourly'
-                              ? 'bg-[#FFC928] text-[#202124] font-black shadow-xs border border-amber-400'
-                              : 'text-slate-600 hover:text-[#202124]'
-                          }`}
-                        >
-                          <Clock className="w-3.5 h-3.5 text-[#D71920]" />
-                          <span>Hourly Basis</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPricingModel('full_package')}
-                          className={`py-2 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                            pricingModel === 'full_package'
-                              ? 'bg-[#D71920] text-white font-black shadow-xs border border-[#FFC928]'
-                              : 'text-slate-600 hover:text-[#202124]'
-                          }`}
-                        >
-                          <Sparkles className="w-3.5 h-3.5 text-[#FFC928]" />
-                          <span>★ Full Package</span>
-                        </button>
-                      </div>
-
-                      {/* --- A. HOURLY BASIS SPECIFIC FIELDS --- */}
-                      {pricingModel === 'hourly' && (
-                        <div className="space-y-3 pt-1">
-                          {/* Separate field: Price / Hour / Head */}
-                          <div className="bg-amber-50/40 p-3 rounded-2xl border border-amber-200/70 space-y-1">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-bold text-[#202124] flex items-center gap-1">
-                                <DollarSign className="w-3.5 h-3.5 text-[#D71920]" />
-                                <span>Hourly Basis Price (₹ / Hour / Head) *</span>
-                              </label>
-                              <span className="text-[10px] text-slate-500 font-semibold">per worker</span>
-                            </div>
-                            <div className="relative">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-sm text-[#D71920]">₹</span>
-                              <input
-                                type="number"
-                                step={10}
-                                min={50}
-                                value={pricePerHourPerHead}
-                                onChange={(e) => setPricePerHourPerHead(Math.max(50, Number(e.target.value)))}
-                                className="w-full pl-8 pr-3 py-2 text-xs bg-white border border-amber-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40"
-                                placeholder="250"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Stepper: Shift Duration in Hours */}
-                          <div className="bg-amber-50/40 p-3 rounded-2xl border border-amber-200/70 flex items-center justify-between">
-                            <div>
-                              <span className="text-xs font-bold text-[#202124] block">Shift Duration</span>
-                              <span className="text-[10px] text-slate-500">Working hours required</span>
-                            </div>
-                            <div className="flex items-center gap-2 bg-white px-2 py-1 rounded-xl border border-amber-200">
-                              <button
-                                type="button"
-                                onClick={() => setShiftHours(Math.max(1, shiftHours - 1))}
-                                className="w-7 h-7 rounded-lg bg-amber-100/70 flex items-center justify-center text-slate-700 font-bold hover:bg-amber-200 cursor-pointer"
-                              >
-                                <Minus className="w-3 h-3 text-[#D71920]" />
-                              </button>
-                              <span className="text-xs font-black text-[#202124] min-w-12 text-center">
-                                {shiftHours} hrs
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setShiftHours(shiftHours + 1)}
-                                className="w-7 h-7 rounded-lg bg-[#FFC928] flex items-center justify-center text-[#202124] font-bold hover:bg-[#E5A900] cursor-pointer"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Formula calculation badge */}
-                          <div className="bg-amber-100/60 p-2.5 rounded-xl border border-amber-300 text-[11px] text-[#202124] flex items-center justify-between font-bold">
-                            <span className="text-[#A80F18]">Cost per worker:</span>
-                            <span className="font-mono text-[#D71920] font-black">
-                              ₹{pricePerHourPerHead}/hr/head × {shiftHours} hrs = ₹{(pricePerHourPerHead * shiftHours).toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* --- B. FULL PACKAGE SPECIFIC FIELDS --- */}
-                      {pricingModel === 'full_package' && (
-                        <div className="space-y-2.5 pt-1">
-                          <label className="text-[11px] font-bold text-[#202124] block">
-                            Select Turnkey Shift Package (Approx. Time & Fixed Rate)
-                          </label>
-                          <div className="space-y-2">
-                            {SHIFT_PACKAGES.map((pkg) => {
-                              const isPkgSelected = selectedPackageId === pkg.id;
-                              return (
-                                <div
-                                  key={pkg.id}
-                                  onClick={() => setSelectedPackageId(pkg.id)}
-                                  className={`p-3 rounded-2xl border transition-all cursor-pointer ${
-                                    isPkgSelected
-                                      ? 'bg-linear-to-r from-amber-50 to-yellow-50 border-2 border-[#FFC928] shadow-xs'
-                                      : 'bg-slate-50 border-slate-200 hover:bg-slate-100'
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between mb-1">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                                        isPkgSelected ? 'border-[#D71920] bg-[#D71920]' : 'border-slate-400 bg-white'
-                                      }`}>
-                                        {isPkgSelected && <span className="w-1.5 h-1.5 rounded-full bg-[#FFC928]" />}
-                                      </span>
-                                      <h4 className="text-xs font-bold text-[#202124]">{pkg.title}</h4>
-                                    </div>
-                                    <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-md font-extrabold border border-amber-400">
-                                      {pkg.badge}
-                                    </span>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 mb-2 pl-5 leading-tight">{pkg.description}</p>
-                                  
-                                  {/* Approx time taking & Fixed rate display */}
-                                  <div className="flex items-center justify-between text-xs font-bold pl-5 pt-1 border-t border-amber-200/50">
-                                    <span className="text-[#A80F18] flex items-center gap-1 text-[11px]">
-                                      <Clock className="w-3.5 h-3.5 text-[#D71920]" />
-                                      <span>Approx Time: ~{pkg.approxHours} Hours</span>
-                                    </span>
-                                    <span className="text-[#D71920] font-black">
-                                      ₹{pkg.fixedRatePerWorker.toLocaleString()} / worker
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-
-                          {/* If Custom Turnkey Package is selected, allow adjusting hours and rate */}
-                          {selectedPackageId === 'custom_pack' && (
-                            <div className="p-3 bg-white rounded-2xl border border-amber-300 space-y-2 mt-2">
-                              <span className="text-[11px] font-bold text-[#A80F18] block">Custom Package Details</span>
-                              <div className="grid grid-cols-2 gap-2">
-                                <div>
-                                  <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Approx. Work Time (Hrs)</label>
-                                  <input
-                                    type="number"
-                                    step={0.5}
-                                    value={customPackageHours}
-                                    onChange={(e) => setCustomPackageHours(Number(e.target.value))}
-                                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                                  />
-                                </div>
-                                <div>
-                                  <label className="text-[10px] font-bold text-slate-600 block mb-0.5">Package Rate (₹ / head)</label>
-                                  <input
-                                    type="number"
-                                    step={100}
-                                    value={customPackageRate}
-                                    onChange={(e) => setCustomPackageRate(Number(e.target.value))}
-                                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#D71920]"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Section 4: Workers Needed with [-] 3 [+] stepper */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs flex items-center justify-between">
-                      <div>
-                        <label className="text-xs font-bold text-[#202124] block">Workers Needed (Heads)</label>
-                        <span className="text-[11px] text-[#686868]">Total workforce count required</span>
-                      </div>
-                      <div className="flex items-center gap-3 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
-                        <button
-                          type="button"
-                          onClick={() => setRequiredWorkers(Math.max(1, requiredWorkers - 1))}
-                          className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-slate-100 cursor-pointer shadow-2xs font-bold"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-sm font-black text-[#202124] min-w-5 text-center">
-                          {requiredWorkers}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setRequiredWorkers(requiredWorkers + 1)}
-                          className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 hover:bg-slate-100 cursor-pointer shadow-2xs font-bold"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Section 5: Interactive Date & Time Widget Selection */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-3">
-                      <div>
-                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5 mb-2">
-                          <CalendarDays className="w-4 h-4 text-[#D71920]" />
-                          <span>Select Shift Date</span>
-                        </label>
-                        {/* Date selection quick pills */}
-                        <div className="grid grid-cols-4 gap-1.5">
-                          {[
-                            { key: 'today', label: 'Today', date: '2026-10-15', sub: '15 Oct' },
-                            { key: 'tomorrow', label: 'Tomorrow', date: '2026-10-16', sub: '16 Oct' },
-                            { key: 'day_after', label: 'Day After', date: '2026-10-17', sub: '17 Oct' },
-                            { key: 'custom', label: 'Custom', date: jobDate, sub: 'Calendar' },
-                          ].map((d) => (
-                            <button
-                              key={d.key}
-                              type="button"
-                              onClick={() => {
-                                setDateSelection(d.key as any);
-                                if (d.key !== 'custom') setJobDate(d.date);
-                              }}
-                              className={`py-2 px-1 rounded-xl text-center transition-all cursor-pointer ${
-                                dateSelection === d.key
-                                  ? 'bg-[#D71920] text-white shadow-xs'
-                                  : 'bg-slate-50 border border-slate-200 text-[#202124] hover:bg-slate-100'
-                              }`}
-                            >
-                              <span className="text-[11px] font-extrabold block leading-tight">{d.label}</span>
-                              <span className={`text-[9px] block ${dateSelection === d.key ? 'text-white/80' : 'text-slate-500'}`}>
-                                {d.sub}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Custom Date Input when selected */}
-                        {dateSelection === 'custom' && (
-                          <div className="mt-2">
-                            <input
-                              type="date"
-                              value={jobDate}
-                              onChange={(e) => setJobDate(e.target.value)}
-                              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
-                            />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Time Slot Selection Widget */}
-                      <div>
-                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5 mb-2">
-                          <Clock className="w-4 h-4 text-[#D71920]" />
-                          <span>Select Shift Start Time Slot</span>
-                        </label>
-                        <div className="grid grid-cols-3 gap-1.5">
-                          {[
-                            '07:00 AM',
-                            '08:30 AM',
-                            '11:00 AM',
-                            '01:30 PM',
-                            '05:30 PM',
-                            '08:00 PM',
-                          ].map((slot) => {
-                            const isSlotActive = timeSlotSelection === slot;
-                            return (
-                              <button
-                                key={slot}
-                                type="button"
-                                onClick={() => setTimeSlotSelection(slot)}
-                                className={`py-1.5 px-2 rounded-xl text-center text-xs font-extrabold transition-all cursor-pointer ${
-                                  isSlotActive
-                                    ? 'bg-[#FFC928] text-[#202124] shadow-xs'
-                                    : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-slate-100'
-                                }`}
-                              >
-                                {slot}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Scheduled Time Banner */}
-                      <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                        <span className="text-slate-600 font-semibold">Scheduled Shift:</span>
-                        <span className="font-bold text-[#D71920]">
-                          📅 {jobDate} • ⏰ {scheduledTimeDisplay}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Section 6: Live GPS Worksite Location (Zero Manual Filing) */}
-                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
-                          <MapPin className="w-4 h-4 text-[#D71920]" />
-                          <span>Job Site Location (Automatic GPS)</span>
-                        </label>
-                        <span className="text-[10px] font-bold text-[#202124] bg-[#FFC928] px-2 py-0.5 rounded-md flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#D71920] animate-pulse"></span>
-                          {isGpsAutoFilled ? 'GPS Auto-Filled' : 'Custom'}
-                        </span>
-                      </div>
-                      <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-200 space-y-1.5">
-                        <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                          <span>Lat: {gpsCoordinates ? gpsCoordinates.lat.toFixed(4) : '12.9141'}° N, Lng: {gpsCoordinates ? gpsCoordinates.lng.toFixed(4) : '74.8560'}° E</span>
-                          <span className="text-[#D71920] font-semibold">±4m Accuracy</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={jobLocation}
-                            onChange={(e) => {
-                              setJobLocation(e.target.value);
-                              setIsGpsAutoFilled(false);
-                            }}
-                            placeholder="GPS auto-detecting location..."
-                            className="w-full text-xs bg-transparent focus:outline-none font-semibold text-[#202124]"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between pt-1">
-                        <p className="text-[10px] text-slate-500">
-                          ⚡ Zero manual entry required — workers are auto-dispatched to this GPS pin.
-                        </p>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setShowAddressPickerModal(true)}
-                            className="px-2.5 py-1 text-[10px] font-bold text-[#202124] bg-[#FFC928] hover:bg-[#E5A900] rounded-lg flex items-center gap-1 shadow-2xs transition-all cursor-pointer"
-                          >
-                            <MapPin className="w-3 h-3 text-[#D71920]" />
-                            <span>Address Picker & Map</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={autoDetectGps}
-                            disabled={isDetectingGps}
-                            className="px-2.5 py-1 text-[10px] font-bold text-[#D71920] bg-red-50 hover:bg-red-100 rounded-lg flex items-center gap-1 transition-all cursor-pointer"
-                          >
-                            <MapPin className={`w-3 h-3 ${isDetectingGps ? 'animate-spin' : ''}`} />
-                            <span>{isDetectingGps ? 'Detecting...' : 'Re-Detect GPS'}</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Section 7: Required Remarks / Special Notes Field */}
-                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#FFC928] shadow-xs space-y-1.5 focus-within:ring-2 focus-within:ring-[#FFC928]/40 transition-all">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-[#D71920]" />
-                          <span>Additional Remarks / Worksite Notes *</span>
-                        </label>
-                        <span className="text-[10px] font-bold text-[#202124] bg-[#FFC928] px-2 py-0.5 rounded-md">
-                          Required
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">
-                        Specific guidelines, safety equipment required, supervisor contact, gate access, or cargo details.
-                      </p>
-                      <textarea
-                        rows={3}
-                        required
-                        value={remarks}
-                        onChange={(e) => setRemarks(e.target.value)}
-                        placeholder="e.g. Safety boots required. Report to Gate 4 at dock warehouse. Supervisor phone: +91 99001 55432."
-                        className="w-full p-2.5 text-xs bg-amber-50/40 border border-amber-200/90 rounded-2xl focus:outline-none font-medium text-[#202124] focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40"
-                      />
-                    </div>
-
-                    {/* Section 8: Direct UPI QR Payment & Screenshot Proof Upload (Client Feedback Flow) */}
-                    <div className="bg-white p-3.5 rounded-3xl border-2 border-[#FFC928] shadow-xs space-y-3">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
-                          <QrCode className="w-4 h-4 text-[#D71920]" />
-                          <span>UPI & QR Payment with Screenshot Upload *</span>
-                        </label>
-                        <span className="text-[10px] bg-[#FFC928] text-[#202124] font-bold px-2 py-0.5 rounded-md">
-                          Admin Audited
-                        </span>
-                      </div>
-
-                      {/* Payment Method Selector Tabs */}
-                      <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-2xl text-[11px] font-bold text-center">
-                        <button
-                          type="button"
-                          onClick={() => setPaymentSelection('upi_qr')}
-                          className={`py-1.5 rounded-xl cursor-pointer transition-all ${
-                            paymentSelection === 'upi_qr'
-                              ? 'bg-[#D71920] text-white shadow-xs'
-                              : 'text-slate-600 hover:text-black'
-                          }`}
-                        >
-                          UPI QR & Proof
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentSelection('wallet')}
-                          className={`py-1.5 rounded-xl cursor-pointer transition-all ${
-                            paymentSelection === 'wallet'
-                              ? 'bg-[#D71920] text-white shadow-xs'
-                              : 'text-slate-600 hover:text-black'
-                          }`}
-                        >
-                          Prepaid Wallet
-                        </button>
-                        <button
-                          type="button"
-                          disabled={Boolean(selectedCategory.requiresOnlinePaymentOnly)}
-                          onClick={() => {
-                            if (selectedCategory.requiresOnlinePaymentOnly) {
-                              triggerAppRingAlert(`🛡️ Online payment is mandatory for ${selectedCategory.name}. Worksite cash is disabled.`);
-                              return;
-                            }
-                            setPaymentSelection('cash');
-                          }}
-                          className={`py-1.5 rounded-xl transition-all flex items-center justify-center gap-1 ${
-                            selectedCategory.requiresOnlinePaymentOnly
-                              ? 'opacity-40 cursor-not-allowed bg-slate-200/80 text-slate-400'
-                              : paymentSelection === 'cash'
-                              ? 'bg-[#D71920] text-white shadow-xs cursor-pointer'
-                              : 'text-slate-600 hover:text-black cursor-pointer'
-                          }`}
-                          title={selectedCategory.requiresOnlinePaymentOnly ? 'Cash payments are disabled for this category' : 'Pay cash on worksite'}
-                        >
-                          {selectedCategory.requiresOnlinePaymentOnly && <Lock className="w-3 h-3 text-[#D71920]" />}
-                          <span>Worksite Cash</span>
-                        </button>
-                      </div>
-
-                      {/* Mandatory Online Payment Banner if Category requires it */}
-                      {selectedCategory.requiresOnlinePaymentOnly && (
-                        <div className="p-2.5 bg-red-50 border border-red-200 rounded-2xl flex items-center gap-2 text-xs text-[#D71920]">
-                          <ShieldCheck className="w-4 h-4 shrink-0 text-[#D71920]" />
-                          <div>
-                            <span className="font-black block leading-tight">
-                              🛡️ Online Payment Mandatory for {selectedCategory.name}
-                            </span>
-                            <span className="text-[10px] text-slate-600 block mt-0.5">
-                              Platform safety & turnkey verification require payment via UPI QR or Prepaid Wallet. Worksite cash is disabled.
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                      {paymentSelection === 'upi_qr' && (
-                        <div className="space-y-3 pt-1">
-                          {/* Official UPI Details Box */}
-                          <div className="bg-linear-to-r from-amber-50 to-orange-50 p-3 rounded-2xl border border-amber-300 space-y-2">
-                            <div className="flex items-center justify-between text-xs">
-                              <div>
-                                <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-bold">
-                                  Official Platform UPI ID
-                                </span>
-                                <span className="font-mono font-black text-sm text-[#D71920]">
-                                  {PLATFORM_UPI_ID}
-                                </span>
-                                <span className="text-[10px] text-slate-600 block">
-                                  Beneficiary: <strong>{PLATFORM_UPI_NAME} (Kotak / PhonePe)</strong>
-                                </span>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard?.writeText(PLATFORM_UPI_ID);
-                                  triggerAppRingAlert(`UPI ID "${PLATFORM_UPI_ID}" copied to clipboard!`);
-                                }}
-                                className="px-2.5 py-1.5 bg-white hover:bg-amber-100 text-[#D71920] rounded-xl border border-amber-300 text-[10px] font-bold shadow-2xs flex items-center gap-1 cursor-pointer"
-                              >
-                                <Copy className="w-3 h-3" />
-                                <span>Copy UPI</span>
-                              </button>
-                            </div>
-
-                            {/* Dynamic QR Code display */}
-                            <div className="bg-white p-2.5 rounded-xl border border-amber-200 flex flex-col sm:flex-row items-center gap-3">
-                              <div className="w-24 h-24 rounded-lg bg-white border border-slate-200 p-1.5 shadow-2xs shrink-0 flex flex-col items-center justify-center">
-                                <div className="w-full h-full bg-slate-900 rounded-sm p-1 flex flex-col justify-between">
-                                  <div className="flex justify-between">
-                                    <div className="w-5 h-5 bg-white rounded-xs border-2 border-black flex items-center justify-center">
-                                      <div className="w-2 h-2 bg-black"></div>
-                                    </div>
-                                    <div className="w-5 h-5 bg-white rounded-xs border-2 border-black flex items-center justify-center">
-                                      <div className="w-2 h-2 bg-black"></div>
-                                    </div>
-                                  </div>
-                                  <div className="text-center font-mono text-[8px] text-amber-300 font-bold">
-                                    ₹{totalEstimatedCost}
-                                  </div>
-                                  <div className="flex justify-between items-end">
-                                    <div className="w-5 h-5 bg-white rounded-xs border-2 border-black flex items-center justify-center">
-                                      <div className="w-2 h-2 bg-black"></div>
-                                    </div>
-                                    <span className="text-[6px] text-white font-mono">UPI</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <div className="text-xs space-y-1 text-center sm:text-left flex-1">
-                                <span className="font-extrabold text-[#202124] block">Scan via Any UPI App</span>
-                                <p className="text-[10px] text-slate-500 leading-tight">
-                                  Scan using PhonePe, Google Pay, Paytm, BHIM, or Kotak to pay ₹{totalEstimatedCost.toLocaleString()}.
-                                </p>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenUpiApp(totalEstimatedCost, jobTitle)}
-                                  className="w-full mt-1 py-1.5 px-3 bg-[#5f259f] hover:bg-[#4d1d82] text-white text-[11px] font-bold rounded-lg shadow-2xs flex items-center justify-center gap-1.5 cursor-pointer"
-                                >
-                                  <Zap className="w-3.5 h-3.5 text-[#FFC928]" />
-                                  <span>Open PhonePe / UPI Direct</span>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Screenshot Upload Field as Requested by Client */}
-                          <div className="bg-amber-50/50 p-3 rounded-2xl border-2 border-dashed border-[#FFC928] space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
-                                <Upload className="w-3.5 h-3.5 text-[#D71920]" />
-                                <span>Upload Payment Proof Screenshot *</span>
-                              </label>
-                              <span className="text-[10px] bg-red-100 text-[#D71920] font-bold px-2 py-0.5 rounded">
-                                Required
-                              </span>
-                            </div>
-
-                            {paymentScreenshotUrl ? (
-                              <div className="p-2 bg-white rounded-xl border border-amber-300 flex items-center justify-between gap-2 shadow-2xs">
-                                <div className="flex items-center gap-2">
-                                  <img
-                                    src={paymentScreenshotUrl}
-                                    alt="Payment Screenshot Preview"
-                                    className="w-12 h-12 object-cover rounded-lg border border-slate-200"
-                                  />
-                                  <div className="text-xs">
-                                    <span className="font-bold text-[#202124] block truncate max-w-[180px]">
-                                      {paymentScreenshotName || 'Payment_Proof_Receipt.png'}
-                                    </span>
-                                    <span className="text-[10px] text-emerald-600 font-semibold flex items-center gap-1">
-                                      <CheckCircle2 className="w-3 h-3" /> Screenshot Attached
-                                    </span>
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setPaymentScreenshotUrl(null);
-                                    setPaymentScreenshotName(null);
-                                  }}
-                                  className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg text-xs font-bold cursor-pointer"
-                                  title="Remove Screenshot"
-                                >
-                                  ✕
-                                </button>
-                              </div>
-                            ) : (
-                              <div>
-                                <label className="flex flex-col items-center justify-center p-3 rounded-xl bg-white border border-slate-200 hover:border-[#D71920] transition-colors cursor-pointer text-center">
-                                  <Upload className="w-5 h-5 text-[#D71920] mb-1" />
-                                  <span className="text-xs font-bold text-[#202124]">
-                                    Click to Browse Payment Screenshot
-                                  </span>
-                                  <span className="text-[10px] text-slate-500">
-                                    PNG, JPG, WEBP receipt image (Max 10MB)
-                                  </span>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleScreenshotUpload}
-                                    className="hidden"
-                                  />
-                                </label>
-                              </div>
-                            )}
-
-                            {/* UTR / Reference Input */}
-                            <div className="space-y-1 pt-1">
-                              <label className="text-[11px] font-bold text-[#202124] block">
-                                UTR / Transaction Reference ID (12 Digits)
-                              </label>
-                              <input
-                                type="text"
-                                value={upiRefNumber}
-                                onChange={(e) => setUpiRefNumber(e.target.value)}
-                                placeholder="e.g. 428919028371 (From GPay/PhonePe)"
-                                className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
-                              />
-                            </div>
-
-                            <p className="text-[10px] text-[#A80F18] font-medium leading-tight">
-                              🛡️ Admin will verify your payment screenshot. Status will automatically update from Pending to Confirmed upon verification.
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {paymentSelection === 'wallet' && (
-                        <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between text-xs">
-                          <div>
-                            <span className="font-bold text-[#202124] block">Available Wallet Balance:</span>
-                            <span className="text-base font-black text-emerald-700">₹{walletBalance.toLocaleString()}</span>
-                          </div>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
-                            walletBalance >= totalEstimatedCost ? 'bg-[#FFC928] text-[#202124]' : 'bg-red-100 text-[#D71920]'
-                          }`}>
-                            {walletBalance >= totalEstimatedCost ? 'Balance Ready' : 'Needs Top-Up'}
-                          </span>
-                        </div>
-                      )}
-
-                      {paymentSelection === 'cash' && (
-                        <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-xs">
-                          <span className="font-bold text-[#202124] block">Direct Cash on Worksite:</span>
-                          <span className="text-[10px] text-slate-600 block mt-0.5">
-                            Pay workers in cash upon shift completion after verifying End OTP.
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Total Summary Pill - Distinct Gold & Red Banner */}
-                    <div className="bg-linear-to-r from-[#FFFDF0] via-[#FFF9E6] to-[#FFF3CD] p-4 rounded-2xl border-2 border-[#FFC928] shadow-xs flex items-center justify-between text-xs">
-                      <div>
-                        <span className="text-[10px] text-[#A80F18] font-bold uppercase tracking-wider block">Total Estimated Cost</span>
-                        <span className="text-2xl font-black text-[#D71920]">
-                          ₹{totalEstimatedCost.toLocaleString()}
-                        </span>
-                        <span className="text-[10px] text-slate-600 block mt-0.5">
-                          {paymentSelection === 'wallet' && 'Instant debit from employer wallet balance'}
-                          {paymentSelection === 'upi_qr' && 'Pay direct via verified UPI (prnm@kotak)'}
-                          {paymentSelection === 'cash' && 'Pay directly to workers on shift end'}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="text-[11px] font-black text-[#202124] bg-[#FFC928] px-3 py-1 rounded-xl block shadow-2xs border border-amber-400">
-                          {requiredWorkers} Workers × ₹{costPerWorker.toLocaleString()}
-                        </span>
-                        <span className="text-[10px] text-[#A80F18] font-bold mt-1 block">
-                          {pricingModel === 'hourly' ? `${shiftHours} Hours Shift` : `Turnkey ~${packageApproxHours}h`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Publish / Book Button - Primary Red and Yellow CTA */}
-                    <button
-                      type="button"
-                      onClick={promptPublishJob}
-                      className="w-full py-3.5 bg-linear-to-r from-[#D71920] via-[#C6171E] to-[#B7151B] hover:from-[#B7151B] hover:to-[#961217] text-white font-black text-sm rounded-2xl shadow-md border-2 border-[#FFC928] transition-all cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      {paymentSelection === 'wallet' ? (
-                        <>
-                          <Wallet className="w-4 h-4 text-[#FFC928]" />
-                          <span>Debit ₹{totalEstimatedCost.toLocaleString()} & Broadcast Job Order</span>
-                        </>
-                      ) : paymentSelection === 'upi_qr' ? (
-                        <>
-                          <QrCode className="w-4 h-4 text-[#FFC928]" />
-                          <span>Pay ₹{totalEstimatedCost.toLocaleString()} via UPI & Broadcast Job</span>
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-4 h-4 text-[#FFC928]" />
-                          <span>Publish Job Order & Alert Workers (Cash)</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                {/* 3. POST A JOB TAB - CLEAN 6-STEP SECTION TYPES (USER-FRIENDLY WIZARD) */}
+                {activeTab === "post-job" && (
+                  <BookingWizard
+                    categories={categories}
+                    selectedCategory={selectedCategory}
+                    onSelectCategory={(cat) => setSelectedCategory(cat)}
+                    jobLocation={jobLocation}
+                    onLocationChange={(loc) => {
+                      setJobLocation(loc);
+                      setIsGpsAutoFilled(false);
+                    }}
+                    gpsCoordinates={gpsCoordinates}
+                    isGpsAutoFilled={isGpsAutoFilled}
+                    isDetectingGps={isDetectingGps}
+                    onAutoDetectGps={autoDetectGps}
+                    onOpenAddressPicker={() => setShowAddressPickerModal(true)}
+                    serviceZones={serviceZones}
+                    selectedZoneId={selectedZoneId}
+                    onSelectZoneId={(zId) => setSelectedZoneId(zId)}
+                    jobTitle={jobTitle}
+                    onChangeJobTitle={(t) => setJobTitle(t)}
+                    requiredWorkers={requiredWorkers}
+                    onChangeWorkers={(w) => setRequiredWorkers(w)}
+                    pricingModel={pricingModel}
+                    onChangePricingModel={(m) => setPricingModel(m)}
+                    pricePerHourPerHead={pricePerHourPerHead}
+                    onChangePricePerHour={(p) => setPricePerHourPerHead(p)}
+                    shiftHours={shiftHours}
+                    onChangeShiftHours={(h) => setShiftHours(h)}
+                    shiftPackages={SHIFT_PACKAGES}
+                    selectedPackageId={selectedPackageId}
+                    onSelectPackageId={(pkgId) => setSelectedPackageId(pkgId)}
+                    customPackageHours={customPackageHours}
+                    onChangeCustomHours={(h) => setCustomPackageHours(h)}
+                    customPackageRate={customPackageRate}
+                    onChangeCustomRate={(r) => setCustomPackageRate(r)}
+                    dateSelection={dateSelection}
+                    onChangeDateSelection={(d) => setDateSelection(d)}
+                    jobDate={jobDate}
+                    onChangeJobDate={(d) => setJobDate(d)}
+                    timeSlotSelection={timeSlotSelection}
+                    onChangeTimeSlot={(s) => setTimeSlotSelection(s)}
+                    remarks={remarks}
+                    onChangeRemarks={(r) => setRemarks(r)}
+                    paymentSelection={paymentSelection}
+                    onChangePaymentSelection={(m) => setPaymentSelection(m)}
+                    walletBalance={walletBalance}
+                    totalEstimatedCost={totalEstimatedCost}
+                    costPerWorker={costPerWorker}
+                    platformUpiId={PLATFORM_UPI_ID}
+                    paymentScreenshotUrl={paymentScreenshotUrl}
+                    paymentScreenshotName={paymentScreenshotName}
+                    onScreenshotUpload={handleScreenshotUpload}
+                    onRemoveScreenshot={() => {
+                      setPaymentScreenshotUrl(null);
+                      setPaymentScreenshotName(null);
+                    }}
+                    upiRefNumber={upiRefNumber}
+                    onChangeUpiRef={(r) => setUpiRefNumber(r)}
+                    onPublishJob={promptPublishJob}
+                    onAddCustomCategory={() => setShowAddCategoryModal(true)}
+                    onGoBackToHome={() => setActiveTab('home')}
+                  />
                 )}
 
                 {/* 4. MESSAGES TAB */}
@@ -2925,6 +2330,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         setGpsCoordinates({ lat: loc.latitude, lng: loc.longitude });
                         setIsGpsAutoFilled(true);
                         setShowAddressPickerModal(false);
+                        setBookingWizardStep(2);
                         triggerAppRingAlert(`Worksite location applied: ${loc.address}`);
                       }}
                       onClose={() => setShowAddressPickerModal(false)}
