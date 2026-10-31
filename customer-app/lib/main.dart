@@ -3278,6 +3278,17 @@ class CustomerNotificationsScreen extends ConsumerWidget {
         leading: const BackButton(),
         actions: [
           IconButton(
+            tooltip: 'Send Instant Push-Up Notification',
+            icon: const Icon(Icons.notification_add, size: 20),
+            onPressed: () {
+              FCMService().triggerInAppNotification(
+                title: '⚡ Worker Arrived: Order #1045',
+                body: 'Ramesh Kumar (Loading & Unloading) reached Dock 4. Start OTP is ready.',
+                type: 'ARRIVAL',
+              );
+            },
+          ),
+          IconButton(
             tooltip: 'FCM Token & Test',
             icon: const Icon(Icons.key_outlined, size: 20),
             onPressed: () {
