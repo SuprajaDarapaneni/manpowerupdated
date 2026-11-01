@@ -33,15 +33,17 @@ import {
 type AppRoute = 'admin' | 'customer' | 'employee' | 'dual' | 'handover' | 'dev-hub';
 
 function getInitialRoute(): AppRoute {
-  if (typeof window === 'undefined') return 'admin';
+  if (typeof window === 'undefined') return 'dual';
   const params = new URLSearchParams(window.location.search);
   const preview = params.get('preview') || params.get('app') || params.get('view');
   if (preview === 'customer') return 'customer';
   if (preview === 'employee') return 'employee';
-  if (preview === 'dual' || preview === 'split') return 'dual';
+  if (preview === 'admin') return 'admin';
   if (preview === 'handover') return 'handover';
+  if (preview === 'dual' || preview === 'split') return 'dual';
   if (params.get('dev') === 'true' || params.get('hub') === 'true' || preview === 'hub') return 'dev-hub';
-  return 'admin';
+  // Default to dual apps preview as requested
+  return 'dual';
 }
 
 export default function App() {
@@ -195,10 +197,40 @@ export default function App() {
   // =========================================================================
   if (route === 'customer') {
     return (
-      <CustomerApp
-        onBackToAdmin={() => navigateTo('admin')}
-        showExitBar={isDevMode}
-      />
+      <div className="min-h-screen bg-[#121316] text-white flex flex-col antialiased">
+        <div className="bg-[#1a1b1e] border-b border-white/10 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FFC928]" />
+            <span className="font-bold text-xs text-white">Customer App (Employer)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigateTo('dual')}
+              className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer"
+            >
+              📱 Dual Apps View
+            </button>
+            <button
+              onClick={() => navigateTo('employee')}
+              className="px-3 py-1 rounded-lg bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-semibold cursor-pointer"
+            >
+              👷 Employee App
+            </button>
+            <button
+              onClick={() => navigateTo('admin')}
+              className="px-3 py-1 rounded-lg bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold cursor-pointer"
+            >
+              🛡️ Admin
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <CustomerApp
+            onBackToAdmin={() => navigateTo('dual')}
+            showExitBar={false}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -207,10 +239,40 @@ export default function App() {
   // =========================================================================
   if (route === 'employee') {
     return (
-      <EmployeeApp
-        onBackToAdmin={() => navigateTo('admin')}
-        showExitBar={isDevMode}
-      />
+      <div className="min-h-screen bg-[#121316] text-white flex flex-col antialiased">
+        <div className="bg-[#1a1b1e] border-b border-white/10 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#D71920]" />
+            <span className="font-bold text-xs text-white">Employee App (Worker)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigateTo('dual')}
+              className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer"
+            >
+              📱 Dual Apps View
+            </button>
+            <button
+              onClick={() => navigateTo('customer')}
+              className="px-3 py-1 rounded-lg bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold cursor-pointer"
+            >
+              🏢 Customer App
+            </button>
+            <button
+              onClick={() => navigateTo('admin')}
+              className="px-3 py-1 rounded-lg bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold cursor-pointer"
+            >
+              🛡️ Admin
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-4">
+          <EmployeeApp
+            onBackToAdmin={() => navigateTo('dual')}
+            showExitBar={false}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -220,25 +282,55 @@ export default function App() {
   if (route === 'dual') {
     return (
       <div className="min-h-screen bg-[#1E1F23] text-white flex flex-col antialiased">
-        <div className="bg-[#121316] border-b border-white/10 px-6 py-3 flex items-center justify-between sticky top-0 z-40">
+        <div className="bg-[#121316] border-b border-white/10 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
           <div className="flex items-center gap-3">
             <div className="w-7 h-7 rounded-lg bg-[#D71920] flex items-center justify-center font-extrabold text-white text-xs border border-[#FFC928]">
               M
             </div>
             <div>
-              <span className="font-bold text-sm text-white">Dual Mobile Apps Simulation</span>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-white">Dual Mobile Apps Simulation</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFC928] text-[#202124]">
+                  LIVE RADAR
+                </span>
+              </div>
               <p className="text-[10px] text-white/50">Side-by-side Customer & Employee 10-Step Workflow</p>
             </div>
           </div>
-          <button
-            onClick={() => navigateTo('admin')}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold transition-colors cursor-pointer shadow-xs"
-          >
-            <LayoutDashboard className="w-3.5 h-3.5" />
-            <span>Back to Admin Dashboard</span>
-          </button>
+
+          {/* Quick App Switchers */}
+          <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-xl border border-white/10">
+            <button
+              onClick={() => navigateTo('dual')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-[#FFC928] text-[#202124] cursor-pointer shadow-xs"
+            >
+              <Columns className="w-3.5 h-3.5" />
+              <span>Dual Split</span>
+            </button>
+            <button
+              onClick={() => navigateTo('customer')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white/80 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+            >
+              <Smartphone className="w-3.5 h-3.5 text-[#FFC928]" />
+              <span>Customer App</span>
+            </button>
+            <button
+              onClick={() => navigateTo('employee')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white/80 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+            >
+              <HardHat className="w-3.5 h-3.5 text-[#D71920]" />
+              <span>Employee App</span>
+            </button>
+            <button
+              onClick={() => navigateTo('admin')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors border border-white/15"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5 text-[#FFC928]" />
+              <span>Admin Dashboard</span>
+            </button>
+          </div>
         </div>
-        <div className="p-6 md:p-8 max-w-7xl mx-auto flex-1">
+        <div className="p-4 md:p-8 max-w-7xl mx-auto flex-1">
           <DualAppsPreview
             categories={categories}
             workers={workers}
@@ -441,8 +533,8 @@ export default function App() {
         <div className="flex-1">
           <AdminLogin
             onSuccess={() => setAdminAuth(dataService.getAdminAuth())}
-            showPreviews={isDevMode}
-            onOpenPreview={isDevMode ? (target) => navigateTo(target) : undefined}
+            showPreviews={true}
+            onOpenPreview={(target) => navigateTo(target)}
           />
         </div>
       </div>
@@ -470,7 +562,7 @@ export default function App() {
           <AdminHeader
             currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
             onLogout={handleLogout}
-            onOpenPreview={isDevMode ? (mode) => navigateTo(mode) : undefined}
+            onOpenPreview={(mode) => navigateTo(mode)}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
           />
           <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl w-full mx-auto">

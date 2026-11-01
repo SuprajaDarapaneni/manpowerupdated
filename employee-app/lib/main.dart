@@ -5,11 +5,8 @@ import 'package:flutter_ringtone_player_plus/flutter_ringtone_player_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'widgets/worker_create_job_sheet.dart';
-import 'services/worker_notification_service.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await WorkerNotificationService().initialize();
+void main() {
   runApp(const ProviderScope(child: ManPowerLinkWorkerApp()));
 }
 
@@ -853,70 +850,14 @@ final workerNotificationsProvider =
 // ---------------------------------------------------------------------------
 // 3. MAIN APP & ROOT ROUTER
 // ---------------------------------------------------------------------------
-class ManPowerLinkWorkerApp extends ConsumerStatefulWidget {
+class ManPowerLinkWorkerApp extends ConsumerWidget {
   const ManPowerLinkWorkerApp({super.key});
 
   @override
-  ConsumerState<ManPowerLinkWorkerApp> createState() => _ManPowerLinkWorkerAppState();
-}
-
-class _ManPowerLinkWorkerAppState extends ConsumerState<ManPowerLinkWorkerApp> {
-  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
-
-  @override
-  void initState() {
-    super.initState();
-    WorkerNotificationService().notificationsStream.listen((payload) {
-      ref.read(workerNotificationsProvider.notifier).addNotification(
-            title: payload.title,
-            body: payload.body,
-            type: payload.type,
-          );
-
-      HapticFeedback.heavyImpact();
-
-      _scaffoldMessengerKey.currentState?.removeCurrentSnackBar();
-      _scaffoldMessengerKey.currentState?.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(Icons.notifications_active, color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(payload.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
-                    const SizedBox(height: 2),
-                    Text(payload.body, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 11, color: Colors.white70)),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          backgroundColor: WorkerTheme.primaryRed,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(workerAuthProvider);
 
     return MaterialApp(
-      scaffoldMessengerKey: _scaffoldMessengerKey,
       title: 'ManPowerLink Worker',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -4668,17 +4609,6 @@ class WorkerNotificationsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Worker Notifications'),
         actions: [
-          IconButton(
-            tooltip: 'Send Instant Push-Up Alert',
-            icon: const Icon(Icons.notification_add, size: 20),
-            onPressed: () {
-              WorkerNotificationService().triggerNotification(
-                title: '⚡ New Shift Assigned: #1048',
-                body: 'Loading & Unloading at Panambur Dock 4. Daily wage: ₹2,000.',
-                type: 'SHIFT',
-              );
-            },
-          ),
           if (notifications.isNotEmpty) ...[
             TextButton(
               onPressed: () {

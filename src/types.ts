@@ -36,6 +36,19 @@ export interface AdminUser {
   lastLogin: string;
 }
 
+export interface WalletTransaction {
+  id: string;
+  transactionId?: string;
+  type: 'credit' | 'debit';
+  amount: number;
+  comments?: string;
+  description: string;
+  timestamp: string;
+  utrRef?: string;
+  category?: 'refund' | 'penalty' | 'order_payment' | 'wallet_topup' | 'adjustment';
+  adminNote?: string;
+}
+
 export interface ServiceCategory {
   id: string;
   name: string;
@@ -44,6 +57,7 @@ export interface ServiceCategory {
   icon: string;
   bannerUrl?: string;
   isActive: boolean;
+  requiresOnlinePaymentOnly?: boolean; // Employers must pay online only (No cash on worksite)
   minPrice: number;
   maxPrice: number;
   hourlyRate: number;
@@ -148,14 +162,7 @@ export interface Customer {
   totalBookings: number;
   status: 'active' | 'restricted' | 'suspended';
   walletBalance?: number;
-  walletTransactions?: {
-    id: string;
-    type: 'credit' | 'debit';
-    amount: number;
-    description: string;
-    timestamp: string;
-    utrRef?: string;
-  }[];
+  walletTransactions?: WalletTransaction[];
 }
 
 export interface UpiPayoutRequest {

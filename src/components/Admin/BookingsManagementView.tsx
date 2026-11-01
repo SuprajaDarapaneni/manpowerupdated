@@ -50,6 +50,13 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
   const [showRejectModal, setShowRejectModal] = useState<boolean>(false);
   const [rejectionReasonInput, setRejectionReasonInput] = useState<string>('');
 
+  // Refund States
+  const [showRefundModal, setShowRefundModal] = useState<boolean>(false);
+  const [refundAmountInput, setRefundAmountInput] = useState<number>(0);
+  const [refundCommentsInput, setRefundCommentsInput] = useState<string>('');
+  const [refundTxnIdInput, setRefundTxnIdInput] = useState<string>('');
+  const [refundStatusMessage, setRefundStatusMessage] = useState<string | null>(null);
+
   const pendingPaymentCount = bookings.filter(
     (b) => b.paymentVerificationStatus === 'pending' || (b.paymentProofScreenshot && b.paymentStatus === 'pending')
   ).length;
@@ -167,6 +174,40 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
       if (remaining.length > 0) {
         setActiveBookingId(remaining[0].id);
       }
+    }
+  };
+
+  const handleOpenRefundModal = () => {
+    if (!currentBooking) return;
+    setRefundAmountInput(currentBooking.totalEstimatedAmount);
+    setRefundCommentsInput(`Full refund for Order #${currentBooking.orderNumber} (${currentBooking.categoryName})`);
+    setRefundTxnIdInput(`TXN-REF-${currentBooking.orderNumber}`);
+    setRefundStatusMessage(null);
+    setShowRefundModal(true);
+  };
+
+  const handleExecuteRefund = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentBooking) return;
+    if (refundAmountInput <= 0) {
+      alert('Please enter a valid refund amount.');
+      return;
+    }
+    const result = dataService.issueCustomerRefund(
+      currentBooking.customerId,
+      refundAmountInput,
+      refundCommentsInput.trim() || `Refund for Order #${currentBooking.orderNumber}`,
+      refundTxnIdInput.trim()
+    );
+    if (result.success) {
+      dataService.updateBookingStatus(currentBooking.id, 'CANCELLED');
+      setRefundStatusMessage(`Successfully credited ₹${refundAmountInput.toLocaleString()} to employer wallet! Transaction ID: ${result.transaction?.transactionId || refundTxnIdInput}`);
+      setTimeout(() => {
+        setShowRefundModal(false);
+        setRefundStatusMessage(null);
+      }, 1500);
+    } else {
+      alert(result.error || 'Failed to issue refund.');
     }
   };
 
@@ -321,7 +362,7 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
                   <p className="text-xs text-[#686868]">{currentBooking.customerName} ({currentBooking.customerPhone})</p>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs text-[#686868]">Change Status:</span>
                     <select
@@ -338,6 +379,15 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
                       <option value="CANCELLED">CANCELLED</option>
                     </select>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenRefundModal}
+                    className="px-3 py-1 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
+                    title="Credit refund back to employer prepaid wallet"
+                  >
+                    <DollarSign className="w-3.5 h-3.5" />
+                    <span>Issue Refund</span>
+                  </button>
                   <button
                     onClick={() => handleDeleteBooking(currentBooking.id, currentBooking.orderNumber)}
                     className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
@@ -1140,6 +1190,120 @@ export const BookingsManagementView: React.FC<BookingsManagementViewProps> = ({
                 Confirm Rejection
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Issue Refund to Employer Wallet Modal */}
+      {showRefundModal && currentBooking && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-neutral-200">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+              <div className="flex items-center gap-2 text-amber-600">
+                <DollarSign className="w-5 h-5" />
+                <h3 className="text-base font-bold text-[#202124]">Issue Refund to Employer Wallet</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRefundModal(false)}
+                className="text-[#686868] hover:text-[#202124] p-1 rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-[#686868] mt-3 mb-4">
+              Credits funds directly back to <strong className="text-[#202124]">{currentBooking.customerName}</strong>'s prepaid wallet for Order <span className="font-mono text-[#D71920]">{currentBooking.orderNumber}</span>.
+            </p>
+
+            {refundStatusMessage ? (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{refundStatusMessage}</span>
+              </div>
+            ) : (
+              <form onSubmit={handleExecuteRefund} className="space-y-3.5 text-xs">
+                {/* 1. Transaction ID */}
+                <div>
+                  <label className="block font-semibold text-[#202124] mb-1">
+                    Transaction ID *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={refundTxnIdInput}
+                    onChange={(e) => setRefundTxnIdInput(e.target.value)}
+                    placeholder="e.g. TXN-REF-1045"
+                    className="w-full px-3 py-2 font-mono text-xs bg-[#FFFDF8] border border-neutral-300 rounded-lg focus:outline-none focus:border-[#D71920]"
+                  />
+                  <span className="text-[10px] text-[#686868] mt-0.5 block">Audit and ledger reference code</span>
+                </div>
+
+                {/* 2. Transaction Type */}
+                <div>
+                  <label className="block font-semibold text-[#202124] mb-1">
+                    Transaction Type
+                  </label>
+                  <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg flex items-center justify-between text-xs font-bold text-emerald-800">
+                    <span>CREDIT (Employer Wallet Refund)</span>
+                    <span className="text-[10px] bg-emerald-200 px-2 py-0.5 rounded text-emerald-900">+ Balance Addition</span>
+                  </div>
+                </div>
+
+                {/* 3. Transaction Amount */}
+                <div>
+                  <label className="block font-semibold text-[#202124] mb-1">
+                    Transaction Amount (₹) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 font-bold text-[#686868]">₹</span>
+                    <input
+                      type="number"
+                      required
+                      min={1}
+                      max={100000}
+                      value={refundAmountInput}
+                      onChange={(e) => setRefundAmountInput(Number(e.target.value))}
+                      className="w-full pl-7 pr-3 py-2 text-sm font-bold bg-[#FFFDF8] border border-neutral-300 rounded-lg focus:outline-none focus:border-[#D71920]"
+                    />
+                  </div>
+                  <span className="text-[10px] text-[#686868] mt-0.5 block">
+                    Order value: ₹{currentBooking.totalEstimatedAmount.toLocaleString()}
+                  </span>
+                </div>
+
+                {/* 4. Transaction Comments */}
+                <div>
+                  <label className="block font-semibold text-[#202124] mb-1">
+                    Transaction Comments / Reason *
+                  </label>
+                  <textarea
+                    rows={2}
+                    required
+                    value={refundCommentsInput}
+                    onChange={(e) => setRefundCommentsInput(e.target.value)}
+                    placeholder="e.g. Full refund due to customer requested cancellation"
+                    className="w-full p-2.5 text-xs bg-[#FFFDF8] border border-neutral-300 rounded-lg focus:outline-none focus:border-[#D71920]"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100">
+                  <button
+                    type="button"
+                    onClick={() => setShowRefundModal(false)}
+                    className="px-4 py-2 text-xs font-semibold text-[#686868] hover:text-[#202124] cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-lg cursor-pointer shadow-xs transition-colors"
+                  >
+                    Credit ₹{refundAmountInput.toLocaleString()} to Wallet
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

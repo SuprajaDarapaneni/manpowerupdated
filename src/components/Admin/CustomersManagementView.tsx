@@ -14,6 +14,15 @@ import {
   CheckCircle2,
   AlertCircle,
   Eye,
+  Shield,
+  ShieldAlert,
+  ArrowDownRight,
+  ArrowUpRight,
+  Receipt,
+  FileText,
+  Clock,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import { Customer } from '../../types';
 import { dataService } from '../../services/storage';
@@ -27,8 +36,14 @@ export const CustomersManagementView: React.FC<CustomersManagementViewProps> = (
   const [isCreatingCustomer, setIsCreatingCustomer] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [walletModalCustomer, setWalletModalCustomer] = useState<Customer | null>(null);
-  const [rechargeAmount, setRechargeAmount] = useState<number>(1000);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+
+  // Employer Wallet Refund / Penalty / Credit State
+  const [walletActionType, setWalletActionType] = useState<'refund' | 'penalty' | 'credit'>('refund');
+  const [walletTxnId, setWalletTxnId] = useState('');
+  const [walletAmount, setWalletAmount] = useState<number>(1200);
+  const [walletComments, setWalletComments] = useState('');
+  const [walletSuccessMessage, setWalletSuccessMessage] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -127,15 +142,62 @@ export const CustomersManagementView: React.FC<CustomersManagementViewProps> = (
     }
   };
 
-  const handleRechargeWallet = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!walletModalCustomer || rechargeAmount <= 0) return;
-    dataService.rechargeCustomerWallet(
-      walletModalCustomer.id,
-      rechargeAmount,
-      `ADMIN_TOPUP_${Date.now().toString().slice(-6)}`
+  const handleOpenWalletModal = (customer: Customer, defaultAction: 'refund' | 'penalty' | 'credit' = 'refund') => {
+    setWalletModalCustomer(customer);
+    setWalletActionType(defaultAction);
+    const prefix = defaultAction === 'refund' ? 'TXN-REF-' : defaultAction === 'penalty' ? 'TXN-PEN-' : 'TXN-TOP-';
+    setWalletTxnId(`${prefix}${Date.now().toString().slice(-6)}`);
+    setWalletAmount(defaultAction === 'penalty' ? 500 : 1500);
+    setWalletComments(
+      defaultAction === 'refund'
+        ? 'Order cancellation full refund approved by Administrator'
+        : defaultAction === 'penalty'
+        ? 'Worksite late cancellation penalty fee'
+        : 'Direct employer wallet balance top-up'
     );
-    setWalletModalCustomer(null);
+    setWalletSuccessMessage(null);
+  };
+
+  const handleExecuteWalletAction = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!walletModalCustomer || walletAmount <= 0) return;
+
+    if (walletActionType === 'refund') {
+      const res = dataService.issueCustomerRefund(
+        walletModalCustomer.id,
+        walletAmount,
+        walletComments,
+        walletTxnId
+      );
+      if (res.success) {
+        setWalletSuccessMessage(`✓ Refund of ₹${walletAmount.toLocaleString()} credited to ${walletModalCustomer.name}. Txn ID: ${walletTxnId}`);
+        const updated = dataService.getCustomer(walletModalCustomer.id);
+        if (updated) setWalletModalCustomer(updated);
+      }
+    } else if (walletActionType === 'penalty') {
+      const res = dataService.applyCustomerPenaltyDebit(
+        walletModalCustomer.id,
+        walletAmount,
+        walletComments,
+        walletTxnId
+      );
+      if (res.success) {
+        setWalletSuccessMessage(`✓ Penalty of ₹${walletAmount.toLocaleString()} debited from ${walletModalCustomer.name}. Txn ID: ${walletTxnId}`);
+        const updated = dataService.getCustomer(walletModalCustomer.id);
+        if (updated) setWalletModalCustomer(updated);
+      }
+    } else {
+      const res = dataService.rechargeCustomerWallet(
+        walletModalCustomer.id,
+        walletAmount,
+        walletTxnId
+      );
+      if (res.success) {
+        setWalletSuccessMessage(`✓ Wallet credited ₹${walletAmount.toLocaleString()} successfully.`);
+        const updated = dataService.getCustomer(walletModalCustomer.id);
+        if (updated) setWalletModalCustomer(updated);
+      }
+    }
   };
 
   return (
@@ -208,19 +270,17 @@ export const CustomersManagementView: React.FC<CustomersManagementViewProps> = (
                   </td>
                   <td className="py-3 px-4 text-[#202124]">{customer.location.address}</td>
                   <td className="py-3 px-4">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-emerald-700 tabular-nums">
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-emerald-700 text-xs tabular-nums">
                         ₹{(customer.walletBalance || 0).toLocaleString()}
                       </span>
                       <button
-                        onClick={() => {
-                          setWalletModalCustomer(customer);
-                          setRechargeAmount(1000);
-                        }}
-                        className="p-1 text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50 rounded cursor-pointer"
-                        title="Top up wallet"
+                        onClick={() => handleOpenWalletModal(customer, 'refund')}
+                        className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-[#202124] rounded-lg text-[10px] font-bold flex items-center gap-1 cursor-pointer border border-[#FFC928] shadow-2xs transition-colors"
+                        title="Manage Wallet, Issue Refunds & Penalties"
                       >
-                        <Wallet className="w-3.5 h-3.5" />
+                        <Wallet className="w-3 h-3 text-[#D71920]" />
+                        <span>Refund / Wallet</span>
                       </button>
                     </div>
                   </td>
@@ -422,63 +482,341 @@ export const CustomersManagementView: React.FC<CustomersManagementViewProps> = (
         </div>
       )}
 
-      {/* Wallet Top-up Modal */}
+      {/* Comprehensive Employer Wallet, Refund & Penalty Management Center */}
       {walletModalCustomer && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-[#202124]/10">
-            <div className="flex items-center justify-between pb-3 border-b border-[#202124]/10">
-              <div className="flex items-center gap-2">
-                <Wallet className="w-4 h-4 text-[#D71920]" />
-                <h3 className="text-sm font-bold text-[#202124]">Credit Wallet Balance</h3>
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-[#202124]/10 max-h-[92vh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-[#202124]/10 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-[#FFC928] flex items-center justify-center text-[#D71920]">
+                  <Wallet className="w-5 h-5 text-[#D71920]" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-[#202124]">
+                    Employer Wallet, Refunds & Penalties
+                  </h3>
+                  <p className="text-[11px] text-[#686868]">
+                    {walletModalCustomer.name} • {walletModalCustomer.companyName || 'Employer Account'}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setWalletModalCustomer(null)}
-                className="p-1 text-[#686868] hover:text-[#202124] rounded cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleRechargeWallet} className="space-y-4 mt-4 text-xs">
-              <div>
-                <span className="text-[#686868] block">Employer</span>
-                <span className="font-bold text-[#202124]">{walletModalCustomer.name}</span>
-                <span className="text-[11px] text-[#686868] block">
-                  Current Balance: ₹{(walletModalCustomer.walletBalance || 0).toLocaleString()}
-                </span>
+            {/* Scrollable Modal Content */}
+            <div className="flex-1 overflow-y-auto py-3 space-y-4">
+              {/* Wallet Balance Hero Card */}
+              <div className="bg-linear-to-r from-[#1E1F23] to-[#2D3039] p-4 rounded-2xl text-white shadow-md flex items-center justify-between border border-white/10">
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider text-white/70 font-bold block">
+                    Current Employer Wallet Balance
+                  </span>
+                  <span className="text-3xl font-black text-[#FFC928]">
+                    ₹{(walletModalCustomer.walletBalance || 0).toLocaleString()}
+                  </span>
+                  <span className="text-[10px] text-white/50 block mt-0.5">
+                    Available for order auto-debits, refunds, or emergency dispatch settlements
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                    Active Ledger
+                  </span>
+                </div>
               </div>
 
-              <div>
-                <label className="block font-semibold text-[#202124] mb-1">
-                  Credit Amount (₹)
-                </label>
-                <input
-                  type="number"
-                  min="100"
-                  step="100"
-                  required
-                  value={rechargeAmount}
-                  onChange={(e) => setRechargeAmount(Number(e.target.value))}
-                  className="w-full px-3 py-2 text-sm bg-[#FFFDF8] border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920] font-bold"
-                />
+              {/* Success Notification Alert */}
+              {walletSuccessMessage && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2 text-xs text-emerald-800 font-medium">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{walletSuccessMessage}</span>
+                </div>
+              )}
+
+              {/* Action Tabs: Refund vs Penalty vs Top-up */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#202124] uppercase tracking-wider">
+                    Select Administrative Action
+                  </span>
+                  <span className="text-[10px] font-medium text-slate-500">
+                    Audit trail logged automatically
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1 rounded-2xl text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWalletActionType('refund');
+                      setWalletTxnId(`TXN-REF-${Date.now().toString().slice(-6)}`);
+                      setWalletAmount(1500);
+                      setWalletComments('Order cancellation full refund approved by Administrator');
+                      setWalletSuccessMessage(null);
+                    }}
+                    className={`py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      walletActionType === 'refund'
+                        ? 'bg-emerald-600 text-white shadow-xs font-black'
+                        : 'text-slate-600 hover:text-black hover:bg-slate-200'
+                    }`}
+                  >
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                    <span>Issue Refund (Credit)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWalletActionType('penalty');
+                      setWalletTxnId(`TXN-PEN-${Date.now().toString().slice(-6)}`);
+                      setWalletAmount(500);
+                      setWalletComments('Penalty fee deducted for late worksite cancellation / breach');
+                      setWalletSuccessMessage(null);
+                    }}
+                    className={`py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      walletActionType === 'penalty'
+                        ? 'bg-[#D71920] text-white shadow-xs font-black'
+                        : 'text-slate-600 hover:text-black hover:bg-slate-200'
+                    }`}
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>Apply Penalty (Debit)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWalletActionType('credit');
+                      setWalletTxnId(`TXN-TOP-${Date.now().toString().slice(-6)}`);
+                      setWalletAmount(2000);
+                      setWalletComments('Manual wallet credit top-up by Administrator');
+                      setWalletSuccessMessage(null);
+                    }}
+                    className={`py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                      walletActionType === 'credit'
+                        ? 'bg-[#FFC928] text-[#202124] shadow-xs font-black'
+                        : 'text-slate-600 hover:text-black hover:bg-slate-200'
+                    }`}
+                  >
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                    <span>Direct Top-Up (Credit)</span>
+                  </button>
+                </div>
+
+                {/* Form Rendering Exact 4 Fields: Transaction ID, Comments, Type, Amount */}
+                <form
+                  onSubmit={handleExecuteWalletAction}
+                  className={`p-4 rounded-2xl border space-y-3 ${
+                    walletActionType === 'refund'
+                      ? 'bg-emerald-50/50 border-emerald-200'
+                      : walletActionType === 'penalty'
+                      ? 'bg-red-50/50 border-red-200'
+                      : 'bg-amber-50/50 border-amber-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between pb-1 border-b border-black/5">
+                    <span className="text-xs font-black text-[#202124] flex items-center gap-1.5">
+                      <Receipt className="w-3.5 h-3.5 text-[#D71920]" />
+                      <span>
+                        {walletActionType === 'refund' && 'Execute Employer Refund (Credit)'}
+                        {walletActionType === 'penalty' && 'Deduct Compliance Penalty (Debit)'}
+                        {walletActionType === 'credit' && 'Manual Wallet Balance Recharge'}
+                      </span>
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono font-black px-2 py-0.5 rounded-md ${
+                        walletActionType === 'penalty'
+                          ? 'bg-red-200 text-[#D71920]'
+                          : 'bg-emerald-200 text-emerald-800'
+                      }`}
+                    >
+                      TYPE: {walletActionType === 'penalty' ? 'DEBIT (-)' : 'CREDIT (+)'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {/* 1. Transaction ID */}
+                    <div>
+                      <label className="block font-bold text-[#202124] mb-1">
+                        Transaction ID *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={walletTxnId}
+                        onChange={(e) => setWalletTxnId(e.target.value)}
+                        placeholder="e.g. TXN-REF-10452"
+                        className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl font-mono text-xs font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
+                      />
+                    </div>
+
+                    {/* 2. Transaction Amount */}
+                    <div>
+                      <label className="block font-bold text-[#202124] mb-1">
+                        Transaction Amount (₹) *
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 font-black text-[#202124]">
+                          ₹
+                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          step="50"
+                          required
+                          value={walletAmount}
+                          onChange={(e) => setWalletAmount(Number(e.target.value))}
+                          placeholder="1000"
+                          className="w-full pl-7 pr-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-black text-[#202124] focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 3. Transaction Comments */}
+                  <div>
+                    <label className="block font-bold text-[#202124] mb-1 text-xs">
+                      Transaction Comments / Reason *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={walletComments}
+                      onChange={(e) => setWalletComments(e.target.value)}
+                      placeholder="e.g. Full refund for cancelled Order #1045 due to rain, or Penalty for late cancellation"
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium text-[#202124] focus:outline-none focus:border-[#D71920]"
+                    />
+                  </div>
+
+                  {/* Submit Action Button */}
+                  <div className="flex items-center justify-between pt-1">
+                    <p className="text-[10px] text-slate-500">
+                      Balance will update immediately across employer mobile app & central audit log.
+                    </p>
+                    <button
+                      type="submit"
+                      className={`px-4 py-2 font-black text-xs rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                        walletActionType === 'refund'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          : walletActionType === 'penalty'
+                          ? 'bg-[#D71920] hover:bg-[#A80F18] text-white'
+                          : 'bg-[#FFC928] hover:bg-[#E5A900] text-[#202124]'
+                      }`}
+                    >
+                      {walletActionType === 'refund' && (
+                        <>
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          <span>Credit Refund ₹{walletAmount.toLocaleString()}</span>
+                        </>
+                      )}
+                      {walletActionType === 'penalty' && (
+                        <>
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          <span>Deduct Penalty ₹{walletAmount.toLocaleString()}</span>
+                        </>
+                      )}
+                      {walletActionType === 'credit' && (
+                        <>
+                          <ArrowUpRight className="w-3.5 h-3.5" />
+                          <span>Top-Up ₹{walletAmount.toLocaleString()}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setWalletModalCustomer(null)}
-                  className="px-3 py-1.5 text-xs text-[#686868] hover:text-[#202124] cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg cursor-pointer"
-                >
-                  Credit ₹{rechargeAmount.toLocaleString()}
-                </button>
+              {/* Transaction History Table with exact 4 fields */}
+              <div className="space-y-2 pt-2 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-[#202124] uppercase tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#D71920]" />
+                    <span>Employer Wallet Transaction Ledger</span>
+                  </h4>
+                  <span className="text-[10px] font-mono text-slate-500">
+                    {(walletModalCustomer.walletTransactions || []).length} Recorded Transactions
+                  </span>
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs max-h-56 overflow-y-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] uppercase font-bold sticky top-0 z-10">
+                      <tr>
+                        <th className="py-2.5 px-3">Transaction ID</th>
+                        <th className="py-2.5 px-3">Transaction Comments</th>
+                        <th className="py-2.5 px-3 text-center">Type</th>
+                        <th className="py-2.5 px-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(walletModalCustomer.walletTransactions || []).length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-6 text-center text-slate-400 text-xs">
+                            No wallet transactions recorded for this employer yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        walletModalCustomer.walletTransactions?.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-slate-50/70 transition-colors">
+                            <td className="py-2 px-3 font-mono text-[11px] font-bold text-slate-700 whitespace-nowrap">
+                              {tx.transactionId || tx.id}
+                            </td>
+                            <td className="py-2 px-3">
+                              <span className="font-semibold text-[#202124] block leading-tight">
+                                {tx.comments || tx.description}
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-mono block mt-0.5">
+                                {tx.timestamp}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-center whitespace-nowrap">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-mono font-black uppercase ${
+                                  tx.type === 'credit'
+                                    ? 'bg-emerald-100 text-emerald-800'
+                                    : 'bg-red-100 text-[#D71920]'
+                                }`}
+                              >
+                                {tx.type}
+                              </span>
+                            </td>
+                            <td className="py-2 px-3 text-right whitespace-nowrap">
+                              <span
+                                className={`font-mono font-black text-xs ${
+                                  tx.type === 'credit' ? 'text-emerald-700' : 'text-[#D71920]'
+                                }`}
+                              >
+                                {tx.type === 'credit' ? '+' : '-'}₹{tx.amount.toLocaleString()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </form>
+            </div>
+
+            {/* Footer */}
+            <div className="pt-3 border-t border-[#202124]/10 flex items-center justify-between shrink-0">
+              <span className="text-[10px] text-slate-500 font-mono">
+                Employer ID: {walletModalCustomer.id}
+              </span>
+              <button
+                type="button"
+                onClick={() => setWalletModalCustomer(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-[#202124] text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Close Wallet Center
+              </button>
+            </div>
           </div>
         </div>
       )}

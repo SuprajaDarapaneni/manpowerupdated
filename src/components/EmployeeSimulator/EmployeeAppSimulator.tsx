@@ -143,9 +143,28 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
       }
     );
 
+    // 3. Storage subscription watcher for instant job broadcasts
+    const unsubscribeStorage = dataService.subscribe(() => {
+      const all = dataService.getBookings();
+      const newest = all[0];
+      if (newest && (newest.status === 'SEARCHING_EMPLOYEES' || newest.status === 'CONFIRMED')) {
+        // If not already active alert
+        setIncomingJobAlert((prev) => {
+          if (!prev || prev.id !== newest.id) {
+            setIsRinging(true);
+            playIncomingJobRingtone();
+            setActiveAlertToast(`🚨 NEW JOB RADAR: ${newest.categoryName} (₹${newest.offeredPricePerWorker})`);
+            return newest;
+          }
+          return prev;
+        });
+      }
+    });
+
     return () => {
       window.removeEventListener('manpowerlink_new_job_broadcast', handleNewJobBroadcast);
       unsubscribeFirebase();
+      unsubscribeStorage();
     };
   }, [currentWorker.id]);
 
