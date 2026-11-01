@@ -209,7 +209,8 @@ export default function App() {
   );
 
   // =========================================================================
-  // 1. SEPARATE STANDALONE PREVIEW: CUSTOMER APP (?preview=customer or ?app=customer)
+  // 1. SEPARATE STANDALONE APP: CUSTOMER (EMPLOYER)
+  // Accessible cleanly via ?app=customer or ?preview=customer
   // =========================================================================
   if (route === 'customer') {
     if (isStandalone) {
@@ -220,45 +221,15 @@ export default function App() {
       );
     }
     return (
-      <div className="min-h-screen bg-[#121316] text-white flex flex-col antialiased">
-        <div className="bg-[#1a1b1e] border-b border-white/10 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#FFC928]" />
-            <span className="font-bold text-xs text-white">Customer App (Employer)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigateTo('dual')}
-              className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer"
-            >
-              📱 Dual Apps View
-            </button>
-            <button
-              onClick={() => navigateTo('employee')}
-              className="px-3 py-1 rounded-lg bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-semibold cursor-pointer"
-            >
-              👷 Employee App
-            </button>
-            <button
-              onClick={() => navigateTo('admin')}
-              className="px-3 py-1 rounded-lg bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold cursor-pointer"
-            >
-              🛡️ Admin
-            </button>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-center p-4">
-          <CustomerApp
-            onBackToAdmin={() => navigateTo('dual')}
-            showExitBar={false}
-          />
-        </div>
+      <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col items-center justify-center p-0 antialiased">
+        <CustomerApp showExitBar={false} />
       </div>
     );
   }
 
   // =========================================================================
-  // 2. SEPARATE STANDALONE PREVIEW: EMPLOYEE APP (?preview=employee or ?app=employee)
+  // 2. SEPARATE STANDALONE APP: EMPLOYEE (WORKER)
+  // Accessible cleanly via ?app=employee or ?preview=employee
   // =========================================================================
   if (route === 'employee') {
     if (isStandalone) {
@@ -269,39 +240,8 @@ export default function App() {
       );
     }
     return (
-      <div className="min-h-screen bg-[#121316] text-white flex flex-col antialiased">
-        <div className="bg-[#1a1b1e] border-b border-white/10 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#D71920]" />
-            <span className="font-bold text-xs text-white">Employee App (Worker)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigateTo('dual')}
-              className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer"
-            >
-              📱 Dual Apps View
-            </button>
-            <button
-              onClick={() => navigateTo('customer')}
-              className="px-3 py-1 rounded-lg bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold cursor-pointer"
-            >
-              🏢 Customer App
-            </button>
-            <button
-              onClick={() => navigateTo('admin')}
-              className="px-3 py-1 rounded-lg bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold cursor-pointer"
-            >
-              🛡️ Admin
-            </button>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-center p-4">
-          <EmployeeApp
-            onBackToAdmin={() => navigateTo('dual')}
-            showExitBar={false}
-          />
-        </div>
+      <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col items-center justify-center p-0 antialiased">
+        <EmployeeApp showExitBar={false} />
       </div>
     );
   }
