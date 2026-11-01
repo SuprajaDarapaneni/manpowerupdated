@@ -1,0 +1,15 @@
+{
+  "short_name": "ManPowerLink",
+  "name": "ManPowerLink - Temporary Manpower Marketplace Admin",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "64x64 128x128 256x256 512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#FFFDF8",
+  "theme_color": "#D71920",
+  "display": "standalone"
+}

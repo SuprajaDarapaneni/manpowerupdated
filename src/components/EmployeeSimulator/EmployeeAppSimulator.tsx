@@ -400,16 +400,16 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center w-full h-full">
       {/* Mobile Device Frame */}
-      <div className="w-[380px] h-[760px] bg-[#1E1F23] rounded-[48px] p-3 shadow-2xl border-4 border-[#202124]/40 flex flex-col relative overflow-hidden select-none">
+      <div className="w-full max-w-md sm:w-[380px] h-screen sm:h-[760px] bg-[#1E1F23] sm:rounded-[48px] p-0 sm:p-3 shadow-2xl sm:border-4 border-[#202124]/40 flex flex-col relative overflow-hidden select-none">
         {/* Notch */}
-        <div className="w-36 h-4 bg-black rounded-full mx-auto mb-2 shrink-0 flex items-center justify-center">
+        <div className="hidden sm:flex w-36 h-4 bg-black rounded-full mx-auto mb-2 shrink-0 items-center justify-center">
           <div className="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-700" />
         </div>
 
         {/* Screen Canvas */}
-        <div className="flex-1 bg-[#F8FAFC] rounded-[38px] overflow-hidden flex flex-col relative text-[#202124]">
+        <div className="flex-1 bg-[#F8FAFC] sm:rounded-[38px] overflow-hidden flex flex-col relative text-[#202124]">
           {/* Active Audio / Ring Notification Toast */}
           {activeAlertToast && (
             <div className="absolute top-2 left-3 right-3 z-50 bg-[#D71920] text-white px-3.5 py-2.5 rounded-2xl shadow-xl flex items-center gap-2.5 animate-bounce text-xs font-bold">

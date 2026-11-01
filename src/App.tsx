@@ -34,6 +34,16 @@ type AppRoute = 'admin' | 'customer' | 'employee' | 'dual' | 'handover' | 'dev-h
 
 function getInitialRoute(): AppRoute {
   if (typeof window === 'undefined') return 'admin';
+  const customMode = (window as any).__APP_MODE__ || localStorage.getItem('manpower_app_mode');
+  if (customMode === 'customer') return 'customer';
+  if (customMode === 'employee') return 'employee';
+  if (customMode === 'admin') return 'admin';
+
+  const hash = window.location.hash.toLowerCase();
+  if (hash.includes('customer')) return 'customer';
+  if (hash.includes('employee')) return 'employee';
+  if (hash.includes('admin')) return 'admin';
+
   const params = new URLSearchParams(window.location.search);
   const preview = params.get('preview') || params.get('app') || params.get('view');
   if (preview === 'customer') return 'customer';
@@ -192,10 +202,23 @@ export default function App() {
 
 
 
+  const isStandalone = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).get('standalone') === 'true' ||
+    window.location.hash.includes('standalone') ||
+    (window as any).__STANDALONE__ === true
+  );
+
   // =========================================================================
   // 1. SEPARATE STANDALONE PREVIEW: CUSTOMER APP (?preview=customer or ?app=customer)
   // =========================================================================
   if (route === 'customer') {
+    if (isStandalone) {
+      return (
+        <div className="min-h-screen bg-[#FFFDF8] text-[#202124] antialiased">
+          <CustomerApp onBackToAdmin={undefined} showExitBar={false} />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-[#121316] text-white flex flex-col antialiased">
         <div className="bg-[#1a1b1e] border-b border-white/10 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40">
@@ -238,6 +261,13 @@ export default function App() {
   // 2. SEPARATE STANDALONE PREVIEW: EMPLOYEE APP (?preview=employee or ?app=employee)
   // =========================================================================
   if (route === 'employee') {
+    if (isStandalone) {
+      return (
+        <div className="min-h-screen bg-[#FFFDF8] text-[#202124] antialiased">
+          <EmployeeApp onBackToAdmin={undefined} showExitBar={false} />
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-[#121316] text-white flex flex-col antialiased">
         <div className="bg-[#1a1b1e] border-b border-white/10 px-4 py-2.5 flex items-center justify-between sticky top-0 z-40">
