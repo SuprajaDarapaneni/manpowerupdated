@@ -29,6 +29,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { ServiceCategory, ServiceZone } from '../../types';
+import { dataService } from '../../services/storage';
 
 export interface BookingWizardProps {
   categories: ServiceCategory[];
@@ -158,6 +159,16 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
   const [startTime, setStartTime] = useState('09:00 AM');
   const [endTime, setEndTime] = useState('05:00 PM');
   const [copiedUpi, setCopiedUpi] = useState(false);
+  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
+
+  const VERIFIED_SEARCH_PLACES = [
+    { name: 'Udupi Garden Park', address: 'Udupi Garden Park, 17th Main Road, Udupi – 576101', area: 'Udupi Central' },
+    { name: 'Udupi Sri Krishna Matha', address: 'Car Street, Sri Krishna Temple, Udupi – 576101', area: 'Temple Zone' },
+    { name: 'Udupi Service Bus Stand', address: 'Service Bus Stand, Court Road, Udupi – 576101', area: 'Transit Hub' },
+    { name: 'Baikampady Industrial Estate', address: 'Gate 2, Baikampady Industrial Area, Mangalore – 575011', area: 'Industrial Corridor' },
+    { name: 'Panambur Port Terminal', address: 'Container Dock 4, NMPT Panambur, Mangalore – 575010', area: 'Port Berth' },
+    { name: 'Surathkal Cargo Yard', address: 'Surathkal Commercial Junction, NH 66 – 575014', area: 'Commercial Belt' },
+  ];
 
   // Derive city / area label for screen 2 ("Available in Udupi")
   const locationCity = jobLocation.includes('Udupi')
@@ -262,16 +273,88 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
               <p className="text-[11px] text-slate-500">Search area or pinpoint on map</p>
             </div>
 
-            {/* Search Input Field */}
+            {/* Search Input Field with Dropdown Autocomplete */}
             <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={jobLocation}
-                onChange={(e) => onLocationChange(e.target.value)}
-                placeholder="Search area, landmark..."
-                className="w-full pl-10 pr-3 py-2.5 text-xs bg-white border border-slate-200 rounded-2xl shadow-2xs focus:outline-none focus:border-[#D71920] font-medium text-[#202124]"
-              />
+              <div className="relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={jobLocation}
+                  onFocus={() => setShowSearchDropdown(true)}
+                  onChange={(e) => {
+                    onLocationChange(e.target.value);
+                    setShowSearchDropdown(true);
+                  }}
+                  placeholder="Search area, landmark..."
+                  className="w-full pl-10 pr-8 py-2.5 text-xs bg-white border border-slate-200 rounded-2xl shadow-2xs focus:outline-none focus:border-[#D71920] font-medium text-[#202124]"
+                />
+                {jobLocation && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onLocationChange('');
+                      setShowSearchDropdown(true);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Autocomplete Dropdown List */}
+              {showSearchDropdown && (
+                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 z-50 max-h-56 overflow-y-auto">
+                  <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                    <span>Verified Locations</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowSearchDropdown(false)}
+                      className="text-[#D71920] hover:underline"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  {VERIFIED_SEARCH_PLACES.filter((p) =>
+                    !jobLocation || p.name.toLowerCase().includes(jobLocation.toLowerCase()) || p.address.toLowerCase().includes(jobLocation.toLowerCase())
+                  ).map((place) => (
+                    <button
+                      key={place.name}
+                      type="button"
+                      onClick={() => {
+                        onLocationChange(place.address);
+                        setShowSearchDropdown(false);
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-amber-50 flex items-start gap-2.5 transition-colors border-b border-slate-50 last:border-b-0 cursor-pointer"
+                    >
+                      <MapPin className="w-4 h-4 text-[#D71920] shrink-0 mt-0.5" />
+                      <div>
+                        <span className="text-xs font-bold text-[#202124] block">{place.name}</span>
+                        <span className="text-[10px] text-slate-500 leading-tight">{place.address}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quick 1-Tap Location Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar text-[11px]">
+              {[
+                { label: '📍 Udupi Bus Stand', addr: 'Service Bus Stand, Court Road, Udupi – 576101' },
+                { label: '📍 Sri Krishna Matha', addr: 'Car Street, Sri Krishna Temple, Udupi – 576101' },
+                { label: '📍 Baikampady Gate 2', addr: 'Gate 2, Baikampady Industrial Area, Mangalore – 575011' },
+                { label: '📍 Panambur Dock 4', addr: 'Container Dock 4, NMPT Panambur, Mangalore – 575010' },
+              ].map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => onLocationChange(chip.addr)}
+                  className="px-2.5 py-1 rounded-xl bg-slate-100 hover:bg-amber-100 text-[#202124] whitespace-nowrap font-medium text-[10px] transition-colors cursor-pointer border border-slate-200"
+                >
+                  {chip.label}
+                </button>
+              ))}
             </div>
 
             {/* Map Visual with Green Pinpoint & Crosshair Radar */}
@@ -806,75 +889,104 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
               )}
             </div>
 
-            {/* Payment Method Selector */}
-            <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2.5">
-              <label className="text-xs font-bold text-[#202124] block">Payment Method *</label>
-              <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1 rounded-2xl text-[11px] font-bold text-center">
-                <button
-                  type="button"
-                  onClick={() => onChangePaymentSelection('upi_qr')}
-                  className={`py-1.5 rounded-xl cursor-pointer transition-all ${
-                    paymentSelection === 'upi_qr'
-                      ? 'bg-[#D71920] text-white shadow-xs'
-                      : 'text-slate-600 hover:text-black'
-                  }`}
-                >
-                  UPI QR & Proof
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChangePaymentSelection('wallet')}
-                  className={`py-1.5 rounded-xl cursor-pointer transition-all ${
-                    paymentSelection === 'wallet'
-                      ? 'bg-[#D71920] text-white shadow-xs'
-                      : 'text-slate-600 hover:text-black'
-                  }`}
-                >
-                  Prepaid Wallet
-                </button>
-                <button
-                  type="button"
-                  disabled={Boolean(selectedCategory.requiresOnlinePaymentOnly)}
-                  onClick={() => {
-                    if (selectedCategory.requiresOnlinePaymentOnly) return;
-                    onChangePaymentSelection('cash');
-                  }}
-                  className={`py-1.5 rounded-xl transition-all ${
-                    selectedCategory.requiresOnlinePaymentOnly
-                      ? 'opacity-40 cursor-not-allowed bg-slate-200 text-slate-400'
-                      : paymentSelection === 'cash'
-                      ? 'bg-[#D71920] text-white shadow-xs cursor-pointer'
-                      : 'text-slate-600 hover:text-black cursor-pointer'
-                  }`}
-                >
-                  Worksite Cash
-                </button>
+            {/* Payment Method: Direct Admin UPI QR & Proof Verification */}
+            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xs space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center text-[#D71920]">
+                    <QrCode className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-[#202124]">Platform UPI QR Payment</h4>
+                    <p className="text-[10px] text-slate-500">Scan & pay deposit to initiate dispatch</p>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                  Direct Transfer
+                </span>
               </div>
 
-              {/* UPI QR & Screenshot proof */}
-              {paymentSelection === 'upi_qr' && (
-                <div className="space-y-2 pt-1">
-                  <div className="bg-amber-50 p-2.5 rounded-2xl border border-amber-300 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-[10px] text-slate-500 font-bold uppercase block">Platform UPI</span>
-                      <span className="font-mono font-black text-[#D71920] text-xs">{platformUpiId}</span>
+              {/* QR Code and Payee UPI Box */}
+              {(() => {
+                const currentSettings = dataService.getPaymentSettings();
+                const isCustomQr = currentSettings.qrDisplayMode === 'custom_uploaded' && Boolean(currentSettings.qrCodeUrl);
+                const qrImageSrc = isCustomQr
+                  ? currentSettings.qrCodeUrl
+                  : `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                      `upi://pay?pa=${platformUpiId}&pn=${encodeURIComponent(currentSettings.payeeName || 'ManPowerLink')}&am=${totalCalculatedAmount}&cu=INR&tn=ManPowerLink_Job_Deposit`
+                    )}`;
+
+                return (
+                  <div className="bg-[#FFFDF8] p-3 rounded-2xl border border-amber-300 flex flex-col items-center text-center space-y-2">
+                    <div className="p-2 bg-white rounded-xl shadow-xs border border-amber-200">
+                      <img
+                        src={qrImageSrc}
+                        alt="Scan to Pay via UPI"
+                        className="w-36 h-36 object-contain"
+                      />
+                    </div>
+                    {isCustomQr && (
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                        Official Merchant QR Code Attached
+                      </span>
+                    )}
+                    <span className="text-[11px] font-extrabold text-[#D71920]">
+                      Scan with GPay / PhonePe / Paytm / BHIM (₹{totalCalculatedAmount.toLocaleString()})
+                    </span>
+
+                    <div className="w-full bg-white p-2 rounded-xl border border-slate-200 flex items-center justify-between">
+                      <div className="text-left">
+                        <span className="text-[9px] text-slate-400 font-bold uppercase block">Platform UPI ID</span>
+                        <span className="font-mono font-black text-xs text-[#202124]">{platformUpiId}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(platformUpiId);
+                          setCopiedUpi(true);
+                          setTimeout(() => setCopiedUpi(false), 2000);
+                        }}
+                        className="px-2.5 py-1 text-[11px] font-bold bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] rounded-lg cursor-pointer transition-colors"
+                      >
+                        {copiedUpi ? 'Copied! ✓' : 'Copy UPI'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Screenshot Proof Upload Field */}
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-[#202124] block">
+                  Upload Payment Screenshot Proof *
+                </label>
+                {paymentScreenshotUrl ? (
+                  <div className="relative p-2.5 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between">
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <img
+                        src={paymentScreenshotUrl}
+                        alt="Proof Preview"
+                        className="w-10 h-10 rounded-lg object-cover border border-emerald-300 shrink-0"
+                      />
+                      <div className="overflow-hidden">
+                        <span className="text-xs font-bold text-emerald-900 block truncate">
+                          {paymentScreenshotName || 'Screenshot attached'}
+                        </span>
+                        <span className="text-[10px] text-emerald-700">✓ Ready for Admin Verification</span>
+                      </div>
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
-                        navigator.clipboard?.writeText(platformUpiId);
-                        setCopiedUpi(true);
-                        setTimeout(() => setCopiedUpi(false), 2000);
-                      }}
-                      className="px-2 py-1 text-[10px] font-bold bg-[#FFC928] text-[#202124] rounded-lg cursor-pointer"
+                      onClick={onRemoveScreenshot}
+                      className="text-xs font-bold text-red-600 hover:text-red-800 p-1"
                     >
-                      {copiedUpi ? 'Copied!' : 'Copy'}
+                      Remove
                     </button>
                   </div>
-
-                  <label className="flex items-center justify-center p-2.5 rounded-xl bg-slate-50 border border-dashed border-amber-300 hover:border-[#D71920] cursor-pointer text-center text-xs font-bold text-[#202124] gap-1.5">
+                ) : (
+                  <label className="flex items-center justify-center p-3 rounded-xl bg-slate-50 border-2 border-dashed border-amber-300 hover:border-[#D71920] cursor-pointer text-center text-xs font-bold text-[#202124] gap-2 transition-colors">
                     <Upload className="w-4 h-4 text-[#D71920]" />
-                    <span>{paymentScreenshotName ? paymentScreenshotName : 'Attach Payment Screenshot Proof'}</span>
+                    <span>Attach Payment Screenshot</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -882,8 +994,30 @@ export const BookingWizard: React.FC<BookingWizardProps> = ({
                       className="hidden"
                     />
                   </label>
-                </div>
-              )}
+                )}
+              </div>
+
+              {/* 12-Digit UTR Reference Input */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-bold text-[#202124] block">
+                  UPI / Bank Reference (UTR) Number
+                </label>
+                <input
+                  type="text"
+                  value={upiRefNumber}
+                  onChange={(e) => onChangeUpiRef(e.target.value)}
+                  placeholder="e.g. 430291847291 (12 digits)"
+                  className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-[#D71920]"
+                />
+              </div>
+
+              {/* Notice */}
+              <div className="p-2.5 bg-blue-50/70 border border-blue-200/60 rounded-xl text-[10px] text-blue-900 flex items-start gap-1.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <span>
+                  Admin will verify your payment proof screenshot. Status will automatically update to <strong>CONFIRMED</strong> upon verification.
+                </span>
+              </div>
             </div>
           </div>
         )}

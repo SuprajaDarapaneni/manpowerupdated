@@ -33,7 +33,7 @@ import {
 type AppRoute = 'admin' | 'customer' | 'employee' | 'dual' | 'handover' | 'dev-hub';
 
 function getInitialRoute(): AppRoute {
-  if (typeof window === 'undefined') return 'dual';
+  if (typeof window === 'undefined') return 'admin';
   const params = new URLSearchParams(window.location.search);
   const preview = params.get('preview') || params.get('app') || params.get('view');
   if (preview === 'customer') return 'customer';
@@ -42,8 +42,8 @@ function getInitialRoute(): AppRoute {
   if (preview === 'handover') return 'handover';
   if (preview === 'dual' || preview === 'split') return 'dual';
   if (params.get('dev') === 'true' || params.get('hub') === 'true' || preview === 'hub') return 'dev-hub';
-  // Default to dual apps preview as requested
-  return 'dual';
+  // Default for Client Delivery is pure Admin Dashboard
+  return 'admin';
 }
 
 export default function App() {
@@ -533,8 +533,8 @@ export default function App() {
         <div className="flex-1">
           <AdminLogin
             onSuccess={() => setAdminAuth(dataService.getAdminAuth())}
-            showPreviews={true}
-            onOpenPreview={(target) => navigateTo(target)}
+            showPreviews={isDevMode}
+            onOpenPreview={isDevMode ? (target) => navigateTo(target) : undefined}
           />
         </div>
       </div>
@@ -562,7 +562,8 @@ export default function App() {
           <AdminHeader
             currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
             onLogout={handleLogout}
-            onOpenPreview={(mode) => navigateTo(mode)}
+            onOpenPreview={isDevMode ? (mode) => navigateTo(mode) : undefined}
+            showPreviews={isDevMode}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
           />
           <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl w-full mx-auto">

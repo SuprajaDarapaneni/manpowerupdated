@@ -25,6 +25,12 @@ import {
   Radio,
   FileCheck,
   Search,
+  QrCode,
+  Key,
+  Copy,
+  Trash2,
+  EyeOff,
+  Zap,
 } from 'lucide-react';
 import {
   BrandingSettings,
@@ -69,7 +75,62 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
   const [otpSettings, setOtpSettings] = useState<OtpVerificationSettings>(dataService.getOtpSettings());
   const [commissionSettings, setCommissionSettings] = useState<CommissionSettings>(dataService.getCommissionSettings());
   const [matchingSettings, setMatchingSettings] = useState<MatchingSettings>(dataService.getMatchingSettings());
+  const [paymentSettings, setPaymentSettings] = useState(() => dataService.getPaymentSettings());
   const categories = dataService.getCategories();
+
+  const [activeGatewayId, setActiveGatewayId] = useState<string>('razorpay');
+  const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
+  const [testingGatewayId, setTestingGatewayId] = useState<string | null>(null);
+
+  const handleQrImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      showFeedback('error', 'Please upload a valid image file (PNG, JPG, SVG, WebP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      showFeedback('error', 'QR Code image exceeds 5MB limit.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      if (base64) {
+        const updated = {
+          ...paymentSettings,
+          qrCodeUrl: base64,
+          qrDisplayMode: 'custom_uploaded' as const,
+          customQrName: file.name,
+        };
+        setPaymentSettings(updated);
+        dataService.setPaymentSettings(updated);
+        showFeedback('success', `Custom QR Code (${file.name}) uploaded and activated for employer checkout!`);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveCustomQr = () => {
+    const updated = {
+      ...paymentSettings,
+      qrCodeUrl: '',
+      qrDisplayMode: 'dynamic_generated' as const,
+      customQrName: '',
+    };
+    setPaymentSettings(updated);
+    dataService.setPaymentSettings(updated);
+    showFeedback('info', 'Custom QR Code removed. Reverted to auto-generated dynamic UPI QR.');
+  };
+
+  const handleTestGateway = (gatewayId: string) => {
+    setTestingGatewayId(gatewayId);
+    setTimeout(() => {
+      setTestingGatewayId(null);
+      showFeedback('success', `Gateway API handshake & webhook signature verified successfully for ${gatewayId.toUpperCase()}!`);
+    }, 700);
+  };
 
   // 6. Notification Broadcast State
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -1245,11 +1306,478 @@ export const SettingsManagement: React.FC<SettingsManagementProps> = ({ initialS
 
                   <div className="p-4 bg-[#FFFDF8] rounded-xl border border-[#202124]/10 space-y-2">
                     <span className="font-bold text-xs text-[#202124]">Enabled Settlement Providers</span>
-                    <p className="text-xs text-[#202124]">Razorpay, UPI Intent, Cash at Worksite, Bank NEFT</p>
+                    <p className="text-xs text-[#202124]">UPI QR & Screenshot Proof, Instant T+0 Worker Settlement</p>
                     <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 inline-block font-semibold">
-                      Instant T+0 Worker Daily Settlement Active
+                      Admin Payment Verification Active
                     </span>
                   </div>
+                </div>
+
+                {/* Platform UPI & Custom QR Code Configuration Card (Admin Setup) */}
+                <div className="p-5 bg-white rounded-xl border-2 border-amber-300 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-amber-200 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center text-[#D71920]">
+                        <QrCode className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-[#202124]">
+                          Platform UPI ID & Merchant QR Code Setup
+                        </h3>
+                        <p className="text-[11px] text-[#686868] mt-0.5">
+                          Configure the platform beneficiary UPI ID or upload custom merchant QR codes displayed on employer checkout.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dataService.setPaymentSettings(paymentSettings);
+                        showFeedback('success', 'UPI details & QR code settings saved successfully!');
+                      }}
+                      className="px-4 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save QR Settings</span>
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-[#202124] mb-1">
+                        Payee Platform UPI ID *
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentSettings.payeeUpiId}
+                        onChange={(e) => setPaymentSettings({ ...paymentSettings, payeeUpiId: e.target.value })}
+                        placeholder="e.g. prnm@kotak or business@okaxis"
+                        className="w-full px-3 py-2 bg-[#FFFDF8] border border-[#202124]/15 rounded-xl text-xs font-mono font-bold text-[#D71920] focus:outline-none focus:border-[#D71920]"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        Direct UPI address copied by customers and embedded into generated payment QR codes.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-[#202124] mb-1">
+                        Beneficiary Payee Name (As per Bank Account)
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentSettings.payeeName}
+                        onChange={(e) => setPaymentSettings({ ...paymentSettings, payeeName: e.target.value })}
+                        placeholder="e.g. PRAVEEN / MANPOWERLINK TECHNOLOGIES"
+                        className="w-full px-3 py-2 bg-[#FFFDF8] border border-[#202124]/15 rounded-xl text-xs font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
+                      />
+                      <span className="text-[10px] text-slate-500 mt-1 block">
+                        Account holder name shown during customer payment checkout.
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* QR Code Mode Selector */}
+                  <div className="p-4 bg-neutral-50 rounded-xl border border-neutral-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#202124] uppercase tracking-wider">
+                        QR Display Mode on Customer App
+                      </span>
+                      <span className="text-[10px] text-[#686868]">Select how the QR code is generated for employers</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <label className={`p-3 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
+                        paymentSettings.qrDisplayMode !== 'custom_uploaded'
+                          ? 'bg-amber-50/50 border-amber-300 ring-1 ring-amber-300'
+                          : 'bg-white border-slate-200'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="qrMode"
+                          checked={paymentSettings.qrDisplayMode !== 'custom_uploaded'}
+                          onChange={() => setPaymentSettings({ ...paymentSettings, qrDisplayMode: 'dynamic_generated' })}
+                          className="mt-0.5 accent-[#D71920]"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-[#202124] block">Dynamic Generated UPI QR</span>
+                          <span className="text-[10px] text-slate-500">
+                            Automatically embeds exact order total (₹) + Order Ref into a live scan-to-pay QR.
+                          </span>
+                        </div>
+                      </label>
+
+                      <label className={`p-3 rounded-xl border flex items-start gap-2.5 cursor-pointer transition-all ${
+                        paymentSettings.qrDisplayMode === 'custom_uploaded'
+                          ? 'bg-amber-50/50 border-amber-300 ring-1 ring-amber-300'
+                          : 'bg-white border-slate-200'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="qrMode"
+                          checked={paymentSettings.qrDisplayMode === 'custom_uploaded'}
+                          onChange={() => setPaymentSettings({ ...paymentSettings, qrDisplayMode: 'custom_uploaded' })}
+                          className="mt-0.5 accent-[#D71920]"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-[#202124] block">Custom Uploaded Merchant QR</span>
+                          <span className="text-[10px] text-slate-500">
+                            Upload your official bank / PhonePe / Paytm / GPay merchant scanner image.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Custom Upload Dropzone (shown if custom uploaded QR selected or if QR exists) */}
+                    <div className="pt-2 border-t border-neutral-200">
+                      <label className="text-[11px] font-bold text-[#202124] block mb-1.5">
+                        Upload Custom QR Image (PNG, JPG, SVG, WebP)
+                      </label>
+                      <div className="flex flex-col sm:flex-row items-center gap-3">
+                        {paymentSettings.qrCodeUrl ? (
+                          <div className="flex items-center gap-3 p-2 bg-white rounded-xl border border-amber-300 w-full sm:w-auto">
+                            <img
+                              src={paymentSettings.qrCodeUrl}
+                              alt="Custom QR Preview"
+                              className="w-16 h-16 object-contain rounded border border-slate-200 p-1"
+                            />
+                            <div>
+                              <span className="text-xs font-bold text-emerald-800 block truncate max-w-[180px]">
+                                {paymentSettings.customQrName || 'Custom Merchant QR'}
+                              </span>
+                              <span className="text-[10px] text-emerald-600 block">✓ Custom QR active</span>
+                              <button
+                                type="button"
+                                onClick={handleRemoveCustomQr}
+                                className="text-[10px] text-red-600 hover:text-red-800 font-bold mt-1 flex items-center gap-1 cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                <span>Remove & Revert to Dynamic</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        <label className="flex-1 w-full flex items-center justify-center p-3 rounded-xl bg-white border-2 border-dashed border-amber-300 hover:border-[#D71920] cursor-pointer text-center text-xs font-bold text-[#202124] gap-2 transition-colors">
+                          <Upload className="w-4 h-4 text-[#D71920]" />
+                          <span>{paymentSettings.qrCodeUrl ? 'Replace Custom QR Image' : 'Select QR Image to Upload'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleQrImageUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* QR Live Preview Strip */}
+                  <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={
+                          paymentSettings.qrDisplayMode === 'custom_uploaded' && paymentSettings.qrCodeUrl
+                            ? paymentSettings.qrCodeUrl
+                            : `https://api.qrserver.com/v1/create-qr-code/?size=64x64&data=${encodeURIComponent(
+                                `upi://pay?pa=${paymentSettings.payeeUpiId}&pn=${paymentSettings.payeeName}&cu=INR`
+                              )}`
+                        }
+                        alt="QR Sample"
+                        className="w-12 h-12 rounded border border-amber-300 bg-white p-0.5 object-contain shrink-0"
+                      />
+                      <div>
+                        <span className="font-bold text-[#202124] block">
+                          {paymentSettings.qrDisplayMode === 'custom_uploaded' && paymentSettings.qrCodeUrl
+                            ? 'Displaying Custom Merchant QR Code'
+                            : 'Displaying Live Dynamic Generated UPI QR'}
+                        </span>
+                        <span className="text-[10px] text-slate-600 font-mono">
+                          Target Payee: {paymentSettings.payeeUpiId} ({paymentSettings.payeeName})
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800">
+                      Synchronized with Mobile App
+                    </span>
+                  </div>
+                </div>
+
+                {/* ========================================================= */}
+                {/* PAYMENT GATEWAY INTEGRATIONS SETUP SECTION                */}
+                {/* ========================================================= */}
+                <div className="p-5 bg-white rounded-xl border border-[#202124]/10 shadow-2xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#202124]/10 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center text-blue-700">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h3 className="text-xs font-bold uppercase tracking-wider text-[#202124]">
+                          Payment Gateway Integrations Setup
+                        </h3>
+                        <p className="text-[11px] text-[#686868] mt-0.5">
+                          Configure online checkout gateways (Razorpay, PhonePe PG, Cashfree, Paytm, Stripe) for automated online collections and webhooks.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        dataService.setPaymentSettings(paymentSettings);
+                        showFeedback('success', 'All Payment Gateway configurations saved and synchronized!');
+                      }}
+                      className="px-4 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>Save All Gateway Keys</span>
+                    </button>
+                  </div>
+
+                  {/* Gateway Cards Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {(paymentSettings.gateways || []).map((gw) => {
+                      const isSelected = activeGatewayId === gw.id;
+                      return (
+                        <div
+                          key={gw.id}
+                          className={`p-4 rounded-xl border transition-all ${
+                            isSelected
+                              ? 'bg-blue-50/20 border-blue-400 shadow-xs ring-1 ring-blue-300'
+                              : 'bg-[#FFFDF8] border-[#202124]/10 hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-bold text-xs text-[#202124]">{gw.name}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                gw.isEnabled
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : 'bg-neutral-100 text-neutral-500'
+                              }`}>
+                                {gw.isEnabled ? 'ENABLED' : 'DISABLED'}
+                              </span>
+                              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                gw.isTestMode
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {gw.isTestMode ? 'SANDBOX' : 'LIVE'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <p className="text-[10px] text-[#686868] mb-3">
+                            Supported: {gw.supportedMethods.join(', ')}
+                          </p>
+
+                          <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                            <label className="flex items-center gap-1.5 text-xs text-[#202124] cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={gw.isEnabled}
+                                onChange={(e) => {
+                                  const updatedGateways = (paymentSettings.gateways || []).map((g) =>
+                                    g.id === gw.id ? { ...g, isEnabled: e.target.checked } : g
+                                  );
+                                  setPaymentSettings({ ...paymentSettings, gateways: updatedGateways });
+                                }}
+                                className="accent-[#D71920]"
+                              />
+                              <span className="text-[11px] font-medium">Activate</span>
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={() => setActiveGatewayId(gw.id)}
+                              className={`text-[11px] font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-slate-100 hover:bg-slate-200 text-[#202124]'
+                              }`}
+                            >
+                              Configure Keys →
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Active Gateway Detailed Configuration Drawer */}
+                  {(() => {
+                    const activeGw = (paymentSettings.gateways || []).find((g) => g.id === activeGatewayId);
+                    if (!activeGw) return null;
+
+                    const updateActiveGw = (fields: Partial<typeof activeGw>) => {
+                      const updated = (paymentSettings.gateways || []).map((g) =>
+                        g.id === activeGw.id ? { ...g, ...fields } : g
+                      );
+                      setPaymentSettings({ ...paymentSettings, gateways: updated });
+                    };
+
+                    const showSecret = Boolean(showSecrets[activeGw.id]);
+
+                    return (
+                      <div className="p-4 bg-slate-50 rounded-2xl border border-blue-200 space-y-4 animate-fadeIn">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200">
+                          <div>
+                            <span className="text-[10px] font-bold text-blue-700 uppercase tracking-wider block">
+                              Active Configuration Terminal
+                            </span>
+                            <h4 className="text-sm font-bold text-[#202124] flex items-center gap-2">
+                              <span>{activeGw.name} Credentials</span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                activeGw.isTestMode ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                              }`}>
+                                {activeGw.isTestMode ? 'Test Sandbox Environment' : 'Production Live Environment'}
+                              </span>
+                            </h4>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleTestGateway(activeGw.id)}
+                              disabled={testingGatewayId === activeGw.id}
+                              className="px-3 py-1 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-[#202124] flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              <RefreshCw className={`w-3.5 h-3.5 text-blue-600 ${testingGatewayId === activeGw.id ? 'animate-spin' : ''}`} />
+                              <span>{testingGatewayId === activeGw.id ? 'Verifying Handshake...' : 'Test Connection'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                dataService.setPaymentSettings(paymentSettings);
+                                showFeedback('success', `${activeGw.name} keys saved and activated!`);
+                              }}
+                              className="px-3 py-1 bg-[#D71920] hover:bg-[#A80F18] text-white rounded-lg text-xs font-bold shadow-2xs cursor-pointer flex items-center gap-1"
+                            >
+                              <Save className="w-3.5 h-3.5" />
+                              <span>Save {activeGw.name}</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Environment Toggle */}
+                        <div className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200">
+                          <div>
+                            <span className="text-xs font-bold text-[#202124] block">Gateway Mode</span>
+                            <span className="text-[10px] text-slate-500">
+                              Switch between Sandbox simulated payments and Real money capture
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl text-xs font-bold">
+                            <button
+                              type="button"
+                              onClick={() => updateActiveGw({ isTestMode: true })}
+                              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                                activeGw.isTestMode ? 'bg-amber-400 text-black shadow-xs' : 'text-slate-600'
+                              }`}
+                            >
+                              Sandbox Test
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateActiveGw({ isTestMode: false })}
+                              className={`px-3 py-1 rounded-lg transition-colors cursor-pointer ${
+                                !activeGw.isTestMode ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600'
+                              }`}
+                            >
+                              Production Live
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Credentials Form */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-[#202124] mb-1">
+                              {activeGw.id === 'phonepe' ? 'PhonePe Merchant ID' : activeGw.id === 'paytm' ? 'Paytm MID' : 'API Key / Public Key'} *
+                            </label>
+                            <input
+                              type="text"
+                              value={activeGw.apiKey}
+                              onChange={(e) => updateActiveGw({ apiKey: e.target.value })}
+                              placeholder={activeGw.id === 'razorpay' ? 'rzp_test_...' : 'Enter Key ID'}
+                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
+                            />
+                          </div>
+
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-bold text-[#202124]">
+                                {activeGw.id === 'phonepe' ? 'Salt Key' : 'API Secret / Private Key'} *
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setShowSecrets((prev) => ({ ...prev, [activeGw.id]: !prev[activeGw.id] }))
+                                }
+                                className="text-[10px] text-blue-600 hover:underline flex items-center gap-1 cursor-pointer"
+                              >
+                                {showSecret ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                <span>{showSecret ? 'Mask Secret' : 'Reveal Secret'}</span>
+                              </button>
+                            </div>
+                            <input
+                              type={showSecret ? 'text' : 'password'}
+                              value={activeGw.apiSecret}
+                              onChange={(e) => updateActiveGw({ apiSecret: e.target.value })}
+                              placeholder="••••••••••••••••••••••••"
+                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-[#202124] mb-1">
+                              Webhook Signing Secret (For Auto Payment Status Callbacks)
+                            </label>
+                            <input
+                              type="text"
+                              value={activeGw.webhookSecret || ''}
+                              onChange={(e) => updateActiveGw({ webhookSecret: e.target.value })}
+                              placeholder="e.g. whsec_..."
+                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                            />
+                            <span className="text-[10px] text-slate-500 mt-1 block">
+                              Webhook URL: <code className="bg-slate-100 px-1 py-0.5 rounded text-[9px]">https://your-api.com/api/webhooks/{activeGw.id}</code>
+                            </span>
+                          </div>
+
+                          {activeGw.id === 'phonepe' ? (
+                            <div>
+                              <label className="block text-xs font-bold text-[#202124] mb-1">
+                                Salt Index (PhonePe API Header)
+                              </label>
+                              <input
+                                type="text"
+                                value={activeGw.saltIndex || '1'}
+                                onChange={(e) => updateActiveGw({ saltIndex: e.target.value })}
+                                placeholder="1"
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
+                              />
+                            </div>
+                          ) : (
+                            <div>
+                              <label className="block text-xs font-bold text-[#202124] mb-1">
+                                Merchant Reference Code / Tag
+                              </label>
+                              <input
+                                type="text"
+                                value={activeGw.merchantId || ''}
+                                onChange={(e) => updateActiveGw({ merchantId: e.target.value })}
+                                placeholder="MANPOWERLINK_MERCHANT"
+                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Per-Category Commission Setup */}

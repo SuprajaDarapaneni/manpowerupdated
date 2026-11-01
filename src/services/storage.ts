@@ -1781,6 +1781,162 @@ class DataService {
     return { success: true, newBalance: newBal };
   }
 
+  // --- Platform Payment Setup (Admin Configured UPI ID, QR Code & Gateways) ---
+  public getPaymentSettings(): PaymentControlSettings {
+    return this.getItem<PaymentControlSettings>('manpowerlink_payment_settings_v3', {
+      methods: [
+        { id: 'upi_qr', name: 'Direct UPI QR Code', description: 'Scan & pay with GPay, PhonePe, Paytm, BHIM, Kotak', isEnabled: true },
+        { id: 'online_gateway', name: 'Online Payment Gateway (Razorpay/PhonePe)', description: 'Netbanking, Cards, UPI Intent', isEnabled: true },
+      ],
+      payeeUpiId: PLATFORM_UPI_ID,
+      payeeName: PLATFORM_UPI_NAME,
+      qrCodeUrl: '',
+      qrDisplayMode: 'dynamic_generated',
+      customQrName: '',
+      gateways: [
+        {
+          id: 'razorpay',
+          name: 'Razorpay PG',
+          category: 'cards_netbanking',
+          isEnabled: true,
+          isTestMode: true,
+          apiKey: 'rzp_test_904kL893mNq12a',
+          apiSecret: '••••••••••••••••••••••••',
+          webhookSecret: 'whsec_90kda230194819a',
+          supportedMethods: ['UPI', 'Credit/Debit Cards', 'NetBanking', 'Wallets'],
+          status: 'active',
+        },
+        {
+          id: 'phonepe',
+          name: 'PhonePe PG',
+          category: 'upi_pg',
+          isEnabled: false,
+          isTestMode: true,
+          merchantId: 'M23049184029',
+          apiKey: '',
+          apiSecret: '',
+          saltIndex: '1',
+          webhookSecret: '',
+          supportedMethods: ['UPI Intent', 'PhonePe QR', 'UPI Collect'],
+          status: 'needs_keys',
+        },
+        {
+          id: 'cashfree',
+          name: 'Cashfree Payments',
+          category: 'cards_netbanking',
+          isEnabled: false,
+          isTestMode: true,
+          apiKey: '',
+          apiSecret: '',
+          merchantId: 'CF_MERCHANT_902',
+          webhookSecret: '',
+          supportedMethods: ['Instant Settlements', 'UPI', 'Auto-Split'],
+          status: 'needs_keys',
+        },
+        {
+          id: 'paytm',
+          name: 'Paytm Business PG',
+          category: 'upi_pg',
+          isEnabled: false,
+          isTestMode: true,
+          merchantId: 'PAYTM_MID_49201',
+          apiKey: '',
+          apiSecret: '',
+          supportedMethods: ['Paytm Wallet', 'UPI', 'Postpaid'],
+          status: 'needs_keys',
+        },
+        {
+          id: 'stripe',
+          name: 'Stripe Global Payments',
+          category: 'international',
+          isEnabled: false,
+          isTestMode: true,
+          apiKey: 'pk_test_51Mz90K194A...',
+          apiSecret: '',
+          webhookSecret: '',
+          supportedMethods: ['International Cards', 'Apple Pay', 'Google Pay'],
+          status: 'needs_keys',
+        },
+      ],
+      allowCashAtWorksite: false,
+      minRechargeAmount: 100,
+      maxRechargeAmount: 100000,
+      lastUpdatedBy: 'admin@manpowerlink.com',
+      lastUpdatedAt: new Date().toLocaleString(),
+    });
+  }
+
+  public setPaymentSettings(settings: PaymentControlSettings): void {
+    this.setItem('manpowerlink_payment_settings_v2', settings);
+    this.logAudit('Payment Setup Updated', `UPI ID: ${settings.payeeUpiId}, Payee: ${settings.payeeName}`);
+    this.notify();
+  }
+
+  // --- Backend Payment Proof Approval & Verification Section Methods ---
+  public approveBookingPayment(bookingId: string, adminNotes = 'Verified by Admin'): { success: boolean; booking?: Booking } {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return { success: false };
+
+    const updatedBooking: Booking = {
+      ...booking,
+      paymentStatus: 'successful',
+      paymentVerificationStatus: 'verified',
+      status: booking.status === 'SEARCHING_EMPLOYEES' ? 'CONFIRMED' : booking.status,
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit('Payment Proof Approved', `${booking.orderNumber} payment of ₹${booking.totalEstimatedAmount} verified & approved`);
+
+    // Real-time dispatch notification to Customer
+    dispatchFirebaseNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: 'Payment Verified & Approved! 🚀',
+      message: `Your payment of ₹${booking.totalEstimatedAmount.toLocaleString()} for Order ${booking.orderNumber} has been verified and approved by Admin. Workers are dispatched!`,
+      eventType: 'PAYMENT_RECEIVED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+
+    playNotificationSound();
+    return { success: true, booking: updatedBooking };
+  }
+
+  public rejectBookingPayment(bookingId: string, reason: string): { success: boolean; booking?: Booking } {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return { success: false };
+
+    const updatedBooking: Booking = {
+      ...booking,
+      paymentVerificationStatus: 'rejected',
+      paymentRejectionReason: reason,
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit('Payment Proof Rejected', `${booking.orderNumber} rejected: ${reason}`);
+
+    dispatchFirebaseNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: 'Payment Proof Rejected ⚠️',
+      message: `Your payment receipt for Order ${booking.orderNumber} was rejected: ${reason}. Please re-upload a valid payment screenshot.`,
+      eventType: 'PAYMENT_FAILED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'urgent_ring',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+
+    playNotificationSound();
+    return { success: true, booking: updatedBooking };
+  }
+
   // Commission Settings
   public getCommissionSettings(): CommissionSettings {
     return this.getItem(STORAGE_KEYS.COMMISSION, initialCommissionSettings);

@@ -92,6 +92,36 @@ export const HandoverCenter: React.FC<HandoverCenterProps> = ({
         </div>
       )}
 
+      {/* Project Master Documentation Download Card */}
+      <div className="bg-gradient-to-r from-red-50 via-amber-50 to-orange-50 rounded-2xl border-2 border-amber-300 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#D71920] text-white flex items-center justify-center shrink-0 shadow-xs">
+            <FileCode className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-[#D71920]">Project Deliverable</span>
+              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">Complete & Verified</span>
+            </div>
+            <h2 className="text-sm font-bold text-[#202124] mt-0.5">
+              Comprehensive Technical & Architectural Documentation
+            </h2>
+            <p className="text-xs text-[#686868] mt-0.5 max-w-xl">
+              Includes full `/public` and `/src` breakdown, 6-step Employer booking flows, Worker radar bidding, Start/End OTP attendance checks, Admin payment approval pipelines, UPI QR customization, and Payment Gateway integration specs.
+            </p>
+          </div>
+        </div>
+
+        <a
+          href="/PROJECT_DOCUMENTATION.md"
+          download="ManPowerLink_Project_Documentation.md"
+          className="px-4 py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 shrink-0 cursor-pointer border border-[#FFC928]"
+        >
+          <Download className="w-4 h-4" />
+          <span>Download Documentation (.md)</span>
+        </a>
+      </div>
+
       {/* Directory Separation Matrix */}
       <div className="bg-white rounded-2xl border border-[#202124]/10 p-6 shadow-xs">
         <h2 className="text-sm font-bold text-[#202124] mb-3">

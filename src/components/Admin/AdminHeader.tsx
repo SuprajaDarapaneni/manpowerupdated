@@ -18,6 +18,7 @@ interface AdminHeaderProps {
   currentTabName: string;
   onLogout: () => void;
   onOpenPreview?: (route: 'customer' | 'employee' | 'dual' | 'handover') => void;
+  showPreviews?: boolean;
   onToggleMobileSidebar?: () => void;
 }
 
@@ -25,6 +26,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   currentTabName,
   onLogout,
   onOpenPreview,
+  showPreviews = false,
   onToggleMobileSidebar,
 }) => {
   const adminAuth = dataService.getAdminAuth();
@@ -102,8 +104,8 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
       {/* Zone 3: Actions & Admin Profile */}
       <div className="flex items-center gap-3">
-        {/* Apps Preview Dropdown Button (For testing & cross-checking mobile apps) */}
-        {onOpenPreview && (
+        {/* Apps Preview Dropdown Button (ONLY visible in developer/preview mode) */}
+        {showPreviews && onOpenPreview && (
           <div className="relative" ref={menuRef}>
             <button
               onClick={() => setShowPreviewMenu(!showPreviewMenu)}

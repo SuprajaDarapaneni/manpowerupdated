@@ -565,11 +565,29 @@ export interface PaymentMethodSetting {
   icon?: string;
 }
 
+export interface PaymentGatewayConfig {
+  id: string; // 'razorpay' | 'phonepe' | 'cashfree' | 'paytm' | 'stripe'
+  name: string;
+  category: 'upi_pg' | 'cards_netbanking' | 'international';
+  isEnabled: boolean;
+  isTestMode: boolean;
+  apiKey: string;
+  apiSecret: string;
+  merchantId?: string;
+  webhookSecret?: string;
+  saltIndex?: string; // For PhonePe
+  supportedMethods: string[];
+  status: 'active' | 'needs_keys' | 'disabled';
+}
+
 export interface PaymentControlSettings {
   methods: PaymentMethodSetting[];
   payeeUpiId: string; // e.g. 'prnm@kotak'
   payeeName: string;  // e.g. 'PRAVEEN'
-  qrCodeUrl: string;
+  qrCodeUrl: string;  // Custom uploaded QR code image URL or Base64
+  qrDisplayMode?: 'dynamic_generated' | 'custom_uploaded';
+  customQrName?: string;
+  gateways?: PaymentGatewayConfig[];
   allowCashAtWorksite: boolean;
   minRechargeAmount: number;
   maxRechargeAmount: number;
