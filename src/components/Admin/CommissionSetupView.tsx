@@ -15,7 +15,10 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
   const [percentageValue, setPercentageValue] = useState<number>(initialSettings.percentageValue);
   const [fixedValue, setFixedValue] = useState<number>(initialSettings.fixedValue);
   const [payer, setPayer] = useState<'customer' | 'worker' | 'split'>(initialSettings.payer);
-  const [taxRate, setTaxRate] = useState<number>(initialSettings.taxRate);
+  const [taxRate, setTaxRate] = useState<number>(initialSettings.taxRate || 5);
+  const [minWorkerWalletBalance, setMinWorkerWalletBalance] = useState<number>(
+    initialSettings.minWorkerWalletBalance ?? -200
+  );
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   const bookings = dataService.getBookings();
@@ -28,6 +31,7 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
       fixedValue: Number(fixedValue) || 50,
       payer,
       taxRate: Number(taxRate) || 5,
+      minWorkerWalletBalance: Number(minWorkerWalletBalance),
     });
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
@@ -175,20 +179,33 @@ export const CommissionSetupView: React.FC<CommissionSetupViewProps> = ({
                 </div>
               </div>
 
-              {/* Payer Configuration */}
-              <div>
-                <label className="block text-xs font-semibold text-[#202124] mb-1.5">
-                  Commission Payer Attribution
-                </label>
-                <select
-                  value={payer}
-                  onChange={(e) => setPayer(e.target.value as any)}
-                  className="w-full px-3 py-2 text-xs bg-[#FFFDF8] border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920]"
-                >
-                  <option value="customer">Employer / Customer pays platform fee on booking</option>
-                  <option value="worker">Deducted from Worker final payout settlement</option>
-                  <option value="split">Split equally between Customer & Worker (50/50)</option>
-                </select>
+              {/* Minimum Worker Wallet Balance to Receive Requests */}
+              <div className="bg-[#FFFDF8] p-4 rounded-xl border border-[#202124]/15 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-[#202124]">
+                    Minimum Worker Wallet Balance to Receive Requests (₹)
+                  </label>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    minWorkerWalletBalance < 0 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+                  }`}>
+                    {minWorkerWalletBalance < 0 ? `Allows Overdraft (₹${minWorkerWalletBalance})` : `Prepaid Required (₹${minWorkerWalletBalance})`}
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={minWorkerWalletBalance}
+                    onChange={(e) => setMinWorkerWalletBalance(Number(e.target.value))}
+                    placeholder="e.g. -200 or 100"
+                    className="w-full px-3 py-2 text-sm bg-white border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920]"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-[#686868]">
+                    INR
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#686868] leading-relaxed">
+                  Admin set minimum balance for workers to receive and accept shift requests. Can be a <strong>negative amount</strong> (e.g. <code className="bg-slate-100 px-1 py-0.5 rounded text-[#D71920]">-200</code> to allow workers to accept shifts up to ₹200 overdraft credit) or a <strong>positive amount</strong> (e.g. <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-700">100</code> requiring upfront prepaid wallet balance). Workers below this threshold cannot receive shifts and must recharge.
+                </p>
               </div>
 
               <button

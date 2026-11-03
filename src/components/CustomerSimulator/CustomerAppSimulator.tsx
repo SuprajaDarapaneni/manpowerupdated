@@ -47,8 +47,12 @@ import {
   Zap,
   Upload,
   Image,
+  Trash2,
+  Loader2,
+  Building2,
+  RefreshCw,
 } from 'lucide-react';
-import { Booking, ServiceCategory, Worker, StatusTimelineNode, Customer } from '../../types';
+import { Booking, ServiceCategory, Worker, StatusTimelineNode, Customer, ChatMessage } from '../../types';
 import {
   dataService,
   playNotificationSound,
@@ -143,8 +147,8 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     });
   }, []);
 
-  // Authentication State
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  // Authentication State - Starts at Sign In Screen first
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authScreen, setAuthScreen] = useState<CustomerAuthScreen>('sign-in');
   const [loginPhoneOrEmail, setLoginPhoneOrEmail] = useState('apex@logistics.in');
   const [loginPassword, setLoginPassword] = useState('Customer@2026');
@@ -183,6 +187,29 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   const [addMoneyAmount, setAddMoneyAmount] = useState(2500);
   const [addMoneyUtr, setAddMoneyUtr] = useState('');
   const [copiedUpi, setCopiedUpi] = useState(false);
+
+  // Play Store Compliance State (Terms, Privacy Policy, Account Deletion)
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Real App Top Push Notification Banner (Zomato / Swiggy Style)
+  const [pushBanner, setPushBanner] = useState<{
+    title: string;
+    message: string;
+    timestamp: string;
+    type?: 'order' | 'payment' | 'system';
+  } | null>(null);
+
+  // Authentic Payment Gateway Recharge States
+  const [rechargeMethod, setRechargeMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
+  const [selectedUpiApp, setSelectedUpiApp] = useState<'phonepe' | 'gpay' | 'paytm' | 'bhim'>('phonepe');
+  const [isProcessingRecharge, setIsProcessingRecharge] = useState(false);
+  const [cardNumber, setCardNumber] = useState('4532 •••• •••• 8821');
+  const [cardExpiry, setCardExpiry] = useState('08/28');
+  const [cardCvv, setCardCvv] = useState('321');
+  const [selectedBank, setSelectedBank] = useState('HDFC Bank');
+  const [utrValidationError, setUtrValidationError] = useState<string | null>(null);
 
   // Service Zone Selection
   const [selectedZoneId, setSelectedZoneId] = useState<string>('zone-1');
@@ -294,7 +321,22 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   // Audio / Alert Notification State
   const [activeAlertToast, setActiveAlertToast] = useState<string | null>(null);
 
+  const showRealAppPush = (title: string, message: string, type: 'order' | 'payment' | 'system' = 'order') => {
+    if (!isAuthenticated) return;
+    playNotificationSound();
+    setPushBanner({
+      title,
+      message,
+      timestamp: 'Just now',
+      type,
+    });
+    setTimeout(() => {
+      setPushBanner((curr) => (curr?.title === title ? null : curr));
+    }, 6000);
+  };
+
   const triggerAppRingAlert = (message: string) => {
+    if (!isAuthenticated) return;
     playNotificationSound();
     setActiveAlertToast(message);
     setTimeout(() => {
@@ -345,12 +387,10 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     bookings.find((b) => b.status === 'CONFIRMED' || b.status === 'WORK_IN_PROGRESS') ||
     bookings[0];
 
-  // Messaging State
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'customer' | 'worker'; text: string; time: string }>>([
-    { sender: 'worker', text: 'Namaste sir! I have accepted the container unloading job for tomorrow.', time: '10:15 AM' },
-    { sender: 'customer', text: 'Great Ramesh. Please arrive at Gate 4 by 8:45 AM for pass registration.', time: '10:18 AM' },
-    { sender: 'worker', text: 'Will be there on time with safety gear. Please have the Start OTP ready.', time: '10:20 AM' },
-  ]);
+  // Messaging State synced with real-time storage
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    return dataService.getChatMessages();
+  });
   const [inputMessage, setInputMessage] = useState('');
 
   // Sync wallet balance on data changes
@@ -364,6 +404,32 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     });
     return unsubscribe;
   }, []);
+
+  // Real-time Chat message listener from Workers
+  useEffect(() => {
+    const handleChatMessage = (e: any) => {
+      if (!isAuthenticated) return;
+      const msg = e.detail as ChatMessage;
+      if (!msg) return;
+      if (msg.recipientRole === 'customer') {
+        playNotificationSound();
+        showRealAppPush(
+          `💬 ${msg.senderName} (${msg.orderNumber || 'Shift'})`,
+          msg.text,
+          'system'
+        );
+        setChatMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    };
+
+    window.addEventListener('manpowerlink_chat_message', handleChatMessage);
+    return () => {
+      window.removeEventListener('manpowerlink_chat_message', handleChatMessage);
+    };
+  }, [isAuthenticated]);
 
   // Intercept back button to navigate in-app instead of closing app/preview
   useEffect(() => {
@@ -552,18 +618,80 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
 
   const scheduledTimeDisplay = timeSlotSelection === 'custom' ? customTime : timeSlotSelection;
 
-  // Add Money to Wallet Handler via Direct PhonePe / UPI QR
+  // Authentic Multi-Method Payment Gateway Recharge
   const handleVerifyAddMoney = (e: React.FormEvent) => {
     e.preventDefault();
-    if (addMoneyAmount <= 0) return;
-    const utr = addMoneyUtr.trim() || `UPI/${Date.now().toString().slice(-8)}`;
-    const result = dataService.rechargeCustomerWallet('c-1', addMoneyAmount, utr);
-    if (result.success) {
-      setWalletBalance(result.newBalance);
-      setShowAddMoneyModal(false);
-      setAddMoneyUtr('');
-      triggerAppRingAlert(`₹${addMoneyAmount.toLocaleString()} added to your wallet via PhonePe UPI! New balance: ₹${result.newBalance.toLocaleString()}`);
+    setUtrValidationError(null);
+    if (addMoneyAmount < 100) {
+      setUtrValidationError('Minimum recharge amount is ₹100.');
+      return;
     }
+
+    if (rechargeMethod === 'upi') {
+      const cleanUtr = addMoneyUtr.trim();
+      if (!cleanUtr || cleanUtr.length < 8) {
+        setUtrValidationError('Please enter a valid 12-digit UPI Reference / UTR Number from your PhonePe/GPay receipt.');
+        return;
+      }
+      setIsProcessingRecharge(true);
+      setTimeout(() => {
+        setIsProcessingRecharge(false);
+        const result = dataService.rechargeCustomerWallet('c-1', addMoneyAmount, `UPI/${cleanUtr}`);
+        if (result.success) {
+          setWalletBalance(result.newBalance);
+          setShowAddMoneyModal(false);
+          setAddMoneyUtr('');
+          showRealAppPush(
+            'Wallet Recharged Successfully',
+            `₹${addMoneyAmount.toLocaleString()} credited via UPI (UTR: ${cleanUtr}). New balance: ₹${result.newBalance.toLocaleString()}`,
+            'payment'
+          );
+        }
+      }, 700);
+    } else if (rechargeMethod === 'card') {
+      setIsProcessingRecharge(true);
+      setTimeout(() => {
+        setIsProcessingRecharge(false);
+        const cardRef = `CARD-${Date.now().toString().slice(-6)}`;
+        const result = dataService.rechargeCustomerWallet('c-1', addMoneyAmount, cardRef);
+        if (result.success) {
+          setWalletBalance(result.newBalance);
+          setShowAddMoneyModal(false);
+          showRealAppPush(
+            'Card Payment Successful',
+            `₹${addMoneyAmount.toLocaleString()} credited via Card Gateway. New balance: ₹${result.newBalance.toLocaleString()}`,
+            'payment'
+          );
+        }
+      }, 900);
+    } else if (rechargeMethod === 'netbanking') {
+      setIsProcessingRecharge(true);
+      setTimeout(() => {
+        setIsProcessingRecharge(false);
+        const nbRef = `NB-${Date.now().toString().slice(-6)}`;
+        const result = dataService.rechargeCustomerWallet('c-1', addMoneyAmount, nbRef);
+        if (result.success) {
+          setWalletBalance(result.newBalance);
+          setShowAddMoneyModal(false);
+          showRealAppPush(
+            'Net Banking Top-up Successful',
+            `₹${addMoneyAmount.toLocaleString()} credited via ${selectedBank}. New balance: ₹${result.newBalance.toLocaleString()}`,
+            'payment'
+          );
+        }
+      }, 900);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    setIsDeletingAccount(true);
+    setTimeout(() => {
+      setIsDeletingAccount(false);
+      setShowDeleteAccountModal(false);
+      setIsAuthenticated(false);
+      setAuthScreen('sign-in');
+      setAuthError('Your employer account and all company telemetry data have been permanently erased.');
+    }, 800);
   };
 
   // Direct PhonePe QR Order Payment Handler
@@ -609,11 +737,24 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       }
     }
 
+    // Derive city dynamically from jobLocation
+    let derivedCity = 'Karnataka, India';
+    const locLower = (jobLocation || '').toLowerCase();
+    if (locLower.includes('bangalore') || locLower.includes('bengaluru')) {
+      derivedCity = 'Bengaluru, Karnataka';
+    } else if (locLower.includes('udupi')) {
+      derivedCity = 'Udupi, Karnataka';
+    } else if (locLower.includes('mangalore')) {
+      derivedCity = 'Mangalore, Karnataka';
+    } else if (locLower.includes('mysore')) {
+      derivedCity = 'Mysore, Karnataka';
+    } else if (locLower.includes('mumbai')) {
+      derivedCity = 'Mumbai, Maharashtra';
+    }
+
     setPendingConfirmAction({
       title: 'Confirm Job Order Broadcast',
-      description: paymentSelection === 'upi_qr'
-        ? `Broadcast "${jobTitle}" for ${requiredWorkers} workers (Total: ₹${totalEstimatedCost.toLocaleString()}). Payment proof will be submitted to Admin for verification.`
-        : `Broadcast "${jobTitle}" for ${requiredWorkers} workers (${pricingModel === 'hourly' ? `${shiftHours} hrs @ ₹${pricePerHourPerHead}/hr/head` : `${currentPackage.title} ~${packageApproxHours} hrs`}) totaling ₹${totalEstimatedCost.toLocaleString()}?`,
+      description: `Broadcast "${jobTitle}" for ${requiredWorkers} workers (Total: ₹${totalEstimatedCost.toLocaleString()}) to nearby workers? Payment is settled at the end of work upon End-OTP verification.`,
       onConfirm: () => {
         setPendingConfirmAction(null);
         executePublishJob(upiRefNumber || directPaymentUtr);
@@ -638,7 +779,22 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       }
     }
 
-    const finalUpiRef = upiRef || upiRefNumber.trim() || `UPI/QR-${Date.now().toString().slice(-6)}`;
+    const finalUpiRef = upiRef || upiRefNumber.trim() || `UPI/POST-${Date.now().toString().slice(-6)}`;
+
+    // Derive city dynamically from jobLocation
+    let derivedCity = 'Karnataka, India';
+    const locLower = (jobLocation || '').toLowerCase();
+    if (locLower.includes('bangalore') || locLower.includes('bengaluru')) {
+      derivedCity = 'Bengaluru, Karnataka';
+    } else if (locLower.includes('udupi')) {
+      derivedCity = 'Udupi, Karnataka';
+    } else if (locLower.includes('mangalore')) {
+      derivedCity = 'Mangalore, Karnataka';
+    } else if (locLower.includes('mysore')) {
+      derivedCity = 'Mysore, Karnataka';
+    } else if (locLower.includes('mumbai')) {
+      derivedCity = 'Mumbai, Maharashtra';
+    }
 
     const newBooking = dataService.createBooking({
       customerId: 'c-1',
@@ -665,16 +821,16 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       paymentMode: paymentSelection === 'wallet' ? 'wallet' : paymentSelection === 'upi_qr' ? 'upi' : 'cash',
       paymentMethod: paymentSelection === 'wallet' ? 'wallet' : paymentSelection === 'upi_qr' ? 'online' : 'cash',
       paymentProofScreenshot: paymentScreenshotUrl || undefined,
-      paymentVerificationStatus: paymentScreenshotUrl ? 'pending' : (paymentSelection === 'wallet' ? 'verified' : 'pending'),
+      paymentVerificationStatus: 'pending', // Settled at end of work
       walletDebited,
       upiTransactionRef: paymentSelection === 'upi_qr' ? finalUpiRef : undefined,
       zoneId: selectedZoneId,
-      zoneName: serviceZones.find((z) => z.id === selectedZoneId)?.name || 'Baikampady Industrial Hub',
+      zoneName: serviceZones.find((z) => z.id === selectedZoneId)?.name || 'Local Worksite Area',
       workLocation: {
-        address: jobLocation,
-        city: 'Mangalore, Karnataka',
-        lat: gpsCoordinates ? gpsCoordinates.lat : 12.914,
-        lng: gpsCoordinates ? gpsCoordinates.lng : 74.856,
+        address: jobLocation || 'Selected Worksite Location',
+        city: derivedCity,
+        lat: gpsCoordinates ? gpsCoordinates.lat : 12.9716,
+        lng: gpsCoordinates ? gpsCoordinates.lng : 77.5946,
       },
     });
 
@@ -714,29 +870,85 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        sender: 'customer',
-        text: inputMessage.trim(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
+    const targetBooking = selectedBookingForTimeline || activeBooking || bookings[0];
+    const newMsg = dataService.sendChatMessage({
+      bookingId: targetBooking?.id || 'b-1',
+      orderNumber: targetBooking?.orderNumber || 'Order #1045',
+      sender: 'customer',
+      senderName: customer?.name || 'Apex Logistics Corp',
+      recipientRole: 'employee',
+      text: inputMessage.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+    setChatMessages((prev) => {
+      if (prev.some((m) => m.id === newMsg.id)) return prev;
+      return [...prev, newMsg];
+    });
     setInputMessage('');
-    triggerAppRingAlert('Message sent to worker.');
+    triggerAppRingAlert('Message delivered to worker with push notification.');
   };
 
+  const isStandalone = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).get('standalone') === 'true' ||
+    window.location.hash.includes('customer') ||
+    window.innerWidth <= 640
+  );
+
   return (
-    <div className="flex flex-col items-center w-full h-full">
+    <div className={`flex flex-col items-center w-full h-full max-h-[100dvh] overflow-hidden ${isStandalone ? 'p-0' : ''}`}>
       {/* Mobile Device Frame */}
-      <div className="w-full max-w-md sm:w-[380px] h-screen sm:h-[760px] bg-[#1E1F23] sm:rounded-[48px] p-0 sm:p-3 shadow-2xl sm:border-4 border-[#202124]/40 flex flex-col relative overflow-hidden select-none">
-        {/* Notch / Dynamic Island */}
-        <div className="hidden sm:flex w-36 h-4 bg-black rounded-full mx-auto mb-2 shrink-0 items-center justify-center">
-          <div className="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-700" />
-        </div>
+      <div className={
+        isStandalone
+          ? "w-full h-full h-[100dvh] max-h-[100dvh] bg-[#FFFDF8] flex flex-col relative overflow-hidden select-none"
+          : "w-full max-w-md sm:w-[410px] h-screen sm:h-[820px] max-h-[100dvh] bg-[#1E1F23] sm:rounded-[44px] p-0 sm:p-2.5 shadow-2xl sm:border-4 border-[#202124]/40 flex flex-col relative overflow-hidden select-none"
+      }>
+        {/* Notch / Dynamic Island (only in desktop preview mockup) */}
+        {!isStandalone && (
+          <div className="hidden sm:flex w-36 h-4 bg-black rounded-full mx-auto mb-1.5 shrink-0 items-center justify-center">
+            <div className="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-700" />
+          </div>
+        )}
 
         {/* Screen Canvas */}
-        <div className="flex-1 bg-[#F8FAFC] sm:rounded-[38px] overflow-hidden flex flex-col relative text-[#202124]">
+        <div className={`flex-1 min-h-0 bg-[#F8FAFC] ${isStandalone ? 'rounded-none' : 'sm:rounded-[36px]'} overflow-hidden flex flex-col relative text-[#202124]`}>
+          {/* Real App Push Notification Dropdown (Swiggy / Zomato Style) */}
+          {pushBanner && (
+            <div className="absolute top-2 left-2 right-2 z-50 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
+              <div
+                onClick={() => {
+                  if (pushBanner.type === 'system' || pushBanner.title.includes('Message') || pushBanner.message.includes('Message')) {
+                    navigateToTab('messages');
+                  } else {
+                    navigateToTab('bookings');
+                  }
+                  setPushBanner(null);
+                }}
+                className="bg-[#1E1F23]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-2xl border border-[#FFC928]/40 flex items-start gap-3 cursor-pointer hover:bg-[#1E1F23] transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#D71920] to-[#A80F18] border border-[#FFC928] flex items-center justify-center shrink-0 shadow-md">
+                  <Bell className="w-4 h-4 text-[#FFC928] animate-bounce" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-[#FFC928] uppercase tracking-wider">
+                      {branding.appName || 'ManPowerLink'} Dispatch
+                    </span>
+                    <span className="text-[9px] text-white/50">{pushBanner.timestamp}</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-white line-clamp-1 mt-0.5">{pushBanner.title}</h4>
+                  <p className="text-[11px] text-white/80 line-clamp-2 leading-snug mt-0.5">{pushBanner.message}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPushBanner(null)}
+                  className="text-white/40 hover:text-white p-1 text-xs shrink-0 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Active Audio / Ring Notification Toast */}
           {activeAlertToast && (
             <div className="absolute top-2 left-3 right-3 z-50 bg-[#D71920] text-white px-3.5 py-2.5 rounded-2xl shadow-xl flex items-center gap-2.5 animate-bounce text-xs font-bold">
@@ -744,6 +956,94 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 <Volume2 className="w-3.5 h-3.5 text-white animate-pulse" />
               </div>
               <span className="flex-1">{activeAlertToast}</span>
+            </div>
+          )}
+
+          {/* Delete Account Modal (Google Play Store Compliance) */}
+          {showDeleteAccountModal && (
+            <div className="absolute inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 shadow-2xl max-w-xs w-full space-y-3.5 border border-red-200">
+                <div className="w-12 h-12 rounded-2xl bg-red-100 text-[#D71920] flex items-center justify-center mx-auto">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div className="text-center">
+                  <h4 className="text-sm font-black text-slate-900">Delete Employer Account</h4>
+                  <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                    Under Google Play User Data policies, this will permanently purge your business profile, booking records, worksite coordinates, and invoice history.
+                  </p>
+                </div>
+                <div className="bg-amber-50 p-2.5 rounded-xl border border-amber-200 text-[11px] text-amber-900 font-semibold">
+                  Remaining Wallet Balance: ₹{walletBalance.toLocaleString()}
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteAccountModal(false)}
+                    className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeletingAccount}
+                    onClick={handleDeleteAccount}
+                    className="py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {isDeletingAccount ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    <span>{isDeletingAccount ? 'Purging...' : 'Delete Account'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Terms & Privacy Policy Modal (Google Play Store Compliance) */}
+          {showTermsModal && (
+            <div className="absolute inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
+              <div className="bg-white rounded-3xl p-4 shadow-2xl max-w-sm w-full space-y-3 border border-slate-200 max-h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-[#D71920]" />
+                    <h4 className="text-xs font-black text-slate-900">Terms of Service &amp; Privacy Policy</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowTermsModal(false)}
+                    className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto text-[11px] text-slate-600 space-y-2.5 pr-1 leading-relaxed">
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <p className="font-bold text-slate-800">Play Store Compliance Disclosure</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Updated October 2026 • Compliant with Google Play Developer Policies</p>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-slate-800">1. Worksite Location Usage</h5>
+                    <p>When you post a job, the app tags the worksite GPS coordinates to match and guide verified workers directly to your job site and enable Start-OTP attendance validation.</p>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-slate-800">2. Transparent Payments &amp; Settlement</h5>
+                    <p>Payments for completed shifts are settled upon End-OTP verification. Prepaid wallet balances can be topped up via UPI, Card, or Net Banking and can be withdrawn or refunded upon request.</p>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-slate-800">3. Data Protection &amp; SSL Encryption</h5>
+                    <p>All sensitive information, invoices, and transaction references are transmitted securely using industry-standard SSL encryption. We do not sell user data to advertising brokers.</p>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-slate-800">4. Right to Account &amp; Data Deletion</h5>
+                    <p>Users may permanently delete their account and associated company data at any time via Profile &gt; Delete Account.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(false)}
+                  className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  I Understand &amp; Agree
+                </button>
+              </div>
             </div>
           )}
 
@@ -949,23 +1249,26 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
             </div>
           )}
 
-          {/* Add Money via Direct PhonePe / UPI QR Modal */}
+          {/* Add Money via Multi-Method Secure Payment Gateway */}
           {showAddMoneyModal && (
-            <div className="absolute inset-0 bg-black/70 z-50 flex items-center justify-center p-3">
+            <div className="absolute inset-0 bg-black/75 z-50 flex items-center justify-center p-3 animate-fade-in">
               <div className="bg-white rounded-3xl p-4 shadow-2xl max-w-xs w-full space-y-3 border border-slate-200 max-h-[92%] overflow-y-auto">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <div className="flex items-center gap-1.5">
-                    <div className="w-7 h-7 rounded-lg bg-[#5f259f] text-white flex items-center justify-center font-black text-xs shadow-xs">
-                      पे
+                    <div className="w-7 h-7 rounded-lg bg-[#D71920] text-white flex items-center justify-center font-black text-xs shadow-xs">
+                      ₹
                     </div>
                     <div>
-                      <h4 className="text-xs font-black text-[#202124]">PhonePe / UPI Top-Up</h4>
-                      <p className="text-[10px] text-slate-500">Pay to {PLATFORM_UPI_ID} (Zero gateway fee)</p>
+                      <h4 className="text-xs font-black text-[#202124]">Wallet Recharge Gateway</h4>
+                      <p className="text-[10px] text-slate-500">Secure 256-bit Encrypted Checkout</p>
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => setShowAddMoneyModal(false)}
+                    onClick={() => {
+                      setShowAddMoneyModal(false);
+                      setUtrValidationError(null);
+                    }}
                     className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer"
                   >
                     ✕
@@ -980,10 +1283,13 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       <button
                         key={amt}
                         type="button"
-                        onClick={() => setAddMoneyAmount(amt)}
+                        onClick={() => {
+                          setAddMoneyAmount(amt);
+                          setUtrValidationError(null);
+                        }}
                         className={`py-1.5 text-xs font-extrabold rounded-xl transition-all cursor-pointer ${
                           addMoneyAmount === amt
-                            ? 'bg-[#5f259f] text-white shadow-xs'
+                            ? 'bg-[#D71920] text-white shadow-xs'
                             : 'bg-slate-50 text-slate-700 border border-slate-200 hover:bg-slate-100'
                         }`}
                       >
@@ -992,116 +1298,292 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     ))}
                   </div>
                   <div className="relative mt-2">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-[#5f259f]">₹</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-black text-[#D71920]">₹</span>
                     <input
                       type="number"
                       step={100}
+                      min={100}
                       value={addMoneyAmount}
-                      onChange={(e) => setAddMoneyAmount(Math.max(100, Number(e.target.value)))}
-                      className="w-full pl-7 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#5f259f]"
+                      onChange={(e) => {
+                        setAddMoneyAmount(Math.max(100, Number(e.target.value)));
+                        setUtrValidationError(null);
+                      }}
+                      className="w-full pl-7 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-bold text-[#202124] focus:outline-none focus:border-[#D71920]"
                       placeholder="Custom amount"
                     />
                   </div>
                 </div>
 
-                {/* Direct 1-Click Launch UPI App Button */}
-                <button
-                  type="button"
-                  onClick={() => handleOpenUpiApp(addMoneyAmount)}
-                  className="w-full py-2.5 bg-[#5f259f] hover:bg-[#4d1d82] text-white text-xs font-black rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Zap className="w-4 h-4 text-[#FFC928]" />
-                  <span>Open PhonePe / UPI App &amp; Pay ₹{addMoneyAmount.toLocaleString()}</span>
-                </button>
-
-                {/* PhonePe QR Code Container matching user image */}
-                <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center space-y-2">
-                  <div className="inline-flex items-center gap-1 bg-[#5f259f] text-white px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider">
-                    <span>PhonePe</span>
-                    <span className="text-[#FFC928]">★</span>
-                    <span>ACCEPTED HERE</span>
-                  </div>
-
-                  <p className="text-[10px] text-slate-500 font-semibold">
-                    Scan &amp; Pay Using PhonePe App
-                  </p>
-
-                  {/* Scannable PhonePe QR Image Container */}
-                  <div
-                    onClick={() => handleOpenUpiApp(addMoneyAmount)}
-                    className="w-40 h-40 mx-auto bg-white p-2 rounded-2xl border-2 border-[#5f259f] shadow-xs flex items-center justify-center relative cursor-pointer group"
-                    title="Click to launch PhonePe / UPI App"
-                  >
-                    <img
-                      src="/phonepe-qr.svg"
-                      alt="PhonePe QR Code - prnm@kotak"
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-
-                  <div className="text-center">
-                    <span className="text-xs font-black text-[#202124] block tracking-wide">{PLATFORM_UPI_NAME} .</span>
-                  </div>
-
-                  {/* Clickable UPI ID with 1-click Copy */}
-                  <div className="bg-white p-2 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
-                    <div className="text-left">
-                      <span className="text-[9px] text-slate-400 block font-bold uppercase">Official UPI ID (Tap to Pay)</span>
-                      <button
-                        type="button"
-                        onClick={() => handleOpenUpiApp(addMoneyAmount)}
-                        className="font-mono font-black text-[#5f259f] hover:underline cursor-pointer flex items-center gap-1"
-                      >
-                        <span>{PLATFORM_UPI_ID}</span>
-                      </button>
-                    </div>
+                {/* Payment Method Selector Tabs */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Select Payment Mode</label>
+                  <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl text-[10px] font-bold">
                     <button
                       type="button"
                       onClick={() => {
-                        navigator.clipboard?.writeText(PLATFORM_UPI_ID);
-                        setCopiedUpi(true);
-                        setTimeout(() => setCopiedUpi(false), 2000);
+                        setRechargeMethod('upi');
+                        setUtrValidationError(null);
                       }}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg flex items-center gap-1 cursor-pointer"
+                      className={`py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        rechargeMethod === 'upi' ? 'bg-white text-[#D71920] shadow-xs' : 'text-slate-600 hover:text-black'
+                      }`}
                     >
-                      {copiedUpi ? <Check className="w-3 h-3 text-[#16834A]" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+                      <Zap className="w-3 h-3" />
+                      <span>UPI / QR</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRechargeMethod('card');
+                        setUtrValidationError(null);
+                      }}
+                      className={`py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        rechargeMethod === 'card' ? 'bg-white text-[#D71920] shadow-xs' : 'text-slate-600 hover:text-black'
+                      }`}
+                    >
+                      <CreditCard className="w-3 h-3" />
+                      <span>Card</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setRechargeMethod('netbanking');
+                        setUtrValidationError(null);
+                      }}
+                      className={`py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer ${
+                        rechargeMethod === 'netbanking' ? 'bg-white text-[#D71920] shadow-xs' : 'text-slate-600 hover:text-black'
+                      }`}
+                    >
+                      <Building2 className="w-3 h-3" />
+                      <span>NetBanking</span>
                     </button>
                   </div>
                 </div>
 
-                {/* Form to submit 12-digit UTR */}
-                <form onSubmit={handleVerifyAddMoney} className="space-y-2">
-                  <div>
-                    <label className="block text-[10px] font-bold text-[#202124] mb-0.5">
-                      12-Digit UPI Ref / UTR Number
-                    </label>
-                    <input
-                      type="text"
-                      value={addMoneyUtr}
-                      onChange={(e) => setAddMoneyUtr(e.target.value)}
-                      placeholder="e.g. 428919028371"
-                      className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#5f259f]"
-                    />
+                {/* Validation Error banner */}
+                {utrValidationError && (
+                  <div className="p-2 bg-red-50 border border-red-200 rounded-xl flex items-center gap-1.5 text-[11px] text-[#C62828] font-medium">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{utrValidationError}</span>
                   </div>
+                )}
 
-                  <div className="flex gap-2 pt-1">
+                {/* METHOD 1: UPI / QR */}
+                {rechargeMethod === 'upi' && (
+                  <div className="space-y-2">
                     <button
                       type="button"
-                      onClick={() => setShowAddMoneyModal(false)}
-                      className="flex-1 py-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
+                      onClick={() => handleOpenUpiApp(addMoneyAmount)}
+                      className="w-full py-2 bg-[#5f259f] hover:bg-[#4d1d82] text-white text-[11px] font-black rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      Cancel
+                      <Zap className="w-3.5 h-3.5 text-[#FFC928]" />
+                      <span>Launch PhonePe / GPay &amp; Pay ₹{addMoneyAmount.toLocaleString()}</span>
                     </button>
-                    <button
-                      type="submit"
-                      className="flex-1 py-2 text-xs font-bold text-white bg-[#5f259f] hover:bg-[#4d1d82] rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1"
-                    >
-                      <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Credit ₹{addMoneyAmount.toLocaleString()}</span>
-                    </button>
+
+                    <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-200 text-center space-y-1.5">
+                      <div className="inline-flex items-center gap-1 bg-[#5f259f] text-white px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider">
+                        <span>PhonePe</span>
+                        <span className="text-[#FFC928]">★</span>
+                        <span>ACCEPTED HERE</span>
+                      </div>
+
+                      <div
+                        onClick={() => handleOpenUpiApp(addMoneyAmount)}
+                        className="w-36 h-36 mx-auto bg-white p-2 rounded-2xl border-2 border-[#5f259f] shadow-2xs flex items-center justify-center relative cursor-pointer"
+                        title="Click to launch PhonePe / UPI App"
+                      >
+                        <img
+                          src="/phonepe-qr.svg"
+                          alt="PhonePe QR Code - prnm@kotak"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+
+                      <div className="text-center">
+                        <span className="text-[11px] font-black text-[#202124] block">{PLATFORM_UPI_NAME} .</span>
+                      </div>
+
+                      <div className="bg-white p-1.5 rounded-xl border border-slate-200 flex items-center justify-between text-xs">
+                        <div className="text-left">
+                          <span className="text-[8px] text-slate-400 block font-bold uppercase">Official UPI ID</span>
+                          <span className="font-mono font-black text-[#5f259f] text-[10px]">{PLATFORM_UPI_ID}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(PLATFORM_UPI_ID);
+                            setCopiedUpi(true);
+                            setTimeout(() => setCopiedUpi(false), 2000);
+                          }}
+                          className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold rounded-lg flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedUpi ? <Check className="w-3 h-3 text-[#16834A]" /> : <Copy className="w-3 h-3" />}
+                          <span>{copiedUpi ? 'Copied' : 'Copy'}</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <form onSubmit={handleVerifyAddMoney} className="space-y-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#202124] mb-0.5">
+                          Enter 12-Digit Bank UTR / UPI Reference No. <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={12}
+                          value={addMoneyUtr}
+                          onChange={(e) => {
+                            setAddMoneyUtr(e.target.value.replace(/[^0-9]/g, ''));
+                            setUtrValidationError(null);
+                          }}
+                          placeholder="e.g. 428919028371 (12 digits)"
+                          className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                        />
+                        <span className="text-[9px] text-slate-400 block mt-0.5">
+                          Check PhonePe / GPay transaction details for the 12-digit UTR
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowAddMoneyModal(false);
+                            setUtrValidationError(null);
+                          }}
+                          className="flex-1 py-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={isProcessingRecharge}
+                          className="flex-1 py-2 text-xs font-bold text-white bg-[#D71920] hover:bg-[#A80F18] rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
+                        >
+                          {isProcessingRecharge ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                          )}
+                          <span>{isProcessingRecharge ? 'Verifying...' : `Verify & Credit ₹${addMoneyAmount.toLocaleString()}`}</span>
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                </form>
+                )}
+
+                {/* METHOD 2: DEBIT / CREDIT CARD */}
+                {rechargeMethod === 'card' && (
+                  <form onSubmit={handleVerifyAddMoney} className="space-y-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#202124] mb-0.5">Card Number</label>
+                      <input
+                        type="text"
+                        required
+                        maxLength={19}
+                        placeholder="4532 •••• •••• 8910"
+                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#202124] mb-0.5">Expiry Date</label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={5}
+                          placeholder="MM/YY"
+                          className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#202124] mb-0.5">CVV</label>
+                        <input
+                          type="password"
+                          required
+                          maxLength={4}
+                          placeholder="•••"
+                          className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#202124] mb-0.5">Name on Card</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Apex Logistics Pvt Ltd"
+                        className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-[#202124] focus:outline-none focus:border-[#D71920]"
+                      />
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddMoneyModal(false)}
+                        className="flex-1 py-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isProcessingRecharge}
+                        className="flex-1 py-2 text-xs font-bold text-white bg-[#D71920] hover:bg-[#A80F18] rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
+                      >
+                        {isProcessingRecharge ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isProcessingRecharge ? 'Authorizing 3DS...' : `Pay ₹${addMoneyAmount.toLocaleString()}`}</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
+
+                {/* METHOD 3: NET BANKING */}
+                {rechargeMethod === 'netbanking' && (
+                  <form onSubmit={handleVerifyAddMoney} className="space-y-2.5">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#202124] mb-1">Select Bank</label>
+                      <select className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-[#202124] font-medium focus:outline-none focus:border-[#D71920]">
+                        <option>State Bank of India (SBI)</option>
+                        <option>HDFC Bank</option>
+                        <option>ICICI Bank</option>
+                        <option>Axis Bank</option>
+                        <option>Kotak Mahindra Bank</option>
+                        <option>Canara Bank</option>
+                        <option>Punjab National Bank</option>
+                      </select>
+                    </div>
+                    <div className="p-2.5 bg-amber-50 rounded-xl border border-amber-200 text-[10px] text-amber-800">
+                      You will be securely routed to your bank's Net Banking gateway to authenticate this transaction.
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowAddMoneyModal(false)}
+                        className="flex-1 py-2 text-xs font-semibold text-slate-600 bg-slate-100 rounded-xl cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={isProcessingRecharge}
+                        className="flex-1 py-2 text-xs font-bold text-white bg-[#D71920] hover:bg-[#A80F18] rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1 disabled:opacity-50"
+                      >
+                        {isProcessingRecharge ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Building2 className="w-3.5 h-3.5" />
+                        )}
+                        <span>{isProcessingRecharge ? 'Routing to Bank...' : `Proceed ₹${addMoneyAmount.toLocaleString()}`}</span>
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
           )}
@@ -1358,16 +1840,15 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       <ArrowRight className="w-4 h-4" />
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAuthenticated(true);
-                        setActiveTab('home');
-                      }}
-                      className="w-full py-2 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
-                    >
-                      <span>Quick Enter Customer App →</span>
-                    </button>
+                    <div className="pt-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => setShowTermsModal(true)}
+                        className="text-[10px] text-slate-500 hover:text-[#D71920] underline cursor-pointer"
+                      >
+                        Terms of Service &amp; Privacy Policy
+                      </button>
+                    </div>
                   </div>
 
                   <div className="pt-4 text-center border-t border-slate-100">
@@ -1386,64 +1867,127 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
               )}
 
               {authScreen === 'sign-up' && (
-                <form onSubmit={handleSignUp} className="space-y-2.5 flex-1 flex flex-col justify-between">
-                  <div className="space-y-2.5">
+                <form onSubmit={handleSignUp} className="space-y-2 flex-1 flex flex-col justify-between overflow-y-auto pr-1">
+                  <div className="space-y-2">
                     <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Company / Full Name</label>
+                      <label className="block text-[11px] font-bold text-[#202124] mb-0.5">Company / Full Name</label>
                       <input
                         type="text"
                         required
                         value={signUpName}
                         onChange={(e) => setSignUpName(e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
+                        placeholder="Apex Logistics Pvt Ltd"
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Mobile (+91)</label>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-0.5">Mobile (+91)</label>
                         <input
                           type="tel"
                           required
                           value={signUpPhone}
                           onChange={(e) => setSignUpPhone(e.target.value)}
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
+                          placeholder="99001 55432"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-[#202124] mb-1">City</label>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-0.5">City</label>
                         <input
                           type="text"
                           required
                           value={signUpCity}
                           onChange={(e) => setSignUpCity(e.target.value)}
-                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
+                          placeholder="Mangalore"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Email</label>
+                      <label className="block text-[11px] font-bold text-[#202124] mb-0.5">Work Email</label>
                       <input
                         type="email"
                         required
                         value={signUpEmail}
                         onChange={(e) => setSignUpEmail(e.target.value)}
-                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl"
+                        placeholder="operations@apex.in"
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
                       />
                     </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-0.5">Password</label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={signUpPassword}
+                          onChange={(e) => setSignUpPassword(e.target.value)}
+                          placeholder="Min 6 chars"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-0.5">Confirm Password</label>
+                        <input
+                          type="password"
+                          required
+                          minLength={6}
+                          value={signUpConfirmPassword}
+                          onChange={(e) => setSignUpConfirmPassword(e.target.value)}
+                          placeholder="Re-enter password"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Terms & Conditions Acceptance Checkbox */}
+                    <div className="flex items-start gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id="cust-terms"
+                        required
+                        checked={termsAccepted}
+                        onChange={(e) => setTermsAccepted(e.target.checked)}
+                        className="mt-0.5 accent-[#D71920] cursor-pointer"
+                      />
+                      <label htmlFor="cust-terms" className="text-[10px] text-slate-600 leading-tight">
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          onClick={() => setShowTermsModal(true)}
+                          className="text-[#D71920] font-bold underline cursor-pointer"
+                        >
+                          Terms of Service
+                        </button>{' '}
+                        and{' '}
+                        <button
+                          type="button"
+                          onClick={() => setShowTermsModal(true)}
+                          className="text-[#D71920] font-bold underline cursor-pointer"
+                        >
+                          Privacy Policy
+                        </button>
+                      </label>
+                    </div>
+
                     <button
                       type="submit"
+                      disabled={isAuthLoading}
                       className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer mt-1"
                     >
-                      Create Employer Account
+                      {isAuthLoading ? 'Creating Account...' : 'Register Employer Account'}
                     </button>
                   </div>
-                  <div className="pt-3 text-center border-t border-slate-100">
+                  <div className="pt-2 text-center border-t border-slate-100">
                     <button
                       type="button"
                       onClick={() => setAuthScreen('sign-in')}
-                      className="text-xs font-bold text-[#D71920]"
+                      className="text-xs font-bold text-[#D71920] hover:underline cursor-pointer"
                     >
-                      Back to Sign In
+                      Already have an account? Sign In
                     </button>
                   </div>
                 </form>
@@ -1548,19 +2092,11 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     <span>₹{walletBalance.toLocaleString()}</span>
                     <span className="text-[9px] bg-[#FFC928] text-[#202124] px-1 rounded font-black">+</span>
                   </button>
-
-                  <button
-                    onClick={() => triggerAppRingAlert('🔔 Audible notification tone tested!')}
-                    title="Test Ringtone"
-                    className="p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors cursor-pointer"
-                  >
-                    <Volume2 className="w-3.5 h-3.5" />
-                  </button>
                 </div>
               </div>
 
-              {/* Scrollable Screen Content Body */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Scrollable Screen Content Body - Strictly contained between header and bottom bar */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 overscroll-contain pb-6">
                 {/* 1. HOME TAB (EXACTLY MATCHING SCREEN 1 OF USER POSTER) */}
                 {activeTab === 'home' && (
                   <div className="space-y-3.5">
@@ -1909,14 +2445,14 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                         {/* OTP Verification Display */}
                         <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200/80 flex items-center justify-between">
                           <div>
-                            <span className="text-[10px] text-[#A80F18] font-bold block">Arrival Start OTP (Give to Worker):</span>
+                            <span className="text-[10px] text-[#A80F18] font-bold block">Start OTP (Say to Worker on Arrival):</span>
                             <span className="font-mono font-black text-lg text-[#D71920] tracking-widest">
                               {selectedBookingForTimeline.startOtp}
                             </span>
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-[#686868] font-semibold block">End OTP:</span>
-                            <span className="font-mono font-bold text-sm text-[#202124]">{selectedBookingForTimeline.endOtp}</span>
+                            <span className="text-[10px] text-[#686868] font-semibold block">End OTP (Say upon Completion):</span>
+                            <span className="font-mono font-black text-base text-[#202124] tracking-wider">{selectedBookingForTimeline.endOtp}</span>
                           </div>
                         </div>
 
@@ -1959,6 +2495,18 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                               ? `✓ Paid via PhonePe QR (${selectedBookingForTimeline.upiTransactionRef})`
                               : 'Direct Cash / UPI on Worksite'}
                           </span>
+                        </div>
+
+                        {/* Direct Chat with Assigned Worker */}
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={() => navigateToTab('messages')}
+                            className="w-full py-2 bg-[#D71920] hover:bg-[#B3141A] text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5 text-[#FFC928]" />
+                            <span>Chat with Assigned Worker ({selectedBookingForTimeline.orderNumber})</span>
+                          </button>
                         </div>
 
                         {/* --- VISUAL TIMELINE / STATUS TREE (Beginning to End) --- */}
@@ -2247,11 +2795,41 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                       </div>
                     </div>
 
+                    {/* Google Play Store Compliance & Account Governance */}
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
+                        Account Governance &amp; Compliance
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowTermsModal(true)}
+                        className="w-full py-2 px-3 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-left text-xs font-semibold text-slate-700 flex items-center justify-between transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-3.5 h-3.5 text-[#D71920]" />
+                          <span>Terms of Service &amp; Privacy Policy</span>
+                        </div>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowDeleteAccountModal(true)}
+                        className="w-full py-2 px-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-xl text-left text-xs font-semibold text-[#C62828] flex items-center justify-between transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Trash2 className="w-3.5 h-3.5 text-[#C62828]" />
+                          <span>Delete Employer Account &amp; Purge Data</span>
+                        </div>
+                        <ArrowRight className="w-3.5 h-3.5 text-[#C62828]/60" />
+                      </button>
+                    </div>
+
                     {/* Logout Button with Confirmation */}
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-[#D71920] border border-red-200 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-[#202124] border border-slate-200 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
                     >
                       <LogOut className="w-4 h-4" />
                       <span>Sign Out from Customer App</span>
@@ -2261,9 +2839,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
               </div>
 
               {/* ========================================================== */}
-              {/* FIXED 5-TAB BOTTOM NAVIGATION BAR (RED AND YELLOW PALETTE) */}
-              {/* ========================================================== */}
-              <div className="h-16 bg-white border-t border-slate-200 px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
+              <div className="h-16 bg-white border-t border-slate-200 px-2 flex items-center justify-around shrink-0 z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] select-none">
                 {/* 1. Explore / Home */}
                 <button
                   type="button"

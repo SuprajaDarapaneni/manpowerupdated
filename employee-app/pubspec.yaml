@@ -1,7 +1,7 @@
 name: employee_app
 description: "ManPowerLink Worker & Temporary Employee Mobile App"
 publish_to: 'none'
-version: 1.0.0+1
+version: 2.4.0+5
 
 environment:
   sdk: '>=3.2.0 <4.0.0'
@@ -19,6 +19,7 @@ dependencies:
   cached_network_image: ^3.3.1
   flutter_ringtone_player_plus: ^1.0.0
   webview_flutter: ^4.14.1
+  webview_flutter_android: ^4.14.1
   shelf: ^1.4.3
   shelf_static: ^1.2.0
 dev_dependencies:

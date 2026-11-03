@@ -15,9 +15,18 @@ export const PricingMatchingView: React.FC<PricingMatchingViewProps> = ({
   const [searchRadiusKm, setSearchRadiusKm] = useState(15);
   const [acceptanceTimeoutMins, setAcceptanceTimeoutMins] = useState(30);
 
+  const [minWorkerWalletBalance, setMinWorkerWalletBalance] = useState<number>(() => {
+    return dataService.getCommissionSettings().minWorkerWalletBalance ?? -200;
+  });
+
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     dataService.setOtpSettings(settings);
+    const comm = dataService.getCommissionSettings();
+    dataService.setCommissionSettings({
+      ...comm,
+      minWorkerWalletBalance: Number(minWorkerWalletBalance),
+    });
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -132,6 +141,30 @@ export const PricingMatchingView: React.FC<PricingMatchingViewProps> = ({
                 className="w-full px-3 py-1.5 text-xs bg-[#FFFDF8] border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920]"
               />
             </div>
+          </div>
+
+          {/* Min Worker Wallet Balance Section */}
+          <div className="p-4 bg-[#FFFDF8] rounded-xl border border-[#202124]/10 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-[#202124]">
+                Minimum Worker Wallet Balance to Receive Requests (₹)
+              </label>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                minWorkerWalletBalance < 0 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'
+              }`}>
+                {minWorkerWalletBalance < 0 ? `Overdraft Allowed (₹${minWorkerWalletBalance})` : `Prepaid Required (₹${minWorkerWalletBalance})`}
+              </span>
+            </div>
+            <input
+              type="number"
+              value={minWorkerWalletBalance}
+              onChange={(e) => setMinWorkerWalletBalance(Number(e.target.value))}
+              placeholder="e.g. -200 or 100"
+              className="w-full sm:w-64 px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-lg focus:outline-none focus:border-[#D71920]"
+            />
+            <p className="text-[11px] text-[#686868]">
+              Workers with wallet balance below this amount cannot receive or accept shift requests (can be negative like -200 or positive like 100).
+            </p>
           </div>
 
           <button

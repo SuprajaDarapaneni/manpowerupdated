@@ -3,7 +3,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'firebase_options.dart';
 import 'services/fcm_service.dart';
 import 'services/local_asset_server.dart';
@@ -40,6 +42,7 @@ class _ManPowerLinkCustomerAppState extends State<ManPowerLinkCustomerApp> {
   final LocalAssetServer _server = LocalAssetServer();
   WebViewController? _controller;
   bool _isLoading = true;
+  bool _hasInitialLoaded = false;
   String? _errorMessage;
   DateTime? _lastBackPressTime;
 
@@ -51,6 +54,16 @@ class _ManPowerLinkCustomerAppState extends State<ManPowerLinkCustomerApp> {
 
   Future<void> _startApp() async {
     try {
+      // Proactively request device location permission for real GPS
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          await Geolocator.requestPermission();
+        }
+      } catch (e) {
+        debugPrint('Geolocation permission warning: $e');
+      }
+
       final port = await _server.start();
 
       final controller = WebViewController()
@@ -59,7 +72,7 @@ class _ManPowerLinkCustomerAppState extends State<ManPowerLinkCustomerApp> {
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageStarted: (String url) {
-              if (mounted) {
+              if (mounted && !_hasInitialLoaded) {
                 setState(() {
                   _isLoading = true;
                   _errorMessage = null;
@@ -67,6 +80,7 @@ class _ManPowerLinkCustomerAppState extends State<ManPowerLinkCustomerApp> {
               }
             },
             onPageFinished: (String url) {
+              _hasInitialLoaded = true;
               if (mounted) {
                 setState(() {
                   _isLoading = false;
@@ -78,6 +92,17 @@ class _ManPowerLinkCustomerAppState extends State<ManPowerLinkCustomerApp> {
             },
           ),
         );
+
+      if (controller.platform is AndroidWebViewController) {
+        (controller.platform as AndroidWebViewController).setGeolocationPermissionsPromptCallbacks(
+          onShowPrompt: (request) async {
+            return const GeolocationPermissionsResponse(
+              allow: true,
+              retain: true,
+            );
+          },
+        );
+      }
 
       final targetUrl = 'http://127.0.0.1:$port/?preview=customer&standalone=true#customer';
       await controller.loadRequest(Uri.parse(targetUrl));

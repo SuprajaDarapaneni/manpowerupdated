@@ -37,8 +37,16 @@ import {
   Pause,
   Play,
   Receipt,
+  ArrowDownToLine,
+  Building2,
+  CheckCircle,
+  Check,
+  CheckCheck,
+  Bell,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
-import { Booking, Worker, StatusTimelineNode } from '../../types';
+import { Booking, Worker, StatusTimelineNode, ChatMessage } from '../../types';
 import {
   dataService,
   playNotificationSound,
@@ -73,14 +81,26 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   // Branding State
   const [branding, setBranding] = useState(() => dataService.getBrandingSettings());
 
+  // Admin Minimum Balance to Receive Requests
+  const [minWorkerWalletBalance, setMinWorkerWalletBalance] = useState<number>(() => {
+    return dataService.getCommissionSettings().minWorkerWalletBalance ?? -200;
+  });
+
+  // Work Details Modal State before accepting shift
+  const [viewingWorkDetails, setViewingWorkDetails] = useState<Booking | null>(null);
+
   useEffect(() => {
     return dataService.subscribe(() => {
       setBranding(dataService.getBrandingSettings());
+      const comm = dataService.getCommissionSettings();
+      if (comm.minWorkerWalletBalance !== undefined) {
+        setMinWorkerWalletBalance(comm.minWorkerWalletBalance);
+      }
     });
   }, []);
 
-  // Auth State
-  const [isAuthenticated, setIsAuthenticated] = useState(true);
+  // Auth State - Starts at Sign In Screen first
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authScreen, setAuthScreen] = useState<EmployeeAuthScreen>('sign-in');
   const [loginPhone, setLoginPhone] = useState('+91 98765 43210');
   const [loginPassword, setLoginPassword] = useState('Worker@2026');
@@ -88,14 +108,72 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
+  // Worker Sign Up Form State
+  const [signUpName, setSignUpName] = useState('Suresh Gowda');
+  const [signUpPhone, setSignUpPhone] = useState('+91 98800 12345');
+  const [signUpCategory, setSignUpCategory] = useState('Loading & Unloading');
+  const [signUpCity, setSignUpCity] = useState('Mangalore, Karnataka');
+  const [signUpPassword, setSignUpPassword] = useState('Worker@2026');
+  const [signUpConfirmPassword, setSignUpConfirmPassword] = useState('Worker@2026');
+  const [signUpTermsAccepted, setSignUpTermsAccepted] = useState(true);
+
+  // Play Store Compliance State (Terms, Privacy Policy, Account Deletion)
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  // Real App Top Push Notification Banner (Zomato / Swiggy Style)
+  const [pushBanner, setPushBanner] = useState<{
+    title: string;
+    message: string;
+    timestamp: string;
+    type?: 'job' | 'payment' | 'system';
+  } | null>(null);
+
   // Main 5-Tab Navigation State
   const [activeTab, setActiveTab] = useState<EmployeeTab>('home');
   const [isOnline, setIsOnline] = useState(true);
 
-  // Wallet State
-  const [walletBalance, setWalletBalance] = useState<number>(currentWorker.walletBalance || 4200);
+  // Wallet & Earnings State
+  const [walletBalance, setWalletBalance] = useState<number>(currentWorker.walletBalance || 4850);
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState(1000);
+
+  // Dedicated Worker Withdrawal (Payout of Work Earnings) State
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [withdrawMethod, setWithdrawMethod] = useState<'upi' | 'bank'>('upi');
+  const [withdrawAmount, setWithdrawAmount] = useState<number>(2000);
+  const [withdrawUpiId, setWithdrawUpiId] = useState('ramesh.kumar@okaxis');
+  const [withdrawBankName, setWithdrawBankName] = useState('State Bank of India');
+  const [withdrawAccountNo, setWithdrawAccountNo] = useState('38910029381');
+  const [withdrawIfsc, setWithdrawIfsc] = useState('SBIN0004128');
+  const [withdrawAccountName, setWithdrawAccountName] = useState(currentWorker.name || 'Ramesh Kumar');
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawalSuccessReceipt, setWithdrawalSuccessReceipt] = useState<{
+    utr: string;
+    amount: number;
+    destination: string;
+    date: string;
+  } | null>(null);
+  const [showPassbookModal, setShowPassbookModal] = useState(false);
+  const [withdrawalHistory, setWithdrawalHistory] = useState([
+    {
+      id: 'wth-101',
+      amount: 2000,
+      method: 'Bank A/C (...9381)',
+      utr: 'IMPS/6192849102',
+      status: 'Completed',
+      date: 'Yesterday, 06:15 PM',
+    },
+    {
+      id: 'wth-102',
+      amount: 1500,
+      method: 'UPI (ramesh.kumar@okaxis)',
+      utr: 'UPI/6182049182',
+      status: 'Completed',
+      date: '28 Oct 2026, 08:30 PM',
+    },
+  ]);
 
   // Job Action States
   const [selectedBookingId, setSelectedBookingId] = useState<string>(bookings[0]?.id || '');
@@ -116,60 +194,137 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const [incomingJobAlert, setIncomingJobAlert] = useState<Booking | null>(null);
   const [isRinging, setIsRinging] = useState(false);
 
+  // Helper to trigger realistic Swiggy / Zomato style top push drop-down notification
+  const showRealAppPush = (title: string, message: string, type: 'job' | 'payment' | 'system' = 'job') => {
+    // CRITICAL: NEVER ring or show alerts on unauthenticated sign-in screen
+    if (!isAuthenticated) return;
+    playNotificationSound();
+    setPushBanner({
+      title,
+      message,
+      timestamp: 'Just now',
+      type,
+    });
+    // Auto-dismiss after 6 seconds like real system notification
+    setTimeout(() => {
+      setPushBanner((curr) => (curr?.title === title ? null : curr));
+    }, 6000);
+  };
+
+  // Track bookings that already existed when app opened to PREVENT false ringing on launch
+  const seenBookingIds = useRef<Set<string>>(new Set(dataService.getBookings().map((b) => b.id)));
+
   useEffect(() => {
+    // CRITICAL FIX: NEVER listen or fire alerts if worker is not signed in or is offline!
+    if (!isAuthenticated || !isOnline) {
+      setIsRinging(false);
+      setIncomingJobAlert(null);
+      return;
+    }
+
     // 1. Listen for new job broadcast from customer app
     const handleNewJobBroadcast = (e: any) => {
+      if (!isAuthenticated || !isOnline) return;
       const newJob = e.detail as Booking;
       if (newJob) {
+        seenBookingIds.current.add(newJob.id);
         setIncomingJobAlert(newJob);
-        setIsRinging(true);
-        playIncomingJobRingtone();
-        setActiveAlertToast(`🚨 NEW JOB RADAR: ${newJob.categoryName} (₹${newJob.offeredPricePerWorker})`);
+        // Swiggy gentle chime and top notification banner
+        playNotificationSound();
+        showRealAppPush(
+          `⚡ Shift Alert: ${newJob.categoryName}`,
+          `₹${newJob.offeredPricePerWorker}/worker at ${newJob.workLocation?.address || 'Worksite'}`,
+          'job'
+        );
       }
     };
 
     window.addEventListener('manpowerlink_new_job_broadcast', handleNewJobBroadcast);
 
-    // 2. Real-time Firebase notification subscription
+    // 2. Real-time Chat message listener from Employer
+    const handleChatMessage = (e: any) => {
+      if (!isAuthenticated) return;
+      const msg = e.detail as ChatMessage;
+      if (!msg) return;
+      if (msg.recipientRole === 'employee') {
+        playNotificationSound();
+        showRealAppPush(
+          `💬 ${msg.senderName} (${msg.orderNumber || 'Shift'})`,
+          msg.text,
+          'system'
+        );
+        setChatMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+      }
+    };
+
+    window.addEventListener('manpowerlink_chat_message', handleChatMessage);
+
+    // 3. Real-time Firebase notification subscription
     const unsubscribeFirebase = subscribeToFirebaseNotifications(
       'employee',
       currentWorker.id,
       (notif) => {
-        if (notif.soundType === 'urgent_ring' || notif.eventType === 'BOOKING_CREATED') {
-          playIncomingJobRingtone();
-          setIsRinging(true);
-          setActiveAlertToast(`🚨 ${notif.title}: ${notif.message}`);
-        }
+        if (!isAuthenticated || !isOnline) return;
+        playNotificationSound();
+        showRealAppPush(
+          notif.title,
+          notif.message,
+          notif.eventType === 'BOOKING_CREATED' ? 'job' : 'system'
+        );
       }
     );
 
-    // 3. Storage subscription watcher for instant job broadcasts
+    // 4. Storage subscription watcher for NEW job broadcasts (ONLY for jobs created during active session)
     const unsubscribeStorage = dataService.subscribe(() => {
+      if (!isAuthenticated || !isOnline) return;
       const all = dataService.getBookings();
       const newest = all[0];
-      if (newest && (newest.status === 'SEARCHING_EMPLOYEES' || newest.status === 'CONFIRMED')) {
-        // If not already active alert
-        setIncomingJobAlert((prev) => {
-          if (!prev || prev.id !== newest.id) {
-            setIsRinging(true);
-            playIncomingJobRingtone();
-            setActiveAlertToast(`🚨 NEW JOB RADAR: ${newest.categoryName} (₹${newest.offeredPricePerWorker})`);
-            return newest;
-          }
-          return prev;
-        });
+      if (
+        newest &&
+        (newest.status === 'SEARCHING_EMPLOYEES' || newest.status === 'CONFIRMED') &&
+        !seenBookingIds.current.has(newest.id)
+      ) {
+        seenBookingIds.current.add(newest.id);
+        setIncomingJobAlert(newest);
+        // Swiggy style gentle chime notification and top banner
+        playNotificationSound();
+        showRealAppPush(
+          `⚡ New Shift Posted: ${newest.categoryName}`,
+          `₹${newest.offeredPricePerWorker}/worker • ${newest.workLocation?.address || 'Industrial Zone'}`,
+          'job'
+        );
       }
     });
 
     return () => {
       window.removeEventListener('manpowerlink_new_job_broadcast', handleNewJobBroadcast);
+      window.removeEventListener('manpowerlink_chat_message', handleChatMessage);
       unsubscribeFirebase();
       unsubscribeStorage();
     };
-  }, [currentWorker.id]);
+  }, [isAuthenticated, isOnline, currentWorker.id]);
+
+  const isBelowMinBalance = walletBalance < minWorkerWalletBalance;
+
+  const handleOpenChatForBooking = (booking: Booking) => {
+    setSelectedBookingId(booking.id);
+    setActiveTab('messages');
+    setIncomingJobAlert(null);
+    setViewingWorkDetails(null);
+    setIsRinging(false);
+  };
+
 
   const handleAcceptIncomingJob = () => {
     if (!incomingJobAlert) return;
+    if (isBelowMinBalance) {
+      alert(`Minimum wallet balance required: ₹${minWorkerWalletBalance}. Your current balance is ₹${walletBalance}. Please recharge your wallet to accept shift requests.`);
+      setShowRechargeModal(true);
+      return;
+    }
     setIsRinging(false);
 
     const updatedAssigned = [
@@ -247,12 +402,10 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const [endOtpInput, setEndOtpInput] = useState('');
   const [otpMessage, setOtpMessage] = useState<string | null>(null);
 
-  // Messaging State
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: 'worker' | 'customer'; text: string; time: string }>>([
-    { sender: 'customer', text: 'Ramesh, please report at Dock 4 Container Bay at 9:00 AM.', time: '09:12 AM' },
-    { sender: 'worker', text: 'Understood sir. I have my safety gear ready and will verify Start OTP on arrival.', time: '09:14 AM' },
-    { sender: 'customer', text: 'Start OTP will be provided at worksite upon supervisor gate inspection.', time: '09:15 AM' },
-  ]);
+  // Messaging State synced with real-time storage
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => {
+    return dataService.getChatMessages();
+  });
   const [inputMessage, setInputMessage] = useState('');
 
   const selectedBooking = bookings.find((b) => b.id === selectedBookingId) || bookings[0];
@@ -284,6 +437,50 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     }, 400);
   };
 
+  const handleWorkerSignUp = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError(null);
+    if (!signUpName.trim()) {
+      setAuthError('Please enter your full name.');
+      return;
+    }
+    if (!signUpPhone.trim() || signUpPhone.length < 10) {
+      setAuthError('Please enter a valid 10-digit mobile number.');
+      return;
+    }
+    if (!signUpTermsAccepted) {
+      setAuthError('You must accept the Terms of Service & Privacy Policy to register.');
+      return;
+    }
+    if (signUpPassword.length < 6) {
+      setAuthError('Password must be at least 6 characters.');
+      return;
+    }
+    if (signUpPassword !== signUpConfirmPassword) {
+      setAuthError('Passwords do not match.');
+      return;
+    }
+
+    setIsAuthLoading(true);
+    setTimeout(() => {
+      setIsAuthLoading(false);
+      setIsAuthenticated(true);
+      setActiveTab('home');
+      triggerAppRingAlert(`Welcome ${signUpName}! Worker profile registered & duty radar online.`);
+    }, 600);
+  };
+
+  const handleDeleteAccount = () => {
+    setIsDeletingAccount(true);
+    setTimeout(() => {
+      setIsDeletingAccount(false);
+      setShowDeleteAccountModal(false);
+      setIsAuthenticated(false);
+      setAuthScreen('sign-in');
+      setAuthError('Your worker account and associated telemetry data have been permanently purged.');
+    }, 800);
+  };
+
   const handleLogout = () => {
     setPendingConfirmAction({
       title: 'Sign Out Confirmation',
@@ -305,17 +502,69 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     triggerAppRingAlert(`Wallet Recharged! +₹${amount}. New balance: ₹${res.newBalance}`);
   };
 
+  // Dedicated Worker Withdrawal (Instant Payout to UPI / Bank Account)
+  const handleExecuteWithdrawal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (withdrawAmount < 100) {
+      triggerAppRingAlert('Minimum withdrawal amount is ₹100.');
+      return;
+    }
+    if (withdrawAmount > walletBalance) {
+      triggerAppRingAlert(`Insufficient balance! Available: ₹${walletBalance.toLocaleString()}`);
+      return;
+    }
+
+    setIsWithdrawing(true);
+    setTimeout(() => {
+      const utr = `IMPS/${Date.now().toString().slice(-8)}`;
+      const destination = withdrawMethod === 'upi' ? `UPI: ${withdrawUpiId}` : `${withdrawBankName} (...${withdrawAccountNo.slice(-4)})`;
+
+      dataService.createPayoutRequest({
+        requesterId: currentWorker.id,
+        requesterName: currentWorker.name,
+        requesterRole: 'employee',
+        requesterPhone: currentWorker.phone,
+        beneficiaryUpiId: withdrawMethod === 'upi' ? withdrawUpiId : `${withdrawBankName} - ${withdrawAccountNo} (${withdrawIfsc})`,
+        amount: withdrawAmount,
+        adminNote: `Worker withdrawal via ${withdrawMethod.toUpperCase()} (Instant IMPS)`,
+      });
+
+      const newBal = Math.max(0, walletBalance - withdrawAmount);
+      setWalletBalance(newBal);
+      currentWorker.walletBalance = newBal;
+
+      const newRecord = {
+        id: `wth-${Date.now().toString().slice(-6)}`,
+        amount: withdrawAmount,
+        method: destination,
+        utr,
+        status: 'Completed',
+        date: 'Just now',
+      };
+      setWithdrawalHistory((prev) => [newRecord, ...prev]);
+
+      setIsWithdrawing(false);
+      setWithdrawalSuccessReceipt({
+        utr,
+        amount: withdrawAmount,
+        destination,
+        date: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+      triggerAppRingAlert(`₹${withdrawAmount.toLocaleString()} withdrawn successfully! UTR: ${utr}`);
+    }, 500);
+  };
+
   // Status Actions with Confirmation Dialogs
   const promptAcceptJob = (booking: Booking) => {
-    if (walletBalance < 100) {
-      alert('Insufficient wallet balance! Please recharge at least ₹100 to accept job requests.');
+    if (isBelowMinBalance) {
+      alert(`Minimum wallet balance required: ₹${minWorkerWalletBalance}. Your current balance is ₹${walletBalance}. Please recharge your wallet to accept job requests.`);
       setShowRechargeModal(true);
       return;
     }
 
     setPendingConfirmAction({
       title: 'Confirm Shift Acceptance',
-      description: `Accept ${booking.orderNumber} (${booking.jobTitle || booking.categoryName}) for ₹${booking.offeredPricePerWorker}? You will collect cash directly from customer at worksite.`,
+      description: `Accept ${booking.orderNumber} (${booking.jobTitle || booking.categoryName}) for ₹${booking.offeredPricePerWorker}? Employer will pay online via platform.`,
       onConfirm: () => {
         dataService.directAcceptJob(booking.id, currentWorker.id);
         setSelectedBookingId(booking.id);
@@ -328,13 +577,13 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
 
   const promptVerifyStartOtp = () => {
     if (!startOtpInput.trim()) {
-      alert('Please enter the 4-digit Start OTP from customer.');
+      alert('Please enter the 4-digit Start OTP spoken by the employer.');
       return;
     }
 
     setPendingConfirmAction({
       title: 'Confirm Work Attendance Check-in',
-      description: `Verify Start OTP (${startOtpInput}) at ${currentGpsLocation.address}? Your shift timer and live GPS attendance will be activated.`,
+      description: `Verify Start OTP at ${currentGpsLocation.address}? Your shift timer and live GPS attendance will be activated.`,
       onConfirm: () => {
         setPendingConfirmAction(null);
         const res = dataService.verifyStartOtp(
@@ -354,7 +603,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
 
   const promptVerifyEndOtp = () => {
     if (!endOtpInput.trim()) {
-      alert('Please enter the 4-digit End OTP from customer.');
+      alert('Please enter the 4-digit End OTP spoken by the employer.');
       return;
     }
 
@@ -362,8 +611,8 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     const fee = Math.round(wage * 0.1);
 
     setPendingConfirmAction({
-      title: 'Confirm Work Completion & Cash Pay',
-      description: `Confirm end of shift? You will collect ₹${wage} in Cash or UPI from employer. Platform fee of ₹${fee} will be deducted from your prepaid wallet.`,
+      title: 'Confirm Shift Completion',
+      description: `Verify End OTP? Employer pays ₹${wage} online via platform. Wage will be credited after platform fee of ₹${fee} deduction.`,
       onConfirm: () => {
         setPendingConfirmAction(null);
         const res = dataService.verifyEndOtp(
@@ -378,7 +627,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
           if (res.remainingWallet !== undefined) {
             setWalletBalance(res.remainingWallet);
           }
-          triggerAppRingAlert(`Shift Complete! Collected ₹${wage} cash. Platform fee deducted.`);
+          triggerAppRingAlert(`Shift Complete! Shift payout of ₹${wage} processed online.`);
         }
       },
     });
@@ -387,29 +636,85 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMessage.trim()) return;
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        sender: 'worker',
-        text: inputMessage.trim(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
+    const targetBooking = bookings.find((b) => b.id === selectedBookingId) || selectedBooking || bookings[0];
+    const newMsg = dataService.sendChatMessage({
+      bookingId: targetBooking?.id || 'b-1',
+      orderNumber: targetBooking?.orderNumber || 'Order #1045',
+      sender: 'worker',
+      senderName: currentWorker.name || 'Ramesh Kumar',
+      recipientRole: 'customer',
+      text: inputMessage.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+    setChatMessages((prev) => {
+      if (prev.some((m) => m.id === newMsg.id)) return prev;
+      return [...prev, newMsg];
+    });
     setInputMessage('');
-    triggerAppRingAlert('Message dispatched to employer.');
+    triggerAppRingAlert('Message delivered to employer with push notification.');
   };
 
+  const isStandalone = typeof window !== 'undefined' && (
+    new URLSearchParams(window.location.search).get('standalone') === 'true' ||
+    window.location.hash.includes('employee') ||
+    window.innerWidth <= 640
+  );
+
   return (
-    <div className="flex flex-col items-center w-full h-full">
+    <div className={`flex flex-col items-center w-full h-full max-h-[100dvh] overflow-hidden ${isStandalone ? 'p-0' : ''}`}>
       {/* Mobile Device Frame */}
-      <div className="w-full max-w-md sm:w-[380px] h-screen sm:h-[760px] bg-[#1E1F23] sm:rounded-[48px] p-0 sm:p-3 shadow-2xl sm:border-4 border-[#202124]/40 flex flex-col relative overflow-hidden select-none">
-        {/* Notch */}
-        <div className="hidden sm:flex w-36 h-4 bg-black rounded-full mx-auto mb-2 shrink-0 items-center justify-center">
-          <div className="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-700" />
-        </div>
+      <div className={
+        isStandalone
+          ? "w-full h-full h-[100dvh] max-h-[100dvh] bg-[#FFFDF8] flex flex-col relative overflow-hidden select-none"
+          : "w-full max-w-md sm:w-[410px] h-screen sm:h-[820px] max-h-[100dvh] bg-[#1E1F23] sm:rounded-[44px] p-0 sm:p-2.5 shadow-2xl sm:border-4 border-[#202124]/40 flex flex-col relative overflow-hidden select-none"
+      }>
+        {/* Notch (only in desktop preview mockup) */}
+        {!isStandalone && (
+          <div className="hidden sm:flex w-36 h-4 bg-black rounded-full mx-auto mb-1.5 shrink-0 items-center justify-center">
+            <div className="w-2.5 h-2.5 rounded-full bg-neutral-900 border border-neutral-700" />
+          </div>
+        )}
 
         {/* Screen Canvas */}
-        <div className="flex-1 bg-[#F8FAFC] sm:rounded-[38px] overflow-hidden flex flex-col relative text-[#202124]">
+        <div className={`flex-1 min-h-0 bg-[#F8FAFC] ${isStandalone ? 'rounded-none' : 'sm:rounded-[36px]'} overflow-hidden flex flex-col relative text-[#202124]`}>
+          {/* Real App Push Notification Dropdown (Swiggy / Zomato Style) */}
+          {pushBanner && (
+            <div className="absolute top-2 left-2 right-2 z-50 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
+              <div
+                onClick={() => {
+                  if (pushBanner.type === 'system' || pushBanner.title.includes('Message') || pushBanner.message.includes('Message')) {
+                    setActiveTab('messages');
+                  } else if (pushBanner.type === 'job') {
+                    setActiveTab('find-jobs');
+                  }
+                  setPushBanner(null);
+                }}
+                className="bg-[#1E1F23]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-2xl border border-[#FFC928]/40 flex items-start gap-3 cursor-pointer hover:bg-[#1E1F23] transition-colors"
+              >
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#D71920] to-[#A80F18] border border-[#FFC928] flex items-center justify-center shrink-0 shadow-md">
+                  <Bell className="w-4 h-4 text-[#FFC928] animate-bounce" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-black text-[#FFC928] uppercase tracking-wider">
+                      {branding.appName || 'ManPowerLink'} Partner
+                    </span>
+                    <span className="text-[9px] text-white/50">{pushBanner.timestamp}</span>
+                  </div>
+                  <h4 className="text-xs font-bold text-white line-clamp-1 mt-0.5">{pushBanner.title}</h4>
+                  <p className="text-[11px] text-white/80 line-clamp-2 leading-snug mt-0.5">{pushBanner.message}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPushBanner(null)}
+                  className="text-white/40 hover:text-white p-1 text-xs shrink-0 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Active Audio / Ring Notification Toast */}
           {activeAlertToast && (
             <div className="absolute top-2 left-3 right-3 z-50 bg-[#D71920] text-white px-3.5 py-2.5 rounded-2xl shadow-xl flex items-center gap-2.5 animate-bounce text-xs font-bold">
@@ -417,6 +722,94 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 <Volume2 className="w-3.5 h-3.5 text-white animate-pulse" />
               </div>
               <span className="flex-1">{activeAlertToast}</span>
+            </div>
+          )}
+
+          {/* Delete Account Modal (Google Play Store Compliance) */}
+          {showDeleteAccountModal && (
+            <div className="absolute inset-0 bg-black/75 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-3xl p-5 shadow-2xl max-w-xs w-full space-y-3.5 border border-red-200">
+                <div className="w-12 h-12 rounded-2xl bg-red-100 text-[#D71920] flex items-center justify-center mx-auto">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div className="text-center">
+                  <h4 className="text-sm font-black text-slate-900">Delete Account &amp; Purge Data</h4>
+                  <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                    In compliance with Google Play Store User Data Policies, this will permanently delete your worker profile, shift history, KYC documents, and earnings balance. This action cannot be undone.
+                  </p>
+                </div>
+                <div className="bg-red-50 p-2.5 rounded-xl border border-red-200 text-[11px] text-[#A80F18] font-semibold">
+                  ⚠️ Any remaining balance (₹{walletBalance.toLocaleString()}) should be withdrawn before proceeding.
+                </div>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteAccountModal(false)}
+                    className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeletingAccount}
+                    onClick={handleDeleteAccount}
+                    className="py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    {isDeletingAccount ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    <span>{isDeletingAccount ? 'Purging...' : 'Delete Permanently'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Terms & Privacy Policy Modal (Google Play Store Compliance) */}
+          {showTermsModal && (
+            <div className="absolute inset-0 bg-black/75 z-50 flex items-center justify-center p-3">
+              <div className="bg-white rounded-3xl p-4 shadow-2xl max-w-sm w-full space-y-3 border border-slate-200 max-h-[85vh] flex flex-col">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-[#D71920]" />
+                    <h4 className="text-xs font-black text-slate-900">Terms of Service &amp; Privacy Policy</h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowTermsModal(false)}
+                    className="w-6 h-6 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 flex items-center justify-center text-xs font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto text-[11px] text-slate-600 space-y-2.5 pr-1 leading-relaxed">
+                  <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200">
+                    <p className="font-bold text-slate-800">Play Store Compliance Summary</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">Last updated: October 2026 • Verified for Google Play Developer Distribution Agreement</p>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-slate-800">1. Background Location &amp; Worksite Radar</h5>
+                    <p>When you go "Online", the app accesses your device GPS coordinates to match you with nearby job dispatches within your service radius and verify worksite attendance check-in via OTP.</p>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-slate-800">2. Fair Labor &amp; Transparent Wages</h5>
+                    <p>All shifts specify fixed or hourly rates clearly upfront. Daily wages are settled directly between employer and worker at the completion of work upon Start/End OTP verification.</p>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-slate-800">3. User Data Privacy &amp; Encryption</h5>
+                    <p>Your phone number, identification documents, and bank details are encrypted in transit via SSL/TLS. We never sell your personal contact information to third parties.</p>
+                  </div>
+                  <div>
+                    <h5 className="font-bold text-slate-800">4. Right to Account &amp; Data Deletion</h5>
+                    <p>You have full authority to permanently delete your account, KYC records, and telemetry at any time via Profile &gt; Delete Account.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowTermsModal(false)}
+                  className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl cursor-pointer"
+                >
+                  I Understand &amp; Agree
+                </button>
+              </div>
             </div>
           )}
 
@@ -448,8 +841,8 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                     <span className="text-xl font-black text-[#D71920]">
                       ₹{incomingJobAlert.offeredPricePerWorker.toLocaleString()}
                     </span>
-                    <span className="text-[10px] text-[#A80F18] font-bold block">
-                      Per Worker (Cash / Direct UPI)
+                    <span className="text-[10px] text-emerald-800 font-bold block">
+                      Per Worker (Paid Online by Employer)
                     </span>
                   </div>
                 </div>
@@ -473,16 +866,56 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </div>
                 </div>
 
-                {/* Accept & Decline Buttons */}
+                {/* Accept, View Details, Chat & Decline Buttons */}
                 <div className="space-y-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleAcceptIncomingJob}
-                    className="w-full py-3 bg-[#16834A] hover:bg-[#126b3c] text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-[#FFC928]" />
-                    <span>ACCEPT JOB &amp; START TRANSIT</span>
-                  </button>
+                  {isBelowMinBalance && (
+                    <div className="p-2 bg-red-50 border border-red-300 rounded-xl text-[10px] text-[#D71920] font-bold text-center">
+                      ⚠️ Balance (₹{walletBalance}) is below min (₹{minWorkerWalletBalance}). Recharge required.
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setViewingWorkDetails(incomingJobAlert);
+                        setIsRinging(false);
+                      }}
+                      className="py-2.5 px-2 bg-slate-100 hover:bg-slate-200 text-[#202124] font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-slate-300"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-[#D71920]" />
+                      <span>View Details</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenChatForBooking(incomingJobAlert)}
+                      className="py-2.5 px-2 bg-amber-100 hover:bg-amber-200 text-[#202124] font-bold text-[11px] rounded-xl flex items-center justify-center gap-1.5 border border-amber-300 transition-colors cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-[#D71920]" />
+                      <span>Chat First</span>
+                    </button>
+                  </div>
+
+                  {isBelowMinBalance ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowRechargeModal(true)}
+                      className="w-full py-3 bg-[#D71920] hover:bg-[#A80F18] text-white font-black text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Wallet className="w-4 h-4 text-[#FFC928]" />
+                      <span>RECHARGE TO ACCEPT (Min ₹{minWorkerWalletBalance})</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleAcceptIncomingJob}
+                      className="w-full py-3 bg-[#16834A] hover:bg-[#126b3c] text-white font-black text-xs rounded-xl shadow-md transition-all active:scale-98 flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-[#FFC928]" />
+                      <span>ACCEPT JOB &amp; START TRANSIT</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -493,6 +926,153 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                     className="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs rounded-xl transition-colors cursor-pointer"
                   >
                     Decline Shift
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Full Work Details Modal Before Accepting Shift */}
+          {viewingWorkDetails && (
+            <div className="absolute inset-0 bg-black/80 z-50 flex items-center justify-center p-3 animate-in fade-in duration-150">
+              <div className="bg-white rounded-3xl max-h-[92%] w-full max-w-sm flex flex-col overflow-hidden shadow-2xl border-2 border-slate-200">
+                {/* Header */}
+                <div className="p-4 bg-linear-to-r from-slate-900 to-slate-800 text-white flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-mono text-[#FFC928] font-bold block">
+                      {viewingWorkDetails.orderNumber} • WORK DETAILS
+                    </span>
+                    <h3 className="text-sm font-black text-white leading-snug">
+                      {viewingWorkDetails.jobTitle || viewingWorkDetails.categoryName}
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setViewingWorkDetails(null)}
+                    className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center text-xs font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="p-4 overflow-y-auto space-y-3 flex-1 text-xs text-[#202124]">
+                  {/* Employer Info */}
+                  <div className="p-3 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-1">
+                    <span className="text-[10px] text-[#A80F18] font-bold uppercase tracking-wider block">Employer / Client</span>
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-xs">{viewingWorkDetails.customerName || 'Verified Corporate Client'}</span>
+                      <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                        Verified
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Financial & Wage Breakdown */}
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-slate-500 font-semibold">Shift Payout per Worker:</span>
+                      <span className="text-base font-black text-emerald-700">₹{viewingWorkDetails.offeredPricePerWorker}</span>
+                    </div>
+                    <div className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-1 rounded-lg flex items-center gap-1">
+                      <CreditCard className="w-3 h-3 text-emerald-600" />
+                      <span>Payment Method: Paid Online by Employer via Platform</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-[#686868] pt-1 border-t border-slate-200">
+                      <span>Platform Commission:</span>
+                      <span className="font-bold text-[#D71920]">-₹{Math.round(viewingWorkDetails.offeredPricePerWorker * 0.1)}</span>
+                    </div>
+                  </div>
+
+                  {/* Worksite Location & Distance */}
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1">
+                    <span className="text-[10px] text-slate-500 font-semibold flex items-center gap-1">
+                      <MapPin className="w-3.5 h-3.5 text-[#D71920]" />
+                      Worksite Location:
+                    </span>
+                    <p className="font-bold text-xs text-[#202124]">{viewingWorkDetails.workLocation.address}</p>
+                    <span className="text-[10px] text-[#686868] block">Geofenced GPS arrival check required at gate.</span>
+                  </div>
+
+                  {/* Timing & Slots */}
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 block font-semibold">Shift Hours:</span>
+                      <span className="font-bold text-slate-800">{viewingWorkDetails.startTime} – {viewingWorkDetails.endTime}</span>
+                    </div>
+                    <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200">
+                      <span className="text-[10px] text-slate-500 block font-semibold">Slots Needed:</span>
+                      <span className="font-bold text-[#D71920]">{viewingWorkDetails.acceptedWorkersCount} / {viewingWorkDetails.requiredWorkers} Workers</span>
+                    </div>
+                  </div>
+
+                  {/* Employer Remarks & Instructions */}
+                  {(viewingWorkDetails.remarks || viewingWorkDetails.specialInstructions) && (
+                    <div className="p-3 bg-red-50/50 rounded-2xl border border-red-100 space-y-1">
+                      <span className="text-[10px] text-[#D71920] font-bold flex items-center gap-1">
+                        <FileText className="w-3 h-3" />
+                        Employer Special Instructions:
+                      </span>
+                      <p className="text-[11px] text-slate-700 leading-snug">
+                        {viewingWorkDetails.remarks || viewingWorkDetails.specialInstructions}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* OTP Notice */}
+                  <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[10px] text-blue-900 leading-tight flex items-start gap-1.5">
+                    <Key className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>OTP Procedure:</strong> Employer will verbally provide the 4-digit Start OTP when you reach the worksite.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="p-3 bg-slate-50 border-t border-slate-200 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenChatForBooking(viewingWorkDetails)}
+                      className="py-2.5 bg-amber-100 hover:bg-amber-200 text-[#202124] font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 border border-amber-300 transition-colors cursor-pointer"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-[#D71920]" />
+                      <span>Chat with Employer</span>
+                    </button>
+
+                    {isBelowMinBalance ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setViewingWorkDetails(null);
+                          setShowRechargeModal(true);
+                        }}
+                        className="py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-[11px] rounded-xl shadow-xs transition-colors cursor-pointer text-center"
+                      >
+                        Recharge to Accept
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          promptAcceptJob(viewingWorkDetails);
+                          setViewingWorkDetails(null);
+                        }}
+                        className="py-2.5 bg-[#16834A] hover:bg-[#126b3c] text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer text-center flex items-center justify-center gap-1"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5 text-[#FFC928]" />
+                        <span>Accept Shift</span>
+                      </button>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setViewingWorkDetails(null)}
+                    className="w-full py-1.5 text-slate-500 hover:text-slate-800 text-[11px] font-semibold text-center cursor-pointer"
+                  >
+                    Close Details
                   </button>
                 </div>
               </div>
@@ -575,11 +1155,11 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
           )}
 
           {/* ========================================================== */}
-          {/* A. UNAUTHENTICATED SCREENS */}
+          {/* A. UNAUTHENTICATED SCREENS (SIGN IN / SIGN UP)            */}
           {/* ========================================================== */}
           {!isAuthenticated ? (
             <div className="flex-1 flex flex-col bg-[#FFFDF8] overflow-y-auto p-5">
-              <div className="text-center mt-3 mb-5">
+              <div className="text-center mt-3 mb-4">
                 {branding.mainLogoUrl ? (
                   <div className="w-14 h-14 rounded-2xl bg-white p-1 shadow-md mb-2 mx-auto border-2 border-[#FFC928] overflow-hidden flex items-center justify-center">
                     <img src={branding.mainLogoUrl} alt={branding.appName || 'Logo'} className="w-full h-full object-contain" />
@@ -596,10 +1176,10 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   {branding.appName || 'ManPowerLink'}
                 </h1>
                 <p className="text-[11px] font-bold text-[#D71920] uppercase tracking-wider">
-                  Employee App
+                  Partner / Worker App
                 </p>
-                <p className="text-xs text-[#686868] mt-1">
-                  Find work opportunities and manage shifts
+                <p className="text-xs text-[#686868] mt-0.5">
+                  Verified Shifts, Daily Wage Payouts &amp; Worksite Radar
                 </p>
               </div>
 
@@ -610,66 +1190,220 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 </div>
               )}
 
-              <form onSubmit={handleSignIn} className="space-y-3 flex-1 flex flex-col justify-between">
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#202124] mb-1">
-                      Registered Mobile Number
-                    </label>
-                    <div className="relative">
-                      <Phone className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="tel"
-                        required
-                        value={loginPhone}
-                        onChange={(e) => setLoginPhone(e.target.value)}
-                        placeholder="+91 98765 43210"
-                        className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                      />
+              {authScreen === 'sign-in' ? (
+                /* SIGN IN VIEW */
+                <form onSubmit={handleSignIn} className="space-y-3 flex-1 flex flex-col justify-between">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202124] mb-1">
+                        Registered Mobile Number
+                      </label>
+                      <div className="relative">
+                        <Phone className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="tel"
+                          required
+                          value={loginPhone}
+                          onChange={(e) => setLoginPhone(e.target.value)}
+                          placeholder="+91 98765 43210"
+                          className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
                     </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-[#202124]">Password</label>
+                        <span className="text-[10px] text-slate-400 font-medium">Default: Worker@2026</span>
+                      </div>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          value={loginPassword}
+                          onChange={(e) => setLoginPassword(e.target.value)}
+                          placeholder="••••••••••••"
+                          className="w-full pl-9 pr-9 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#686868] cursor-pointer"
+                        >
+                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isAuthLoading}
+                      className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2"
+                    >
+                      {isAuthLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
+                      <span>Sign In to Worker Account</span>
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-[#202124] mb-1">Password</label>
-                    <div className="relative">
-                      <Lock className="w-4 h-4 text-[#686868] absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="••••••••••••"
-                        className="w-full pl-9 pr-9 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                      />
+                  <div className="pt-4 text-center border-t border-slate-100 space-y-2">
+                    <p className="text-xs text-[#686868]">
+                      New worker or trade specialist?{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthError(null);
+                          setAuthScreen('sign-up');
+                        }}
+                        className="font-bold text-[#D71920] hover:underline cursor-pointer"
+                      >
+                        Register New Profile
+                      </button>
+                    </p>
+
+                    <div className="text-[10px] text-slate-400 flex items-center justify-center gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowTermsModal(true)}
+                        className="hover:underline text-slate-500"
+                      >
+                        Terms &amp; Privacy Policy
+                      </button>
+                      <span>•</span>
+                      <span>Google Play Compliant</span>
                     </div>
                   </div>
+                </form>
+              ) : (
+                /* INTERACTIVE SIGN UP VIEW FOR WORKERS */
+                <form onSubmit={handleWorkerSignUp} className="space-y-2.5 flex-1 flex flex-col justify-between">
+                  <div className="space-y-2.5">
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202124] mb-1">Full Legal Name (as per Aadhaar)</label>
+                      <input
+                        type="text"
+                        required
+                        value={signUpName}
+                        onChange={(e) => setSignUpName(e.target.value)}
+                        placeholder="e.g. Suresh Gowda"
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                      />
+                    </div>
 
-                  <button
-                    type="submit"
-                    className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer flex items-center justify-center gap-2 mt-2"
-                  >
-                    <span>Sign In to Employee App</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Mobile Number</label>
+                        <input
+                          type="tel"
+                          required
+                          value={signUpPhone}
+                          onChange={(e) => setSignUpPhone(e.target.value)}
+                          placeholder="+91 98800 12345"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Primary Skill Trade</label>
+                        <select
+                          value={signUpCategory}
+                          onChange={(e) => setSignUpCategory(e.target.value)}
+                          className="w-full px-2 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        >
+                          <option value="Loading & Unloading">Loading & Unloading</option>
+                          <option value="Construction & Masonry">Construction & Masonry</option>
+                          <option value="Event Setup & Catering">Event Setup & Catering</option>
+                          <option value="Warehouse & Logistics">Warehouse & Logistics</option>
+                          <option value="Cleaning & Sanitation">Cleaning & Sanitation</option>
+                        </select>
+                      </div>
+                    </div>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAuthenticated(true);
-                      setActiveTab('home');
-                    }}
-                    className="w-full py-2 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-2"
-                  >
-                    <span>Quick Enter Employee App →</span>
-                  </button>
-                </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202124] mb-1">City / Base Hub</label>
+                      <input
+                        type="text"
+                        required
+                        value={signUpCity}
+                        onChange={(e) => setSignUpCity(e.target.value)}
+                        placeholder="e.g. Mangalore, Karnataka"
+                        className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                      />
+                    </div>
 
-                <div className="pt-4 text-center border-t border-slate-100">
-                  <p className="text-xs text-[#686868]">
-                    New worker? <span className="font-bold text-[#D71920]">Sign Up via Admin</span>
-                  </p>
-                </div>
-              </form>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={signUpPassword}
+                          onChange={(e) => setSignUpPassword(e.target.value)}
+                          placeholder="Min 6 chars"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-[#202124] mb-1">Confirm Password</label>
+                        <input
+                          type="password"
+                          required
+                          value={signUpConfirmPassword}
+                          onChange={(e) => setSignUpConfirmPassword(e.target.value)}
+                          placeholder="Repeat password"
+                          className="w-full px-3 py-1.5 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Terms & Conditions Checkbox (Google Play Policy Compliance) */}
+                    <div className="flex items-start gap-2 pt-1">
+                      <input
+                        type="checkbox"
+                        id="workerTerms"
+                        checked={signUpTermsAccepted}
+                        onChange={(e) => setSignUpTermsAccepted(e.target.checked)}
+                        className="mt-0.5 rounded text-[#D71920] focus:ring-[#D71920]"
+                      />
+                      <label htmlFor="workerTerms" className="text-[10px] text-slate-600 leading-tight">
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          onClick={() => setShowTermsModal(true)}
+                          className="text-[#D71920] font-bold hover:underline"
+                        >
+                          Terms of Service &amp; Privacy Policy
+                        </button>
+                        , including GPS worksite tracking while on duty.
+                      </label>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={isAuthLoading}
+                      className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white font-bold text-xs rounded-xl shadow-sm transition-colors cursor-pointer mt-1 flex items-center justify-center gap-2"
+                    >
+                      {isAuthLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                      <span>Register Partner Profile</span>
+                    </button>
+                  </div>
+
+                  <div className="pt-3 text-center border-t border-slate-100">
+                    <p className="text-xs text-[#686868]">
+                      Already registered?{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAuthError(null);
+                          setAuthScreen('sign-in');
+                        }}
+                        className="font-bold text-[#D71920] hover:underline cursor-pointer"
+                      >
+                        Sign In Here
+                      </button>
+                    </p>
+                  </div>
+                </form>
+              )}
             </div>
           ) : (
             /* ========================================================== */
@@ -715,22 +1449,18 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    Auto-Ring
-                  </span>
-
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
-                      playIncomingJobRingtone();
-                      triggerAppRingAlert('🔔 Testing Loud Job Ringtone!');
+                      setWithdrawAmount(Math.min(walletBalance, 2000));
+                      setShowWithdrawModal(true);
                     }}
-                    className="p-1.5 bg-black/30 hover:bg-black/50 text-[#FFC928] rounded-full transition-all cursor-pointer shadow-2xs"
-                    title="Test Incoming Job Ringtone"
+                    className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-[#FFC928] border border-[#FFC928]/30 px-2 py-1 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer shadow-2xs"
+                    title="Tap to Withdraw Earnings"
                   >
-                    <Volume2 className="w-3.5 h-3.5" />
+                    <Wallet className="w-3 h-3 text-[#FFC928]" />
+                    <span>₹{walletBalance.toLocaleString()}</span>
                   </button>
 
                   <button
@@ -742,78 +1472,226 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                         : 'bg-white/10 text-white/60 hover:text-white'
                     }`}
                   >
-                    <Power className="w-3 h-3" />
+                    <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-600 animate-pulse' : 'bg-slate-400'}`} />
                     <span>{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
                   </button>
                 </div>
               </div>
 
-              {/* Scrollable Screen Content Body */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {/* 1. HOME TAB */}
+              {/* Scrollable Screen Content Body - Strictly contained between header and bottom bar */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 overscroll-contain pb-6">
+                {/* 1. HOME TAB - COMMERCIAL PARTNER REDESIGN */}
                 {activeTab === 'home' && (
-                  <div className="space-y-4">
-                    {/* Worker Prepaid Wallet Card */}
-                    <div className="bg-linear-to-r from-[#1E1F23] to-[#2D3039] p-4 rounded-3xl text-white shadow-md space-y-3 border border-white/10">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-white/70 flex items-center gap-1.5">
-                          <Wallet className="w-4 h-4 text-[#FFC928]" />
-                          <span>Prepaid Wallet Balance</span>
-                        </span>
-                        <span className="text-[10px] bg-[#FFC928]/20 text-[#FFC928] border border-[#FFC928]/40 px-2 py-0.5 rounded-full font-bold">
-                          {walletBalance >= 100 ? 'Active to Receive Jobs' : 'Low Balance'}
-                        </span>
-                      </div>
-                      <div className="flex items-baseline justify-between">
-                        <span className="text-3xl font-black text-white">₹{walletBalance.toLocaleString()}</span>
+                  <div className="space-y-3.5">
+                    {/* Minimum Wallet Balance Alert Banner */}
+                    {isBelowMinBalance && (
+                      <div className="p-3 bg-red-50 border-2 border-red-300 rounded-2xl flex items-center justify-between shadow-2xs">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-[#D71920] shrink-0" />
+                          <div>
+                            <span className="text-xs font-bold text-[#D71920] block">Minimum Wallet Balance Required</span>
+                            <span className="text-[10px] text-slate-600 block">
+                              Balance (₹{walletBalance}) is below required min (₹{minWorkerWalletBalance}). Recharge to receive shift requests.
+                            </span>
+                          </div>
+                        </div>
                         <button
                           type="button"
                           onClick={() => setShowRechargeModal(true)}
-                          className="px-3 py-1.5 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-black rounded-xl shadow-xs transition-all cursor-pointer"
+                          className="px-2.5 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-[10px] font-black rounded-xl shrink-0 cursor-pointer shadow-xs"
                         >
-                          + Recharge Wallet
+                          Recharge
                         </button>
                       </div>
-                      <p className="text-[10px] text-white/60 leading-tight">
-                        Cash wages are paid directly to you by the customer. Platform fee (₹200) is deducted from this wallet upon job completion.
-                      </p>
+                    )}
+
+                    {/* A. Tactile Partner Duty Status Card */}
+                    <div className={`p-4 rounded-3xl transition-all border shadow-md relative overflow-hidden ${
+                      isOnline
+                        ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 border-[#FFC928]/40 text-white'
+                        : 'bg-slate-100 border-slate-200 text-slate-700'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2.5">
+                          <div className={`w-3.5 h-3.5 rounded-full ${
+                            isOnline ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'
+                          }`} />
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-wider block opacity-70">
+                              {isOnline ? 'DUTY RADAR ACTIVE' : 'WORKER STATUS'}
+                            </span>
+                            <h3 className="text-sm font-black tracking-tight">
+                              {isOnline ? 'Online • Accepting Shifts' : 'Offline • Duty Paused'}
+                            </h3>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => setIsOnline(!isOnline)}
+                          className={`px-3.5 py-1.5 rounded-2xl text-xs font-black shadow-sm transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 ${
+                            isOnline
+                              ? 'bg-[#FFC928] text-[#202124] hover:bg-amber-400'
+                              : 'bg-slate-800 text-white hover:bg-slate-900'
+                          }`}
+                        >
+                          <span>{isOnline ? 'GO OFFLINE' : 'GO ONLINE'}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="mt-3 pt-2.5 border-t border-white/10 flex items-center justify-between text-[11px]">
+                        <div className="flex items-center gap-1.5 text-slate-300">
+                          <MapPin className="w-3.5 h-3.5 text-[#FFC928] shrink-0" />
+                          <span className="truncate max-w-[210px] text-[10px]">{currentGpsLocation.address}</span>
+                        </div>
+                        <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-white/10 text-[#FFC928] shrink-0">
+                          Radar: 15 km
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Today's Assigned Shift Card */}
-                    <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-2xs space-y-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold text-[#A80F18] bg-[#FFC928]/25 px-2.5 py-1 rounded-md">
-                          TODAY'S CONFIRMED SHIFT
-                        </span>
-                        <span className="text-xs font-black text-[#202124]">{selectedBooking?.orderNumber}</span>
+                    {/* B. 3-Part Partner Earnings Grid */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs text-center space-y-0.5">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">Today</span>
+                        <span className="text-sm font-black text-[#202124] block">₹2,200</span>
+                        <span className="text-[9px] font-semibold text-emerald-600 block">1 Shift Done</span>
                       </div>
+                      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs text-center space-y-0.5">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wide block">This Week</span>
+                        <span className="text-sm font-black text-[#202124] block">₹11,400</span>
+                        <span className="text-[9px] font-semibold text-emerald-600 block">5 Shifts</span>
+                      </div>
+                      <div className="bg-amber-50 p-3 rounded-2xl border border-amber-200/80 shadow-2xs text-center space-y-0.5">
+                        <span className="text-[9px] font-bold text-amber-800 uppercase tracking-wide block">Wallet</span>
+                        <span className="text-sm font-black text-[#D71920] block">₹{walletBalance.toLocaleString()}</span>
+                        <span className="text-[9px] font-bold text-slate-600 block">Available</span>
+                      </div>
+                    </div>
+
+                    {/* C. Quick Payout Withdrawal Card */}
+                    <div className="bg-gradient-to-r from-slate-900 to-slate-800 p-3.5 rounded-2xl text-white flex items-center justify-between border border-slate-700 shadow-sm">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-xl bg-[#FFC928]/20 text-[#FFC928] flex items-center justify-center shrink-0">
+                          <Wallet className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-slate-400 block font-bold">Instant Payout Available</span>
+                          <span className="text-xs font-black text-[#FFC928]">₹{walletBalance.toLocaleString()} in Wages</span>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWithdrawAmount(Math.min(walletBalance, 2000));
+                            setShowWithdrawModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-[11px] font-black rounded-xl shadow-xs transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                        >
+                          <ArrowDownToLine className="w-3.5 h-3.5" />
+                          <span>Withdraw</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowPassbookModal(true)}
+                          className="px-2.5 py-1.5 bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold rounded-xl transition-all cursor-pointer"
+                          title="Passbook"
+                        >
+                          <Receipt className="w-3.5 h-3.5 text-[#FFC928]" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* D. Today's Confirmed Shift Action Card */}
+                    <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden space-y-3 p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-[#D71920] bg-red-50 border border-red-200 px-2.5 py-1 rounded-full uppercase tracking-wider flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#D71920] animate-pulse" />
+                          Active Shift Today
+                        </span>
+                        <span className="text-xs font-mono font-bold text-slate-800">
+                          {selectedBooking?.orderNumber || 'MPL-2026-101'}
+                        </span>
+                      </div>
+
                       <div>
-                        <h4 className="text-xs font-bold text-[#202124]">{selectedBooking?.jobTitle || selectedBooking?.categoryName}</h4>
-                        <p className="text-[11px] text-[#686868] mt-0.5 flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-[#D71920]" />
-                          <span>{selectedBooking?.workLocation?.address}</span>
+                        <h4 className="text-sm font-black text-slate-900 leading-snug">
+                          {selectedBooking?.jobTitle || selectedBooking?.categoryName || 'Warehouse Loading & Offloading'}
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-1 flex items-start gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-[#D71920] shrink-0 mt-0.5" />
+                          <span className="line-clamp-2">{selectedBooking?.workLocation?.address || 'Baikampady Industrial Estate, Mangalore'}</span>
                         </p>
                       </div>
-                      <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
-                        <span className="font-black text-[#D71920]">₹{selectedBooking?.offeredPricePerWorker} / Day (Cash)</span>
+
+                      <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
+                        <div>
+                          <span className="text-[10px] text-slate-400 block font-bold">Shift Payout</span>
+                          <span className="text-sm font-black text-[#D71920]">
+                            ₹{selectedBooking?.offeredPricePerWorker || 2200} <span className="text-[10px] text-slate-600 font-semibold">(Direct Cash / UPI)</span>
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 block font-bold">Shift Timing</span>
+                          <span className="text-xs font-bold text-slate-800">
+                            {selectedBooking?.startTime || '08:30 AM'} – {selectedBooking?.endTime || '05:30 PM'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action Buttons: Chat with Employer & Start OTP */}
+                      <div className="grid grid-cols-2 gap-2 pt-1">
                         <button
-                          onClick={() => setActiveTab('my-work')}
-                          className="px-3 py-1.5 bg-[#D71920] text-white text-[11px] font-bold rounded-xl shadow-xs"
+                          type="button"
+                          onClick={() => handleOpenChatForBooking(selectedBooking)}
+                          className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                         >
-                          Attendance & OTP →
+                          <MessageSquare className="w-3.5 h-3.5 text-[#D71920]" />
+                          <span>Chat with Employer</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('my-work')}
+                          className="py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-black rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                        >
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#FFC928]" />
+                          <span>Start OTP Check-In →</span>
                         </button>
                       </div>
                     </div>
 
-                    {/* Live GPS Stamp Status */}
-                    <div className="bg-[#FFC928]/15 border border-[#FFC928]/40 p-3 rounded-2xl flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-[#D71920] text-white flex items-center justify-center shrink-0">
-                        <Navigation className="w-4 h-4" />
-                      </div>
-                      <div className="text-xs">
-                        <h5 className="font-bold text-[#202124]">Current Worksite Location Tagged</h5>
-                        <p className="text-[10px] text-[#686868] mt-0.5">{currentGpsLocation.address}</p>
-                      </div>
+                    {/* E. Quick Action Shortcuts */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('find-jobs')}
+                        className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl text-left shadow-2xs flex items-center gap-2.5 cursor-pointer transition-colors"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-red-50 text-[#D71920] flex items-center justify-center shrink-0">
+                          <Search className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 block">Nearby Shifts</span>
+                          <span className="text-[10px] text-slate-400">{bookings.length} jobs available</span>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowTermsModal(true)}
+                        className="p-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-2xl text-left shadow-2xs flex items-center gap-2.5 cursor-pointer transition-colors"
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                          <ShieldCheck className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-slate-800 block">Safety &amp; Policies</span>
+                          <span className="text-[10px] text-slate-400">Play Store Verified</span>
+                        </div>
+                      </button>
                     </div>
                   </div>
                 )}
@@ -821,6 +1699,28 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 {/* 2. FIND JOBS TAB */}
                 {activeTab === 'find-jobs' && (
                   <div className="space-y-3">
+                    {/* Minimum Wallet Balance Alert Banner */}
+                    {isBelowMinBalance && (
+                      <div className="p-3 bg-red-50 border-2 border-red-300 rounded-2xl flex items-center justify-between shadow-2xs">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle className="w-5 h-5 text-[#D71920] shrink-0" />
+                          <div>
+                            <span className="text-xs font-bold text-[#D71920] block">Minimum Wallet Balance Required</span>
+                            <span className="text-[10px] text-slate-600 block">
+                              Balance (₹{walletBalance}) is below required min (₹{minWorkerWalletBalance}). Recharge to accept shift requests.
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowRechargeModal(true)}
+                          className="px-2.5 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-[10px] font-black rounded-xl shrink-0 cursor-pointer shadow-xs"
+                        >
+                          Recharge
+                        </button>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between">
                       <h3 className="text-xs font-extrabold text-[#202124] uppercase tracking-wider">
                         Available Job Radar ({bookings.length} nearby)
@@ -920,25 +1820,42 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                           </div>
                         </div>
 
-                        {/* Actions with Confirmation */}
-                        <div className="grid grid-cols-2 gap-2 pt-1">
+                        {/* Actions: View Details, Chat, Accept */}
+                        <div className="grid grid-cols-3 gap-1.5 pt-1">
                           <button
                             type="button"
-                            onClick={() => promptAcceptJob(b)}
-                            className="py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                            onClick={() => setViewingWorkDetails(b)}
+                            className="py-2.5 bg-slate-100 hover:bg-slate-200 text-[#202124] text-[11px] font-bold rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1 border border-slate-200"
                           >
-                            Accept Shift
+                            <Eye className="w-3.5 h-3.5 text-[#D71920]" />
+                            <span>Details</span>
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedBookingId(b.id);
-                              setActiveTab('my-work');
-                            }}
-                            className="py-2.5 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+                            onClick={() => handleOpenChatForBooking(b)}
+                            className="py-2.5 bg-amber-100 hover:bg-amber-200 text-[#202124] text-[11px] font-bold rounded-xl border border-amber-300 transition-colors cursor-pointer flex items-center justify-center gap-1"
                           >
-                            Counter-Bid
+                            <MessageSquare className="w-3.5 h-3.5 text-[#D71920]" />
+                            <span>Chat</span>
                           </button>
+                          {isBelowMinBalance ? (
+                            <button
+                              type="button"
+                              onClick={() => setShowRechargeModal(true)}
+                              className="py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-[10px] font-bold rounded-xl shadow-xs transition-colors cursor-pointer text-center"
+                            >
+                              Recharge
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => promptAcceptJob(b)}
+                              className="py-2.5 bg-[#16834A] hover:bg-[#126b3c] text-white text-[11px] font-bold rounded-xl shadow-xs transition-colors cursor-pointer text-center flex items-center justify-center gap-1"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5 text-[#FFC928]" />
+                              <span>Accept</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -1001,31 +1918,19 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                         </button>
                       </div>
 
-                      {/* 2. Step 1: Start OTP with Dynamic Code & Auto-Fill */}
+                      {/* 2. Step 1: Start OTP (Spoken by Employer) */}
                       <div className="bg-amber-50/50 p-3.5 rounded-2xl border-2 border-[#FFC928]/90 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-[#D71920]" />
                             <span>Step 1: Verify Start OTP</span>
                           </span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded font-black">
-                              Code: {selectedBooking?.startOtp || 'Pending'}
-                            </span>
-                            {selectedBooking?.startOtp && (
-                              <button
-                                type="button"
-                                onClick={() => setStartOtpInput(selectedBooking.startOtp || '')}
-                                className="text-[9px] bg-[#D71920] text-white px-1.5 py-0.5 rounded font-bold hover:bg-[#A80F18] cursor-pointer"
-                                title="Auto-fill OTP from booking"
-                              >
-                                Auto-Fill
-                              </button>
-                            )}
-                          </div>
+                          <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold border border-slate-200">
+                            Spoken by Employer
+                          </span>
                         </div>
                         <p className="text-[10px] text-[#686868]">
-                          Ask the worksite employer for their 4-digit start OTP to begin shift:
+                          Ask the worksite employer for their 4-digit Start OTP to begin shift:
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -1033,7 +1938,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                             maxLength={4}
                             value={startOtpInput}
                             onChange={(e) => setStartOtpInput(e.target.value)}
-                            placeholder={selectedBooking?.startOtp ? `e.g. ${selectedBooking.startOtp}` : '4-digit OTP'}
+                            placeholder="Enter 4-digit OTP"
                             className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-amber-300 rounded-xl focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40 text-[#202124]"
                           />
                           <button
@@ -1106,46 +2011,40 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                         )}
                       </div>
 
-                      {/* 4. Step 2: End OTP with Dynamic Code & Auto-Fill & Cash Collection */}
+                      {/* 4. Step 2: End OTP (Spoken by Employer) */}
                       <div className="bg-amber-50/50 p-3.5 rounded-2xl border-2 border-[#FFC928]/90 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
                             <span className="w-2 h-2 rounded-full bg-[#FFC928]" />
                             <span>Step 2: Collect Wage & End OTP</span>
                           </span>
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] bg-[#D71920] text-white px-2 py-0.5 rounded font-bold">
-                              Code: {selectedBooking?.endOtp || 'Pending'}
-                            </span>
-                            {selectedBooking?.endOtp && (
-                              <button
-                                type="button"
-                                onClick={() => setEndOtpInput(selectedBooking.endOtp || '')}
-                                className="text-[9px] bg-[#FFC928] text-[#202124] px-1.5 py-0.5 rounded font-black hover:bg-[#E5A900] cursor-pointer"
-                                title="Auto-fill End OTP"
-                              >
-                                Auto-Fill
-                              </button>
-                            )}
-                          </div>
+                          <span className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-bold border border-slate-200">
+                            Spoken by Employer
+                          </span>
                         </div>
                         <div className="bg-white p-2.5 rounded-xl border border-amber-200 text-xs space-y-1">
                           <div className="flex justify-between font-bold text-[#202124]">
-                            <span>Wage to Collect from Employer:</span>
+                            <span>Shift Wage Payout:</span>
                             <span className="text-emerald-700 font-black">₹{selectedBooking?.offeredPricePerWorker || 2000}</span>
                           </div>
-                          <div className="flex justify-between text-[10px] text-[#686868]">
-                            <span>Platform Commission (debited from your wallet):</span>
+                          <div className="text-[10px] text-emerald-800 font-semibold flex items-center gap-1">
+                            <span>● Paid Online by Employer via Platform Escrow</span>
+                          </div>
+                          <div className="flex justify-between text-[10px] text-[#686868] pt-0.5 border-t border-amber-100">
+                            <span>Platform Commission (debited from wallet):</span>
                             <span className="text-[#D71920] font-bold">-₹{Math.round((selectedBooking?.offeredPricePerWorker || 2000) * 0.1)}</span>
                           </div>
                         </div>
+                        <p className="text-[10px] text-[#686868]">
+                          Ask the worksite employer for the 4-digit End OTP upon satisfactory work completion:
+                        </p>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             maxLength={4}
                             value={endOtpInput}
                             onChange={(e) => setEndOtpInput(e.target.value)}
-                            placeholder={selectedBooking?.endOtp ? `e.g. ${selectedBooking.endOtp}` : '4-digit OTP'}
+                            placeholder="Enter 4-digit OTP"
                             className="flex-1 px-3 py-1.5 text-center font-mono font-black text-sm bg-white border border-amber-300 rounded-xl focus:outline-none focus:border-[#FFC928] focus:ring-2 focus:ring-[#FFC928]/40 text-[#202124]"
                           />
                           <button
@@ -1196,20 +2095,48 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
 
                 {/* 4. MESSAGES TAB */}
                 {activeTab === 'messages' && (
-                  <div className="h-full flex flex-col space-y-3">
+                  <div className="h-full flex flex-col space-y-2.5">
                     <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-[#FFC928] text-[#202124] font-bold flex items-center justify-center text-xs">
-                          AL
+                          {(selectedBooking?.customerName || 'AL').slice(0, 2).toUpperCase()}
                         </div>
                         <div>
-                          <h4 className="text-xs font-bold text-[#202124]">Apex Logistics (Employer)</h4>
+                          <h4 className="text-xs font-bold text-[#202124]">{selectedBooking?.customerName || 'Apex Logistics (Employer)'}</h4>
                           <span className="text-[10px] text-[#D71920] flex items-center gap-1 font-semibold">
-                            ● Order #1045 Active
+                            ● {selectedBooking?.orderNumber || 'Order #1045'} ({selectedBooking?.categoryName || 'Shift'})
                           </span>
                         </div>
                       </div>
+                      {/* If this worker has not yet accepted this shift, show pre-acceptance action */}
+                      {selectedBooking && !selectedBooking.assignedWorkers.some(w => w.workerId === currentWorker.id) && (
+                        isBelowMinBalance ? (
+                          <button
+                            type="button"
+                            onClick={() => setShowRechargeModal(true)}
+                            className="px-2 py-1 bg-[#D71920] text-white text-[10px] font-bold rounded-lg shadow-xs hover:bg-[#A80F18] cursor-pointer"
+                          >
+                            Recharge to Accept
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => promptAcceptJob(selectedBooking)}
+                            className="px-2.5 py-1 bg-[#16834A] text-white text-[10px] font-bold rounded-lg shadow-xs hover:bg-[#126b3c] cursor-pointer flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="w-3 h-3 text-[#FFC928]" />
+                            <span>Accept (₹{selectedBooking.offeredPricePerWorker})</span>
+                          </button>
+                        )
+                      )}
                     </div>
+
+                    {/* Pre-acceptance help notice */}
+                    {selectedBooking && !selectedBooking.assignedWorkers.some(w => w.workerId === currentWorker.id) && (
+                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-900 flex items-center justify-between">
+                        <span>💬 Chat with employer before accepting shift. Ask about reporting gate, PPE or tools.</span>
+                      </div>
+                    )}
 
                     <div className="space-y-2 flex-1 overflow-y-auto">
                       {chatMessages.map((msg, idx) => (
@@ -1237,17 +2164,42 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                       ))}
                     </div>
 
-                    <form onSubmit={handleSendMessage} className="flex gap-1.5 pt-1">
+                    {/* Quick inquiry chips */}
+                    <div className="flex gap-1.5 overflow-x-auto py-1 scrollbar-none">
+                      <button
+                        type="button"
+                        onClick={() => setInputMessage('What specific PPE gear or tools are required on site?')}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-[#202124] text-[10px] rounded-lg shrink-0 font-medium cursor-pointer"
+                      >
+                        PPE / Tools required?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInputMessage('Which specific gate or supervisor should I report to?')}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-[#202124] text-[10px] rounded-lg shrink-0 font-medium cursor-pointer"
+                      >
+                        Reporting gate?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInputMessage('Can you confirm lunch/tea break timings?')}
+                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-[#202124] text-[10px] rounded-lg shrink-0 font-medium cursor-pointer"
+                      >
+                        Break timings?
+                      </button>
+                    </div>
+
+                    <form onSubmit={handleSendMessage} className="flex gap-1.5 pt-0.5">
                       <input
                         type="text"
                         value={inputMessage}
                         onChange={(e) => setInputMessage(e.target.value)}
-                        placeholder="Reply to employer..."
+                        placeholder="Type message to employer..."
                         className="flex-1 px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
                       />
                       <button
                         type="submit"
-                        className="px-3 py-2 bg-[#D71920] text-white rounded-xl cursor-pointer"
+                        className="px-3 py-2 bg-[#D71920] hover:bg-[#A80F18] text-white rounded-xl cursor-pointer"
                       >
                         <Send className="w-3.5 h-3.5" />
                       </button>
@@ -1282,35 +2234,116 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                       </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
-                        <span className="text-[#686868]">Prepaid Wallet:</span>
-                        <span className="font-black text-[#D71920]">₹{walletBalance}</span>
+                    {/* Bank & UPI Payout Wallet Card */}
+                    <div className="bg-linear-to-br from-[#1E1F23] to-[#2D3039] p-4 rounded-3xl text-white shadow-md space-y-3 border border-[#FFC928]/25">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-white/80 flex items-center gap-1.5">
+                          <Wallet className="w-4 h-4 text-[#FFC928]" />
+                          <span>Payout Wallet Balance</span>
+                        </span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold">
+                          Active & Verified
+                        </span>
                       </div>
-                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
-                        <span className="text-[#686868]">Wage Payment Mode:</span>
-                        <span className="font-bold text-[#202124]">Direct Cash / Personal UPI</span>
-                      </div>
-                      <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-between text-xs">
-                        <span className="text-[#686868]">Platform Fee Rule:</span>
-                        <span className="font-semibold text-slate-700">₹200 debited from wallet</span>
+                      <div className="flex items-baseline justify-between">
+                        <span className="text-2xl font-black text-[#FFC928]">₹{walletBalance.toLocaleString()}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWithdrawAmount(Math.min(walletBalance, 2000));
+                            setShowWithdrawModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                        >
+                          <ArrowDownToLine className="w-3.5 h-3.5" />
+                          <span>Withdraw Funds</span>
+                        </button>
                       </div>
                     </div>
 
+                    {/* Linked Bank & Payout Methods */}
+                    <div className="bg-white p-3.5 rounded-3xl border border-slate-200 shadow-2xs space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <h5 className="text-xs font-bold text-[#202124] flex items-center gap-1.5">
+                          <Building2 className="w-4 h-4 text-[#D71920]" />
+                          <span>Linked Bank Account (IMPS/NEFT)</span>
+                        </h5>
+                        <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">
+                          Primary
+                        </span>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-200 text-xs space-y-1">
+                        <div className="flex justify-between">
+                          <span className="text-[#686868]">Bank:</span>
+                          <span className="font-bold text-[#202124]">{withdrawBankName}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#686868]">Account No:</span>
+                          <span className="font-mono font-bold text-[#202124]">••••••••{withdrawAccountNo.slice(-4)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#686868]">IFSC Code:</span>
+                          <span className="font-mono font-semibold text-slate-700">{withdrawIfsc}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-[#686868]">Account Holder:</span>
+                          <span className="font-bold text-[#202124]">{withdrawAccountName}</span>
+                        </div>
+                      </div>
+
+                      <div className="pt-1 flex items-center justify-between text-xs">
+                        <span className="text-[#686868]">Linked UPI ID:</span>
+                        <span className="font-mono font-bold text-[#D71920]">{withdrawUpiId}</span>
+                      </div>
+                    </div>
+
+                    {/* Passbook History Button */}
+                    <button
+                      type="button"
+                      onClick={() => setShowPassbookModal(true)}
+                      className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-[#202124] text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <Receipt className="w-4 h-4 text-[#D71920]" />
+                      <span>View Payout Passbook &amp; Transaction History</span>
+                    </button>
+
+                    {/* Google Play Store Compliance: Terms & Privacy Policy */}
+                    <button
+                      type="button"
+                      onClick={() => setShowTermsModal(true)}
+                      className="w-full py-2.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    >
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <span>Terms of Service &amp; Privacy Policy</span>
+                    </button>
+
+                    {/* Sign Out Button */}
                     <button
                       type="button"
                       onClick={handleLogout}
-                      className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-[#C62828] border border-red-200 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
                     >
-                      <LogOut className="w-4 h-4" />
+                      <LogOut className="w-4 h-4 text-slate-500" />
                       <span>Sign Out from Worker App</span>
                     </button>
+
+                    {/* Google Play Store Compliance: Delete Account & Purge Data */}
+                    <div className="pt-2 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={() => setShowDeleteAccountModal(true)}
+                        className="w-full py-2 text-xs font-semibold text-red-600 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                        <span>Delete Account &amp; Purge Personal Data</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
 
-              {/* FIXED 5-TAB BOTTOM BAR */}
-              <div className="h-16 bg-white border-t border-slate-200 px-2 flex items-center justify-around shrink-0 z-30 shadow-lg">
+              {/* FIXED 5-TAB BOTTOM BAR (STRICTLY PINNED, NEVER SCROLLS OR FADES) */}
+              <div className="h-16 bg-white border-t border-slate-200 px-2 flex items-center justify-around shrink-0 z-40 shadow-[0_-4px_16px_rgba(0,0,0,0.06)] select-none">
                 <button
                   type="button"
                   onClick={() => setActiveTab('home')}
@@ -1384,6 +2417,339 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </span>
                 </button>
               </div>
+
+              {/* ========================================================== */}
+              {/* WORKER WITHDRAWAL MODAL ("WITHDRAWAL OF AMOUNT FOR WORKER") */}
+              {/* ========================================================== */}
+              {showWithdrawModal && (
+                <div className="absolute inset-0 bg-black/65 backdrop-blur-xs z-50 flex flex-col justify-end p-0 animate-in fade-in duration-150">
+                  <div className="bg-white w-full rounded-t-3xl max-h-[92%] overflow-y-auto p-5 shadow-2xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-red-100 text-[#D71920] flex items-center justify-center">
+                          <ArrowDownToLine className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-[#202124]">Withdraw Earnings</h4>
+                          <p className="text-[10px] text-slate-500 font-medium">Instant transfer to Bank or UPI</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowWithdrawModal(false)}
+                        className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center text-xs font-bold cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Available Balance Banner */}
+                    <div className="bg-linear-to-r from-slate-900 to-slate-800 p-3.5 rounded-2xl text-white flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-white/60 block font-semibold uppercase">Withdrawable Balance</span>
+                        <span className="text-xl font-black text-[#FFC928]">₹{walletBalance.toLocaleString()}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-bold">
+                          0% Fee (Free)
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Payout Destination Selector (UPI or Bank Account) */}
+                    <div>
+                      <label className="block text-[11px] font-bold text-[#202124] mb-1.5">
+                        Choose Payout Destination
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setWithdrawMethod('upi')}
+                          className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col ${
+                            withdrawMethod === 'upi'
+                              ? 'border-[#D71920] bg-red-50/50 shadow-xs ring-1 ring-[#D71920]'
+                              : 'border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-bold text-[#202124]">UPI ID</span>
+                            {withdrawMethod === 'upi' && <Check className="w-3.5 h-3.5 text-[#D71920]" />}
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">GPay, PhonePe, Paytm</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setWithdrawMethod('bank')}
+                          className={`p-2.5 rounded-2xl border text-left transition-all cursor-pointer flex flex-col ${
+                            withdrawMethod === 'bank'
+                              ? 'border-[#D71920] bg-red-50/50 shadow-xs ring-1 ring-[#D71920]'
+                              : 'border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-bold text-[#202124]">Bank Account</span>
+                            {withdrawMethod === 'bank' && <Check className="w-3.5 h-3.5 text-[#D71920]" />}
+                          </div>
+                          <span className="text-[10px] text-slate-500 font-medium">Instant IMPS / NEFT</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Method Details */}
+                    {withdrawMethod === 'upi' ? (
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#202124] mb-1">
+                          Beneficiary UPI VPA
+                        </label>
+                        <input
+                          type="text"
+                          value={withdrawUpiId}
+                          onChange={(e) => setWithdrawUpiId(e.target.value)}
+                          placeholder="e.g. 9876543210@upi"
+                          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono text-[#202124] focus:outline-none focus:border-[#D71920]"
+                        />
+                        <span className="text-[10px] text-slate-500 mt-1 block">
+                          Verified Name: <strong>{withdrawAccountName}</strong>
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-[#202124] mb-0.5">Bank Name</label>
+                            <input
+                              type="text"
+                              value={withdrawBankName}
+                              onChange={(e) => setWithdrawBankName(e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-[#202124] mb-0.5">IFSC Code</label>
+                            <input
+                              type="text"
+                              value={withdrawIfsc}
+                              onChange={(e) => setWithdrawIfsc(e.target.value)}
+                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono uppercase"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-[#202124] mb-0.5">Account Number</label>
+                          <input
+                            type="text"
+                            value={withdrawAccountNo}
+                            onChange={(e) => setWithdrawAccountNo(e.target.value)}
+                            className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl font-mono"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Amount to Withdraw & Quick Preset Chips */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[11px] font-bold text-[#202124]">Withdrawal Amount (₹)</label>
+                        <span className="text-[10px] text-slate-500 font-semibold">Min: ₹100</span>
+                      </div>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-slate-400">₹</span>
+                        <input
+                          type="number"
+                          step={100}
+                          min={100}
+                          max={walletBalance}
+                          value={withdrawAmount}
+                          onChange={(e) => setWithdrawAmount(Number(e.target.value))}
+                          className="w-full pl-8 pr-3 py-2 text-base font-black text-[#D71920] bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-[#D71920]"
+                        />
+                      </div>
+
+                      {/* Quick Amount Chips */}
+                      <div className="grid grid-cols-4 gap-1.5 mt-2">
+                        {[500, 1000, 2000].map((amt) => (
+                          <button
+                            key={amt}
+                            type="button"
+                            onClick={() => setWithdrawAmount(Math.min(amt, walletBalance))}
+                            className={`py-1.5 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                              withdrawAmount === amt
+                                ? 'bg-[#FFC928] text-[#202124] border-[#FFC928]'
+                                : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                            }`}
+                          >
+                            ₹{amt}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setWithdrawAmount(walletBalance)}
+                          className={`py-1.5 text-[10px] font-bold rounded-lg border transition-all cursor-pointer ${
+                            withdrawAmount === walletBalance
+                              ? 'bg-[#D71920] text-white border-[#D71920]'
+                              : 'bg-red-50 text-[#D71920] border-red-200 hover:bg-red-100'
+                          }`}
+                        >
+                          All (₹{walletBalance})
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Instant IMPS Settlement Assurance Box */}
+                    <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl flex items-center gap-2 text-emerald-800 text-[10px] font-medium">
+                      <Zap className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Instant payout: credited directly to your account in 5-15 minutes via IMPS rail.</span>
+                    </div>
+
+                    <button
+                      type="button"
+                      disabled={isWithdrawing || withdrawAmount < 100 || withdrawAmount > walletBalance}
+                      onClick={handleExecuteWithdrawal}
+                      className="w-full py-3 bg-[#D71920] hover:bg-[#A80F18] disabled:bg-slate-300 text-white font-extrabold text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+                    >
+                      {isWithdrawing ? (
+                        <span>Processing Instant Payout...</span>
+                      ) : (
+                        <>
+                          <ArrowDownToLine className="w-4 h-4" />
+                          <span>Confirm &amp; Withdraw ₹{withdrawAmount.toLocaleString()}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================== */}
+              {/* WITHDRAWAL SUCCESS RECEIPT MODAL */}
+              {/* ========================================================== */}
+              {withdrawalSuccessReceipt && (
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+                  <div className="bg-white rounded-3xl p-5 shadow-2xl max-w-xs w-full space-y-3.5 border border-slate-200 text-center">
+                    <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                      <CheckCheck className="w-6 h-6 stroke-[2.5]" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-[#202124]">Withdrawal Submitted!</h4>
+                      <p className="text-[11px] text-slate-500 mt-0.5">Funds are on their way to your account</p>
+                    </div>
+
+                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-left space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Amount:</span>
+                        <span className="font-black text-[#D71920]">₹{withdrawalSuccessReceipt.amount.toLocaleString()}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Destination:</span>
+                        <span className="font-semibold text-slate-800">{withdrawalSuccessReceipt.destination}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">UTR / Ref:</span>
+                        <span className="font-mono font-bold text-slate-700">{withdrawalSuccessReceipt.utr}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Status:</span>
+                        <span className="text-emerald-600 font-bold">Completed (IMPS Instant)</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">New Balance:</span>
+                        <span className="font-black text-[#202124]">₹{walletBalance.toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWithdrawalSuccessReceipt(null);
+                        setShowWithdrawModal(false);
+                      }}
+                      className="w-full py-2.5 bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ========================================================== */}
+              {/* PASSBOOK & PAYOUT HISTORY MODAL */}
+              {/* ========================================================== */}
+              {showPassbookModal && (
+                <div className="absolute inset-0 bg-black/65 backdrop-blur-xs z-50 flex flex-col justify-end p-0 animate-in fade-in duration-150">
+                  <div className="bg-white w-full rounded-t-3xl max-h-[88%] overflow-y-auto p-5 shadow-2xl space-y-3.5">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                      <div className="flex items-center gap-2">
+                        <Receipt className="w-5 h-5 text-[#D71920]" />
+                        <h4 className="text-sm font-black text-[#202124]">Worker Passbook &amp; Payouts</h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassbookModal(false)}
+                        className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center text-xs font-bold cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    {/* Summary Row */}
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-200">
+                        <span className="text-[10px] text-slate-500 block">Available Balance</span>
+                        <span className="text-lg font-black text-[#D71920]">₹{walletBalance.toLocaleString()}</span>
+                      </div>
+                      <div className="p-2.5 bg-slate-50 rounded-2xl border border-slate-200">
+                        <span className="text-[10px] text-slate-500 block">Total Lifetime Earnings</span>
+                        <span className="text-lg font-black text-slate-800">₹28,400</span>
+                      </div>
+                    </div>
+
+                    {/* List of Recent Withdrawals */}
+                    <div>
+                      <h5 className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2">
+                        Recent Payouts &amp; Withdrawals
+                      </h5>
+                      <div className="space-y-2">
+                        {withdrawalHistory.map((item) => (
+                          <div
+                            key={item.id}
+                            className="p-3 rounded-2xl border border-slate-200 bg-white shadow-2xs flex items-center justify-between"
+                          >
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-[#202124]">{item.method}</span>
+                                <span className="text-[9px] bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.5 rounded">
+                                  {item.status}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-slate-400 font-mono block">Ref: {item.utr}</span>
+                              <span className="text-[10px] text-slate-400 block">{item.date}</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="text-xs font-black text-[#D71920] block">
+                                -₹{item.amount.toLocaleString()}
+                              </span>
+                              <span className="text-[9px] text-slate-500">IMPS Settled</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPassbookModal(false);
+                        setShowWithdrawModal(true);
+                      }}
+                      className="w-full py-2.5 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] text-xs font-bold rounded-xl shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1"
+                    >
+                      <ArrowDownToLine className="w-4 h-4" />
+                      <span>Request New Withdrawal</span>
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

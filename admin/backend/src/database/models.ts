@@ -222,6 +222,12 @@ export interface IBooking extends Document {
     peopleCount?: number;
     servingMethod?: string;
   };
+  workLocation?: {
+    address: string;
+    city: string;
+    lat: number;
+    lng: number;
+  };
 }
 
 export const BookingSchema = new Schema<IBooking>(
@@ -278,6 +284,12 @@ export const BookingSchema = new Schema<IBooking>(
       eveningTea: Boolean,
       peopleCount: Number,
       servingMethod: String,
+    },
+    workLocation: {
+      address: { type: String, default: '' },
+      city: { type: String, default: '' },
+      lat: { type: Number, default: 0 },
+      lng: { type: Number, default: 0 },
     },
   },
   { timestamps: true }

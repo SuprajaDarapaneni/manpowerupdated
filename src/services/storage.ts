@@ -19,6 +19,7 @@ import {
   PaymentControlSettings,
   PaymentMethodSetting,
   AppNotification,
+  ChatMessage,
   GpsLocationStamp,
   ServiceZone,
   ZoneCategoryPrice,
@@ -53,6 +54,7 @@ const STORAGE_KEYS = {
   ZONES: 'manpowerlink_service_zones_v2',
   ZONE_PRICES: 'manpowerlink_zone_prices_v2',
   NOTIFICATIONS: 'manpowerlink_notifications_v1',
+  CHAT_MESSAGES: 'manpowerlink_chat_messages_v1',
 };
 
 // Official Kotak / PhonePe UPI Account for Platform Recharges & Payments
@@ -442,6 +444,42 @@ export const initialNotifications: AppNotification[] = [
     read: true,
     timestamp: '15 Oct 2026, 08:45 AM',
     soundType: 'chime',
+  },
+];
+
+export const initialChatMessages: ChatMessage[] = [
+  {
+    id: 'msg-1',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    sender: 'customer',
+    senderName: 'Apex Logistics Corp',
+    recipientRole: 'employee',
+    text: 'Hello Ramesh, please report at Dock 4 Container Bay at 9:00 AM.',
+    time: '09:12 AM',
+    timestamp: Date.now() - 3600000,
+  },
+  {
+    id: 'msg-2',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    sender: 'worker',
+    senderName: 'Ramesh Kumar',
+    recipientRole: 'customer',
+    text: 'Understood sir. I have my safety gear ready and will verify Start OTP on arrival.',
+    time: '09:14 AM',
+    timestamp: Date.now() - 3500000,
+  },
+  {
+    id: 'msg-3',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    sender: 'customer',
+    senderName: 'Apex Logistics Corp',
+    recipientRole: 'employee',
+    text: 'Start OTP will be provided at worksite upon supervisor gate inspection.',
+    time: '09:15 AM',
+    timestamp: Date.now() - 3400000,
   },
 ];
 
@@ -1045,7 +1083,7 @@ class DataService {
           id: `node-${Date.now()}-3`,
           stageKey: 'START_OTP_VERIFIED',
           title: 'Arrival & Start OTP Check-in',
-          description: `Worker provides Start OTP (${startOtp}) upon arrival at worksite to verify attendance.`,
+          description: 'Employer tells 4-digit Start OTP to worker upon arrival at worksite to verify attendance.',
           timestamp: 'Pending Check-in',
           location: { address: bookingData.workLocation?.address || 'Worksite', lat: 12.914, lng: 74.856 },
           actor: 'Customer & Worker',
@@ -1055,7 +1093,7 @@ class DataService {
           id: `node-${Date.now()}-4`,
           stageKey: 'WORK_COMPLETED_OTP',
           title: 'Work Completed & End OTP Verification',
-          description: `Shift completion verified via End OTP (${endOtp}). Direct cash wage collected.`,
+          description: 'Shift completion verified via 4-digit End OTP provided by employer upon satisfactory work.',
           timestamp: 'Pending Completion',
           location: { address: bookingData.workLocation?.address || 'Worksite', lat: 12.914, lng: 74.856 },
           actor: 'Customer & Worker',
@@ -1064,9 +1102,9 @@ class DataService {
         {
           id: `node-${Date.now()}-5`,
           stageKey: 'CASH_PAYMENT',
-          title: 'Direct Cash / UPI Settlement',
-          description: 'Customer pays full wages in Cash or direct Worker UPI upon shift end.',
-          timestamp: 'Pending Cash Payment',
+          title: 'Online Payment Settlement',
+          description: 'Employer pays full wages online via platform escrow. Credited to worker wallet.',
+          timestamp: 'Pending Online Payment',
           location: { address: 'Worksite Pay Counter', lat: 12.914, lng: 74.856 },
           actor: 'Customer to Worker',
           completed: false,
@@ -1939,7 +1977,11 @@ class DataService {
 
   // Commission Settings
   public getCommissionSettings(): CommissionSettings {
-    return this.getItem(STORAGE_KEYS.COMMISSION, initialCommissionSettings);
+    const s = this.getItem(STORAGE_KEYS.COMMISSION, initialCommissionSettings);
+    if (s.minWorkerWalletBalance === undefined) {
+      s.minWorkerWalletBalance = -200;
+    }
+    return s;
   }
 
   public setCommissionSettings(settings: CommissionSettings): void {
@@ -2281,6 +2323,49 @@ class DataService {
     this.setItem('manpowerlink_settings_audit_v1', list);
   }
 
+  // --- Real-Time Bidirectional Chat System ---
+  public getChatMessages(bookingId?: string): ChatMessage[] {
+    const all = this.getItem<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, initialChatMessages);
+    if (!bookingId) return all;
+    return all.filter((m) => m.bookingId === bookingId);
+  }
+
+  public sendChatMessage(messageData: Omit<ChatMessage, 'id' | 'timestamp'>): ChatMessage {
+    const newMsg: ChatMessage = {
+      ...messageData,
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+    };
+    const all = this.getItem<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, initialChatMessages);
+    const updated = [...all, newMsg];
+    this.setItem(STORAGE_KEYS.CHAT_MESSAGES, updated);
+
+    // Save notification for recipient in persistent inbox (also automatically dispatches to Firebase)
+    this.addNotification({
+      recipientId: newMsg.recipientRole === 'customer' ? 'c-1' : 'w-1',
+      recipientRole: newMsg.recipientRole,
+      title: `💬 Message from ${newMsg.senderName}`,
+      message: newMsg.text,
+      eventType: 'CHAT_MESSAGE_RECEIVED',
+      bookingId: newMsg.bookingId,
+      orderNumber: newMsg.orderNumber,
+      soundType: 'chime',
+      read: false,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+
+    // Reactive window event for instantaneous cross-component delivery
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('manpowerlink_chat_message', {
+          detail: newMsg,
+        })
+      );
+    }
+
+    return newMsg;
+  }
+
   // Reset all to defaults
   public resetToDefaults(): void {
     localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
@@ -2291,6 +2376,8 @@ class DataService {
     localStorage.removeItem(STORAGE_KEYS.OTP);
     localStorage.removeItem(STORAGE_KEYS.DISPUTES);
     localStorage.removeItem(STORAGE_KEYS.AUDIT);
+    localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+    localStorage.removeItem(STORAGE_KEYS.CHAT_MESSAGES);
     localStorage.removeItem('manpowerlink_admin_users_v1');
     localStorage.removeItem('manpowerlink_safety_incidents_v1');
     localStorage.removeItem('manpowerlink_matching_v1');
@@ -2304,3 +2391,4 @@ class DataService {
 }
 
 export const dataService = new DataService();
+

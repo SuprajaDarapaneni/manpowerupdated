@@ -18,7 +18,7 @@ export const CustomerApp: React.FC<CustomerAppProps> = ({ onBackToAdmin, showExi
   const bookings = dataService.getBookings();
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col items-center justify-center p-3 sm:p-6 antialiased select-none">
+    <div className="h-[100dvh] max-h-[100dvh] w-full bg-[#FFFDF8] text-[#202124] flex flex-col items-center justify-center p-0 overflow-hidden antialiased select-none">
       {showExitBar && onBackToAdmin && (
         <div className="w-full max-w-md mb-2 flex items-center justify-between text-xs text-slate-500">
           <span className="font-semibold">Customer Mobile App (Employer)</span>

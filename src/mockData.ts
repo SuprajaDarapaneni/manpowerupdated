@@ -495,7 +495,7 @@ export const initialBookings: Booking[] = [
         id: 'node-5',
         stageKey: 'WORK_STARTED_OTP',
         title: 'Start OTP Verification',
-        description: 'Customer provides Start OTP (4829) to worker to activate shift timer.',
+        description: 'Customer tells 4-digit Start OTP to worker to activate shift timer.',
         timestamp: 'Pending Start OTP',
         location: { address: 'Dock 4, Panambur Port Corridor', lat: 12.945, lng: 74.815 },
         actor: 'Customer & Worker',
@@ -505,7 +505,7 @@ export const initialBookings: Booking[] = [
         id: 'node-6',
         stageKey: 'WORK_COMPLETED_OTP',
         title: 'Shift Completion via End OTP',
-        description: 'Shift verified. Customer provides End OTP (9154) upon satisfactory work.',
+        description: 'Shift verified. Customer tells 4-digit End OTP upon satisfactory work.',
         timestamp: 'Pending End OTP',
         location: { address: 'Dock 4, Panambur Port Corridor', lat: 12.945, lng: 74.815 },
         actor: 'Customer & Worker',
@@ -514,9 +514,9 @@ export const initialBookings: Booking[] = [
       {
         id: 'node-7',
         stageKey: 'CASH_PAYMENT',
-        title: 'Direct Cash / UPI Settlement',
-        description: 'Customer pays full wages directly to workers in Cash or UPI at worksite.',
-        timestamp: 'Pending Cash Payment',
+        title: 'Online Payment Settlement',
+        description: 'Customer pays full wages online via platform escrow. Credited to worker wallet.',
+        timestamp: 'Pending Online Payment',
         location: { address: 'Worksite Pay Counter', lat: 12.945, lng: 74.815 },
         actor: 'Customer to Worker',
         completed: false,
@@ -662,6 +662,7 @@ export const initialCommissionSettings: CommissionSettings = {
   fixedValue: 50,
   payer: 'customer',
   taxRate: 5,
+  minWorkerWalletBalance: -200,
 };
 
 export const initialOtpSettings: OtpVerificationSettings = {
@@ -774,5 +775,6 @@ export const initialMatchingSettings: MatchingSettings = {
   retryLimit: 3,
   workerLimitPerBooking: 10,
   escalationThresholdMins: 45,
+  minWorkerWalletBalance: -200,
 };
 

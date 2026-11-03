@@ -319,6 +319,7 @@ export interface CommissionSettings {
   payer: 'customer' | 'worker' | 'split';
   taxRate: number;
   categoryRates?: Record<string, number>;
+  minWorkerWalletBalance: number; // Minimum balance required to receive requests (can be negative like -200 or positive like 100)
 }
 
 export interface OtpVerificationSettings {
@@ -337,6 +338,7 @@ export interface MatchingSettings {
   retryLimit: number;
   workerLimitPerBooking: number;
   escalationThresholdMins: number;
+  minWorkerWalletBalance?: number;
 }
 
 export interface PricingSettings {
@@ -621,13 +623,27 @@ export interface AppNotification {
     | 'BOOKING_CANCELLED'
     | 'PRICE_REVISED'
     | 'DISPUTE_OPENED'
-    | 'DISPUTE_RESOLVED';
+    | 'DISPUTE_RESOLVED'
+    | 'CHAT_MESSAGE_RECEIVED';
   bookingId?: string;
   orderNumber?: string;
   read: boolean;
   timestamp: string;
   soundType: 'chime' | 'urgent_ring' | 'silent';
   actionUrl?: string;
+}
+
+// Bidirectional Real-time Chat Message
+export interface ChatMessage {
+  id: string;
+  bookingId: string;
+  orderNumber?: string;
+  sender: 'worker' | 'customer';
+  senderName: string;
+  recipientRole: 'customer' | 'employee';
+  text: string;
+  time: string;
+  timestamp: number;
 }
 
 // GPS Attendance Location Stamp (Client Feedback #5)
@@ -640,3 +656,4 @@ export interface GpsLocationStamp {
   isGeofenceValid?: boolean;
   provider: 'gps' | 'network' | 'manual_fallback';
 }
+

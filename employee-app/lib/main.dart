@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'services/local_asset_server.dart';
 
 void main() {
@@ -27,6 +28,7 @@ class _ManPowerLinkWorkerAppState extends State<ManPowerLinkWorkerApp> {
   final LocalAssetServer _server = LocalAssetServer();
   WebViewController? _controller;
   bool _isLoading = true;
+  bool _hasInitialLoaded = false;
   String? _errorMessage;
   DateTime? _lastBackPressTime;
 
@@ -46,7 +48,7 @@ class _ManPowerLinkWorkerAppState extends State<ManPowerLinkWorkerApp> {
         ..setNavigationDelegate(
           NavigationDelegate(
             onPageStarted: (String url) {
-              if (mounted) {
+              if (mounted && !_hasInitialLoaded) {
                 setState(() {
                   _isLoading = true;
                   _errorMessage = null;
@@ -54,6 +56,7 @@ class _ManPowerLinkWorkerAppState extends State<ManPowerLinkWorkerApp> {
               }
             },
             onPageFinished: (String url) {
+              _hasInitialLoaded = true;
               if (mounted) {
                 setState(() {
                   _isLoading = false;
@@ -65,6 +68,17 @@ class _ManPowerLinkWorkerAppState extends State<ManPowerLinkWorkerApp> {
             },
           ),
         );
+
+      if (controller.platform is AndroidWebViewController) {
+        (controller.platform as AndroidWebViewController).setGeolocationPermissionsPromptCallbacks(
+          onShowPrompt: (request) async {
+            return const GeolocationPermissionsResponse(
+              allow: true,
+              retain: true,
+            );
+          },
+        );
+      }
 
       final targetUrl = 'http://127.0.0.1:$port/?preview=employee&standalone=true#employee';
       await controller.loadRequest(Uri.parse(targetUrl));
