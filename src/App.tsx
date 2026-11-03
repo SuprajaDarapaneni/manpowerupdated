@@ -33,16 +33,18 @@ import {
 type AppRoute = 'admin' | 'customer' | 'employee' | 'dual' | 'handover' | 'dev-hub';
 
 function getInitialRoute(): AppRoute {
-  if (typeof window === 'undefined') return 'admin';
+  if (typeof window === 'undefined') return 'dual';
   const customMode = (window as any).__APP_MODE__ || localStorage.getItem('manpower_app_mode');
   if (customMode === 'customer') return 'customer';
   if (customMode === 'employee') return 'employee';
   if (customMode === 'admin') return 'admin';
+  if (customMode === 'dual') return 'dual';
 
   const hash = window.location.hash.toLowerCase();
   if (hash.includes('customer')) return 'customer';
   if (hash.includes('employee')) return 'employee';
   if (hash.includes('admin')) return 'admin';
+  if (hash.includes('dual') || hash.includes('preview')) return 'dual';
 
   const params = new URLSearchParams(window.location.search);
   const preview = params.get('preview') || params.get('app') || params.get('view');
@@ -50,10 +52,16 @@ function getInitialRoute(): AppRoute {
   if (preview === 'employee') return 'employee';
   if (preview === 'admin') return 'admin';
   if (preview === 'handover') return 'handover';
-  if (preview === 'dual' || preview === 'split') return 'dual';
+  if (preview === 'dual' || preview === 'split' || preview === 'apps') return 'dual';
   if (params.get('dev') === 'true' || params.get('hub') === 'true' || preview === 'hub') return 'dev-hub';
-  // Default for Client Delivery is pure Admin Dashboard
-  return 'admin';
+
+  // Check if locked into client delivery mode
+  if (localStorage.getItem('manpower_client_locked') === 'true') {
+    return 'admin';
+  }
+
+  // Default during development & cross-checking review is dual apps preview
+  return 'dual';
 }
 
 export default function App() {
@@ -61,6 +69,12 @@ export default function App() {
   const [adminAuth, setAdminAuth] = useState(() => dataService.getAdminAuth());
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+
+  // Client Delivery Lock Toggle: when locked, all previews and dev headers are completely hidden
+  const [isClientLocked, setIsClientLocked] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('manpower_client_locked') === 'true';
+  });
 
   // Active sub-tab inside Dev Hub if opened via ?dev=true
   const [hubTab, setHubTab] = useState<'admin' | 'dual' | 'customer' | 'employee' | 'handover'>('dual');
@@ -115,6 +129,7 @@ export default function App() {
   }, []);
 
   const navigateTo = (newRoute: AppRoute) => {
+    localStorage.setItem('manpower_app_mode', newRoute);
     const url = new URL(window.location.href);
     if (newRoute === 'admin') {
       url.search = '';
@@ -125,6 +140,14 @@ export default function App() {
     }
     window.history.pushState({}, '', url.toString());
     setRoute(newRoute);
+  };
+
+  const toggleClientLock = (lock: boolean) => {
+    setIsClientLocked(lock);
+    localStorage.setItem('manpower_client_locked', lock ? 'true' : 'false');
+    if (lock) {
+      navigateTo('admin');
+    }
   };
 
   const handleLogout = () => {
@@ -221,8 +244,36 @@ export default function App() {
       );
     }
     return (
-      <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col items-center justify-center p-0 antialiased">
-        <CustomerApp showExitBar={false} />
+      <div className="min-h-screen bg-[#121316] text-[#202124] flex flex-col antialiased">
+        <div className="w-full bg-[#1A1B1E] text-white px-4 py-2.5 border-b border-white/10 flex items-center justify-between text-xs sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#FFC928]" />
+            <span className="font-bold text-white text-xs">Customer App Preview (Employer)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigateTo('dual')}
+              className="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer"
+            >
+              📱 Dual Apps View
+            </button>
+            <button
+              onClick={() => navigateTo('employee')}
+              className="px-2.5 py-1 rounded-md bg-[#D71920] hover:bg-[#A80F18] text-white font-medium cursor-pointer"
+            >
+              👷 Worker App
+            </button>
+            <button
+              onClick={() => navigateTo('admin')}
+              className="px-2.5 py-1 rounded-md bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold cursor-pointer"
+            >
+              🛡️ Admin
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-3 sm:p-6 bg-[#F0F2F5]">
+          <CustomerApp showExitBar={false} />
+        </div>
       </div>
     );
   }
@@ -240,8 +291,36 @@ export default function App() {
       );
     }
     return (
-      <div className="min-h-screen bg-[#F0F2F5] text-[#202124] flex flex-col items-center justify-center p-0 antialiased">
-        <EmployeeApp showExitBar={false} />
+      <div className="min-h-screen bg-[#121316] text-[#202124] flex flex-col antialiased">
+        <div className="w-full bg-[#1A1B1E] text-white px-4 py-2.5 border-b border-white/10 flex items-center justify-between text-xs sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-[#D71920]" />
+            <span className="font-bold text-white text-xs">Employee App Preview (Worker)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigateTo('dual')}
+              className="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer"
+            >
+              📱 Dual Apps View
+            </button>
+            <button
+              onClick={() => navigateTo('customer')}
+              className="px-2.5 py-1 rounded-md bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold cursor-pointer"
+            >
+              🏢 Customer App
+            </button>
+            <button
+              onClick={() => navigateTo('admin')}
+              className="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer"
+            >
+              🛡️ Admin
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center p-3 sm:p-6 bg-[#F0F2F5]">
+          <EmployeeApp showExitBar={false} />
+        </div>
       </div>
     );
   }
@@ -503,8 +582,8 @@ export default function App() {
         <div className="flex-1">
           <AdminLogin
             onSuccess={() => setAdminAuth(dataService.getAdminAuth())}
-            showPreviews={isDevMode}
-            onOpenPreview={isDevMode ? (target) => navigateTo(target) : undefined}
+            showPreviews={!isClientLocked}
+            onOpenPreview={(target) => navigateTo(target)}
           />
         </div>
       </div>
@@ -532,8 +611,8 @@ export default function App() {
           <AdminHeader
             currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
             onLogout={handleLogout}
-            onOpenPreview={isDevMode ? (mode) => navigateTo(mode) : undefined}
-            showPreviews={isDevMode}
+            onOpenPreview={(mode) => navigateTo(mode)}
+            showPreviews={!isClientLocked}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
           />
           <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl w-full mx-auto">
