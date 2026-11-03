@@ -15,6 +15,7 @@ import {
   UserCog,
   MapPin,
   X,
+  Bell,
 } from 'lucide-react';
 import { dataService } from '../../services/storage';
 
@@ -31,6 +32,8 @@ export type AdminTab =
   | 'safety'
   | 'reports'
   | 'audit'
+  | 'Publish_notifications'
+  | 'publish-notifications'
   | 'settings'
   | 'settings-general'
   | 'settings-branding'
@@ -108,6 +111,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     },
     { id: 'reports' as AdminTab, label: 'Reports & Revenue', icon: BarChart3 },
     { id: 'audit' as AdminTab, label: 'Security Audit Trail', icon: ShieldCheck },
+    { id: 'Publish_notifications' as AdminTab, label: 'Publish Notifications', icon: Bell },
     { id: 'settings' as AdminTab, label: 'Platform Settings', icon: Settings },
   ];
 

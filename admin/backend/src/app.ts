@@ -11,7 +11,7 @@ export const createApp = () => {
   app.use(express.json());
 
   // Health probe
-  app.get('/api/v1/health', (req, res) => {
+  app.get(['/api/health', '/api/v1/health'], (req, res) => {
     res.json({
       status: 'healthy',
       service: 'ManPowerLink Central Backend',
@@ -20,7 +20,8 @@ export const createApp = () => {
     });
   });
 
-  // Mount API v1 Router
+  // Mount API Routers for mobile apps and web dashboard
+  app.use('/api', apiRouter);
   app.use('/api/v1', apiRouter);
 
   return app;

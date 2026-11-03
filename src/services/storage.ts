@@ -20,6 +20,7 @@ import {
   PaymentMethodSetting,
   AppNotification,
   ChatMessage,
+  ConversationSummary,
   GpsLocationStamp,
   ServiceZone,
   ZoneCategoryPrice,
@@ -703,6 +704,19 @@ class DataService {
 
     this.updateCustomer(updatedCustomer);
     this.logAudit('Customer Wallet Recharged', `${customer.name} credited ₹${amount} via PhonePe/UPI QR. UTR: ${utrRef}. New balance: ₹${newBal}`);
+    
+    // Dispatch in-app and push notification
+    this.addNotification({
+      recipientId: customerId,
+      recipientRole: 'customer',
+      title: '💰 Wallet Recharged Successfully',
+      message: `₹${amount.toLocaleString()} credited to your wallet via UPI QR (UTR: ${utrRef}). New balance: ₹${newBal.toLocaleString()}.`,
+      eventType: 'WALLET_RECHARGED',
+      category: 'payment',
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
     return { success: true, newBalance: newBal };
   }
@@ -851,6 +865,31 @@ class DataService {
       'UPI Payout Requested',
       `${data.requesterName} (${data.requesterRole}) asked for ₹${data.amount} credit to UPI: ${data.beneficiaryUpiId}`
     );
+
+    // Notify requester
+    this.addNotification({
+      recipientId: data.requesterId,
+      recipientRole: data.requesterRole,
+      title: '💸 Payout Request Submitted',
+      message: `Your withdrawal request for ₹${data.amount.toLocaleString()} to ${data.beneficiaryUpiId} has been sent for admin approval.`,
+      eventType: 'PAYOUT_REQUESTED',
+      category: 'payment',
+      read: false,
+      soundType: 'chime',
+    });
+
+    // Notify admin
+    this.addNotification({
+      recipientId: 'admin',
+      recipientRole: 'admin',
+      title: '⚡ New Payout Request',
+      message: `${data.requesterName} (${data.requesterRole}) requested ₹${data.amount.toLocaleString()} payout to UPI: ${data.beneficiaryUpiId}.`,
+      eventType: 'PAYOUT_REQUESTED',
+      category: 'payment',
+      read: false,
+      soundType: 'urgent_ring',
+    });
+
     playNotificationSound();
     return newRequest;
   }
@@ -928,6 +967,19 @@ class DataService {
       'UPI Payout Accepted & Credited',
       `Transferred ₹${req.amount} to UPI: ${req.beneficiaryUpiId} for ${req.requesterName} (${req.requesterRole}). UTR: ${utr}`
     );
+
+    // Notify requester of successful payout credit
+    this.addNotification({
+      recipientId: req.requesterId,
+      recipientRole: req.requesterRole,
+      title: '✅ Payout Approved & Credited!',
+      message: `₹${req.amount.toLocaleString()} has been transferred to your UPI: ${req.beneficiaryUpiId}. Bank UTR: ${utr}.`,
+      eventType: 'PAYOUT_APPROVED',
+      category: 'payment',
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
     return { success: true };
   }
@@ -952,6 +1004,19 @@ class DataService {
       'UPI Payout Rejected',
       `Declined payout request for ₹${req.amount} to ${req.beneficiaryUpiId} (${req.requesterName}). Reason: ${reason || 'N/A'}`
     );
+
+    // Notify requester of decline
+    this.addNotification({
+      recipientId: req.requesterId,
+      recipientRole: req.requesterRole,
+      title: '⚠️ Payout Request Declined',
+      message: `Your withdrawal request for ₹${req.amount.toLocaleString()} was declined: ${reason || 'Administrative review'}. Funds remain in your wallet.`,
+      eventType: 'PAYOUT_REJECTED',
+      category: 'payment',
+      read: false,
+      soundType: 'urgent_ring',
+    });
+
     return { success: true };
   }
 
@@ -1179,10 +1244,35 @@ class DataService {
   }
 
   // ==========================================
-  // In-App & Firebase Push Notifications
+  // Centralized In-App & Push Notifications System
   // ==========================================
   public getNotifications(): AppNotification[] {
     return this.getItem<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, initialNotifications);
+  }
+
+  public getNotificationsForRole(
+    role: 'customer' | 'employee' | 'admin',
+    recipientId?: string
+  ): AppNotification[] {
+    const all = this.getNotifications();
+    return all.filter((n) => {
+      if (role === 'admin') {
+        return n.recipientRole === 'admin' || n.recipientRole === 'all';
+      }
+      if (n.recipientRole === 'all') return true;
+      if (n.recipientRole !== role) return false;
+      if (recipientId && n.recipientId && n.recipientId !== 'all') {
+        return n.recipientId === recipientId;
+      }
+      return true;
+    });
+  }
+
+  public getUnreadNotificationsCount(
+    role: 'customer' | 'employee' | 'admin',
+    recipientId?: string
+  ): number {
+    return this.getNotificationsForRole(role, recipientId).filter((n) => !n.read).length;
   }
 
   public setNotifications(notifications: AppNotification[]): void {
@@ -1195,6 +1285,11 @@ class DataService {
       ...notification,
       id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       timestamp: notification.timestamp || new Date().toLocaleString(),
+      category: notification.category || (
+        notification.eventType.includes('CHAT') ? 'chat' :
+        notification.eventType.includes('PAYMENT') || notification.eventType.includes('PAYOUT') ? 'payment' :
+        notification.eventType === 'ADMIN_ANNOUNCEMENT' ? 'announcement' : 'booking'
+      ),
     };
     this.setNotifications([newNotif, ...list]);
 
@@ -1212,6 +1307,20 @@ class DataService {
       soundType: newNotif.soundType,
     }).catch((err) => console.warn('Firebase notification sync warning:', err));
 
+    // Instant cross-component event broadcast for all active simulators & tabs
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('manpowerlink_notification_dispatched', { detail: newNotif })
+      );
+    }
+
+    // Play appropriate sound chime or urgent ringtone
+    if (newNotif.soundType === 'urgent_ring') {
+      playIncomingJobRingtone();
+    } else {
+      playNotificationSound();
+    }
+
     return newNotif;
   }
 
@@ -1220,8 +1329,55 @@ class DataService {
     this.setNotifications(list);
   }
 
-  public clearNotifications(): void {
-    this.setNotifications([]);
+  public markAllNotificationsRead(
+    role?: 'customer' | 'employee' | 'admin',
+    recipientId?: string
+  ): void {
+    const list = this.getNotifications().map((n) => {
+      if (!role) return { ...n, read: true };
+      if (n.recipientRole === role || n.recipientRole === 'all') {
+        if (!recipientId || n.recipientId === 'all' || n.recipientId === recipientId) {
+          return { ...n, read: true };
+        }
+      }
+      return n;
+    });
+    this.setNotifications(list);
+  }
+
+  public deleteNotification(id: string): void {
+    const list = this.getNotifications().filter((n) => n.id !== id);
+    this.setNotifications(list);
+  }
+
+  public clearNotifications(role?: 'customer' | 'employee' | 'admin'): void {
+    if (!role) {
+      this.setNotifications([]);
+      return;
+    }
+    const list = this.getNotifications().filter((n) => n.recipientRole !== role && n.recipientRole !== 'all');
+    this.setNotifications(list);
+  }
+
+  public broadcastAnnouncement(
+    title: string,
+    message: string,
+    targetRole: 'customer' | 'employee' | 'all'
+  ): AppNotification {
+    const notif = this.addNotification({
+      recipientId: 'all',
+      recipientRole: targetRole,
+      title: `📢 ${title}`,
+      message,
+      eventType: 'ADMIN_ANNOUNCEMENT',
+      category: 'announcement',
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'chime',
+    });
+    this.logAudit('Admin Announcement Broadcasted', `Title: "${title}" to target: ${targetRole}`);
+    playNotificationSound();
+    return notif;
   }
 
   // ==========================================
@@ -1538,6 +1694,19 @@ class DataService {
 
     this.updateBooking(updatedBooking);
     this.logAudit('Worker Bid Received', `${worker.name} bid ₹${amount} on ${booking.orderNumber}`);
+
+    // High-priority notification to Customer about new counter-bid
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: `🏷️ Counter-Bid: ${worker.name}`,
+      message: `${worker.name} proposed ₹${amount.toLocaleString()} for order ${booking.orderNumber} (${booking.categoryName}). Tap to review & accept.`,
+      eventType: 'WORKER_BID_SUBMITTED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
   }
 
   public acceptBid(bookingId: string, bidId: string): void {
@@ -1561,7 +1730,7 @@ class DataService {
         workerPhone: worker.phone,
         workerAvatar: worker.avatar,
         agreedRate: bid.proposedAmount,
-        status: 'assigned' as const,
+        status: 'travelling' as const,
         startOtpVerified: false,
       },
     ];
@@ -1581,6 +1750,19 @@ class DataService {
 
     this.updateBooking(updatedBooking);
     this.logAudit('Employee Bid Accepted', `Customer accepted ${worker.name} on ${booking.orderNumber}`);
+
+    // Notify Worker that their bid was accepted
+    this.addNotification({
+      recipientId: worker.id,
+      recipientRole: 'employee',
+      title: `🎉 Bid Accepted! #${booking.orderNumber}`,
+      message: `Employer accepted your bid of ₹${bid.proposedAmount.toLocaleString()} for ${booking.categoryName}! Shift confirmed. Please start transit.`,
+      eventType: 'CUSTOMER_ACCEPTED_BID',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'urgent_ring',
+    });
   }
 
   // Direct Worker Acceptance (Fixed Price mode)
@@ -1618,6 +1800,138 @@ class DataService {
 
     this.updateBooking(updatedBooking);
     this.logAudit('Worker Accepted Offer', `${worker.name} joined ${booking.orderNumber}`);
+
+    // Notify Customer immediately
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: `👷 Worker Accepted! #${booking.orderNumber}`,
+      message: `${worker.name} accepted your booking for ${booking.categoryName}. They have started travelling to your worksite!`,
+      eventType: 'WORKER_ACCEPTED_JOB',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'urgent_ring',
+    });
+
+    // Notify Worker of shift confirmation
+    this.addNotification({
+      recipientId: worker.id,
+      recipientRole: 'employee',
+      title: `✅ Shift Confirmed: #${booking.orderNumber}`,
+      message: `You accepted ${booking.categoryName} at ${booking.workLocation?.address || 'Worksite'}. Agreed wage: ₹${booking.offeredPricePerWorker.toLocaleString()}.`,
+      eventType: 'BOOKING_CONFIRMED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+  }
+
+  // Worker Starts Travelling
+  public recordStartTravelling(bookingId: string, workerId: string): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    const worker = this.getWorkers().find((w) => w.id === workerId);
+    if (!booking || !worker) return;
+
+    const assigned = booking.assignedWorkers.map((a) =>
+      a.workerId === workerId ? { ...a, status: 'travelling' as const } : a
+    );
+
+    const updatedTimeline = (booking.timelineTree || []).map((node) => {
+      if (node.stageKey === 'WORKERS_MATCHED') {
+        return {
+          ...node,
+          completed: true,
+          description: `${worker.name} has started travelling to ${booking.workLocation?.address || 'worksite'}.`,
+        };
+      }
+      return node;
+    });
+
+    const updatedBooking: Booking = {
+      ...booking,
+      assignedWorkers: assigned,
+      timelineTree: updatedTimeline,
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit('Worker Travelling', `${worker.name} en route to ${booking.orderNumber}`);
+
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: '🛵 Worker En Route',
+      message: `${worker.name} has started travelling to your worksite for Order ${booking.orderNumber}.`,
+      eventType: 'WORKER_TRAVELLING',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+  }
+
+  // Worker Reached Worksite (GPS Geofence Arrival)
+  public recordWorksiteArrival(
+    bookingId: string,
+    workerId: string,
+    locationAddress = 'Worksite Entrance Gate'
+  ): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    const worker = this.getWorkers().find((w) => w.id === workerId);
+    if (!booking || !worker) return;
+
+    const assigned = booking.assignedWorkers.map((a) =>
+      a.workerId === workerId ? { ...a, status: 'arrived' as const } : a
+    );
+
+    const updatedTimeline = (booking.timelineTree || []).map((node) => {
+      if (node.stageKey === 'START_OTP_VERIFIED') {
+        return {
+          ...node,
+          current: true,
+          description: `Worker ${worker.name} reached ${locationAddress}. Awaiting Start OTP verification.`,
+        };
+      }
+      return node;
+    });
+
+    const updatedBooking: Booking = {
+      ...booking,
+      assignedWorkers: assigned,
+      timelineTree: updatedTimeline,
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit('Worksite Arrival', `${worker.name} reached ${locationAddress} for ${booking.orderNumber}`);
+
+    // Critical notification to Customer with Start OTP reminder
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: '📍 Worker Arrived at Worksite!',
+      message: `${worker.name} has arrived at ${locationAddress} for ${booking.orderNumber}. Please share Start OTP (${booking.startOtp}) to begin shift.`,
+      eventType: 'WORKER_ARRIVED_GPS',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'urgent_ring',
+    });
+
+    // Confirmation notification to Worker
+    this.addNotification({
+      recipientId: worker.id,
+      recipientRole: 'employee',
+      title: '📍 Worksite Arrival Recorded',
+      message: `You reached ${locationAddress}. Please ask employer for 4-digit Start OTP to check-in.`,
+      eventType: 'WORKER_ARRIVED_GPS',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
   }
 
   // Verify Start OTP
@@ -1667,6 +1981,33 @@ class DataService {
 
     this.updateBooking(updatedBooking);
     this.logAudit('Work Started (OTP Verified)', `Start OTP verified for ${booking.orderNumber} at ${locationAddress}`);
+
+    // Notify Customer
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: `⏱️ Work Started! #${booking.orderNumber}`,
+      message: `Start OTP verified at ${locationAddress}. Shift has officially commenced for ${booking.categoryName}.`,
+      eventType: 'WORK_STARTED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+
+    // Notify Worker
+    this.addNotification({
+      recipientId: workerId,
+      recipientRole: 'employee',
+      title: `🚀 Work Timer Started: #${booking.orderNumber}`,
+      message: `Attendance verified with employer. Shift is now active at ${locationAddress}.`,
+      eventType: 'WORK_STARTED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
     return { success: true, message: 'Work successfully verified & started!' };
   }
@@ -1777,6 +2118,33 @@ class DataService {
       'Work Completed & Cash Collected',
       `Cash wage ₹${workerWage} received. Platform fee ₹${platformFee} debited from worker wallet.`
     );
+
+    // Notify Customer
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: `🏁 Work Completed: #${booking.orderNumber}`,
+      message: `Shift completed at ${locationAddress}! Wage of ₹${workerWage.toLocaleString()} settled. Thank you for using ManPowerLink.`,
+      eventType: 'WORK_COMPLETED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+
+    // Notify Worker
+    this.addNotification({
+      recipientId: workerId,
+      recipientRole: 'employee',
+      title: `💰 Shift Completed & Payout Verified`,
+      message: `Completed #${booking.orderNumber}. Collected ₹${workerWage.toLocaleString()}. Platform fee ₹${platformFee} debited from wallet (Bal: ₹${workerRemainingWallet.toLocaleString()}).`,
+      eventType: 'WORK_COMPLETED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
 
     return {
@@ -1815,6 +2183,19 @@ class DataService {
 
     this.updateWorker(updatedWorker);
     this.logAudit('Worker Wallet Recharged', `${worker.name} recharged ₹${amount}. New balance: ₹${newBal}`);
+
+    // In-app & push notification to Worker
+    this.addNotification({
+      recipientId: workerId,
+      recipientRole: 'employee',
+      title: '💰 Wallet Top-Up Successful',
+      message: `₹${amount.toLocaleString()} credited to your prepaid wallet via ${method}. New balance: ₹${newBal.toLocaleString()}.`,
+      eventType: 'WALLET_RECHARGED',
+      category: 'payment',
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
     return { success: true, newBalance: newBal };
   }
@@ -2330,11 +2711,95 @@ class DataService {
     return all.filter((m) => m.bookingId === bookingId);
   }
 
+  public getConversations(
+    role: 'customer' | 'employee' | 'admin',
+    userId?: string
+  ): ConversationSummary[] {
+    const bookings = this.getBookings();
+    const allMessages = this.getChatMessages();
+    const workers = this.getWorkers();
+    const customers = this.getCustomers();
+
+    const conversations: ConversationSummary[] = [];
+
+    bookings.forEach((booking) => {
+      const msgs = allMessages.filter((m) => m.bookingId === booking.id);
+      const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+
+      const customer = customers.find((c) => c.id === booking.customerId) || {
+        name: booking.customerName,
+        avatar: '',
+      };
+
+      const assignedWorker = booking.assignedWorkers[0];
+      const worker = assignedWorker
+        ? workers.find((w) => w.id === assignedWorker.workerId)
+        : workers[0];
+
+      const unreadCount = msgs.filter((m) => {
+        if (role === 'customer') {
+          return m.sender !== 'customer' && m.status !== 'read';
+        }
+        if (role === 'employee') {
+          return m.sender !== 'worker' && m.status !== 'read';
+        }
+        return false;
+      }).length;
+
+      conversations.push({
+        id: `conv-${booking.id}`,
+        bookingId: booking.id,
+        orderNumber: booking.orderNumber,
+        customerId: booking.customerId,
+        customerName: booking.customerName,
+        customerAvatar: (customer as any).avatar,
+        workerId: worker?.id || 'w-1',
+        workerName: worker?.name || 'Assigned Worker',
+        workerAvatar: worker?.avatar,
+        serviceCategory: booking.categoryName,
+        workLocation: booking.workLocation?.address || 'Worksite',
+        lastMessage: lastMsg ? lastMsg.text : 'Direct chat channel initialized for this order.',
+        lastMessageTime: lastMsg ? lastMsg.time : 'Active',
+        lastMessageTimestamp: lastMsg ? lastMsg.timestamp : Date.now(),
+        unreadCount,
+        isOnline: true,
+      });
+    });
+
+    return conversations.sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
+  }
+
+  public markBookingMessagesAsRead(bookingId: string, readerRole: 'customer' | 'employee'): void {
+    const all = this.getItem<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, initialChatMessages);
+    let updatedAny = false;
+    const updated = all.map((m) => {
+      if (m.bookingId === bookingId && m.recipientRole === readerRole && m.status !== 'read') {
+        updatedAny = true;
+        return {
+          ...m,
+          status: 'read' as const,
+          readAt: new Date().toISOString(),
+        };
+      }
+      return m;
+    });
+
+    if (updatedAny) {
+      this.setItem(STORAGE_KEYS.CHAT_MESSAGES, updated);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('manpowerlink_messages_read', { detail: { bookingId, readerRole } })
+        );
+      }
+    }
+  }
+
   public sendChatMessage(messageData: Omit<ChatMessage, 'id' | 'timestamp'>): ChatMessage {
     const newMsg: ChatMessage = {
       ...messageData,
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       timestamp: Date.now(),
+      status: 'delivered',
     };
     const all = this.getItem<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, initialChatMessages);
     const updated = [...all, newMsg];
@@ -2344,9 +2809,10 @@ class DataService {
     this.addNotification({
       recipientId: newMsg.recipientRole === 'customer' ? 'c-1' : 'w-1',
       recipientRole: newMsg.recipientRole,
-      title: `💬 Message from ${newMsg.senderName}`,
-      message: newMsg.text,
+      title: `💬 ${newMsg.senderName} (${newMsg.orderNumber || 'Chat'})`,
+      message: newMsg.text || 'Sent an attachment photo',
       eventType: 'CHAT_MESSAGE_RECEIVED',
+      category: 'chat',
       bookingId: newMsg.bookingId,
       orderNumber: newMsg.orderNumber,
       soundType: 'chime',

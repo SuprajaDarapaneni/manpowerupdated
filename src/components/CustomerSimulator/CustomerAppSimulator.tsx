@@ -62,8 +62,11 @@ import {
   getUpiIntentUrl,
 } from '../../services/storage';
 import { EmbeddedLocationFetcher } from '../Common/EmbeddedLocationFetcher';
-import { savePaymentProofToFirebase } from '../../services/firebase';
+import { savePaymentProofToFirebase, subscribeToFirebaseNotifications } from '../../services/firebase';
 import { BookingWizard } from '../../apps/customer/BookingWizard';
+import { NotificationCenterModal } from '../Common/NotificationCenterModal';
+import { RealtimeChatView } from '../Common/RealtimeChatView';
+import { DirectOnlinePaymentModal } from '../Common/DirectOnlinePaymentModal';
 
 interface CustomerAppSimulatorProps {
   categories: ServiceCategory[];
@@ -193,12 +196,22 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
+  // Notification & Real-Time Chat & Direct Payment Modals
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+  const [showDirectOnlinePaymentModal, setShowDirectOnlinePaymentModal] = useState(false);
+  const [activeChatBookingId, setActiveChatBookingId] = useState<string | null>(null);
+  const [unreadNotifCount, setUnreadNotifCount] = useState<number>(() => {
+    return dataService.getUnreadNotificationsCount('customer', 'c-1');
+  });
+
   // Real App Top Push Notification Banner (Zomato / Swiggy Style)
   const [pushBanner, setPushBanner] = useState<{
     title: string;
     message: string;
     timestamp: string;
     type?: 'order' | 'payment' | 'system';
+    bookingId?: string;
+    actionTab?: string;
   } | null>(null);
 
   // Authentic Payment Gateway Recharge States
@@ -321,7 +334,13 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
   // Audio / Alert Notification State
   const [activeAlertToast, setActiveAlertToast] = useState<string | null>(null);
 
-  const showRealAppPush = (title: string, message: string, type: 'order' | 'payment' | 'system' = 'order') => {
+  const showRealAppPush = (
+    title: string,
+    message: string,
+    type: 'order' | 'payment' | 'system' = 'order',
+    bookingId?: string,
+    actionTab?: string
+  ) => {
     if (!isAuthenticated) return;
     playNotificationSound();
     setPushBanner({
@@ -329,6 +348,8 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       message,
       timestamp: 'Just now',
       type,
+      bookingId,
+      actionTab,
     });
     setTimeout(() => {
       setPushBanner((curr) => (curr?.title === title ? null : curr));
@@ -401,12 +422,14 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
         setCustomer(c);
         setWalletBalance(c.walletBalance ?? 12500);
       }
+      setUnreadNotifCount(dataService.getUnreadNotificationsCount('customer', 'c-1'));
     });
     return unsubscribe;
   }, []);
 
-  // Real-time Chat message listener from Workers
+  // Real-time Chat message & In-App Notification listeners
   useEffect(() => {
+    // 1. Chat message listener
     const handleChatMessage = (e: any) => {
       if (!isAuthenticated) return;
       const msg = e.detail as ChatMessage;
@@ -422,12 +445,59 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
           if (prev.some((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
+        setUnreadNotifCount(dataService.getUnreadNotificationsCount('customer', 'c-1'));
+      }
+    };
+
+    // 2. Centralized In-App & Push Notification Event listener
+    const handleNotificationDispatched = (e: any) => {
+      if (!isAuthenticated) return;
+      const notif = e.detail;
+      if (!notif) return;
+      if (notif.recipientRole === 'customer' || notif.recipientRole === 'all') {
+        if (!notif.recipientId || notif.recipientId === 'all' || notif.recipientId === 'c-1') {
+          if (notif.soundType === 'urgent_ring') {
+            playIncomingJobRingtone();
+          } else {
+            playNotificationSound();
+          }
+          showRealAppPush(
+            notif.title,
+            notif.message,
+            notif.category === 'payment' ? 'payment' : notif.category === 'chat' ? 'system' : 'order',
+            notif.bookingId,
+            notif.actionTab
+          );
+          setUnreadNotifCount(dataService.getUnreadNotificationsCount('customer', 'c-1'));
+        }
       }
     };
 
     window.addEventListener('manpowerlink_chat_message', handleChatMessage);
+    window.addEventListener('manpowerlink_notification_dispatched', handleNotificationDispatched);
+
+    // 3. Real-Time Firebase Firestore listener
+    const unsubscribeFirebase = subscribeToFirebaseNotifications('customer', 'c-1', (notif) => {
+      if (!isAuthenticated) return;
+      if (notif.soundType === 'urgent_ring') {
+        playIncomingJobRingtone();
+      } else {
+        playNotificationSound();
+      }
+      showRealAppPush(
+        notif.title,
+        notif.message,
+        notif.eventType?.includes('PAYMENT') ? 'payment' : 'order',
+        notif.bookingId,
+        notif.actionTab
+      );
+      setUnreadNotifCount(dataService.getUnreadNotificationsCount('customer', 'c-1'));
+    });
+
     return () => {
       window.removeEventListener('manpowerlink_chat_message', handleChatMessage);
+      window.removeEventListener('manpowerlink_notification_dispatched', handleNotificationDispatched);
+      unsubscribeFirebase();
     };
   }, [isAuthenticated]);
 
@@ -916,9 +986,17 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
             <div className="absolute top-2 left-2 right-2 z-50 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
               <div
                 onClick={() => {
-                  if (pushBanner.type === 'system' || pushBanner.title.includes('Message') || pushBanner.message.includes('Message')) {
+                  if (pushBanner.actionTab === 'messages' || pushBanner.type === 'system' || pushBanner.title.includes('Message') || pushBanner.message.includes('Message')) {
+                    if (pushBanner.bookingId) setActiveChatBookingId(pushBanner.bookingId);
                     navigateToTab('messages');
+                  } else if (pushBanner.actionTab === 'profile' || pushBanner.type === 'payment' || pushBanner.title.includes('Wallet') || pushBanner.title.includes('Payment') || pushBanner.title.includes('Payout')) {
+                    navigateToTab('profile');
                   } else {
+                    if (pushBanner.bookingId) {
+                      setActiveBookingId(pushBanner.bookingId);
+                      const target = bookings.find((b) => b.id === pushBanner.bookingId);
+                      if (target) setSelectedBookingForTimeline(target);
+                    }
                     navigateToTab('bookings');
                   }
                   setPushBanner(null);
@@ -2081,6 +2159,21 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  {/* Notification Center Bell */}
+                  <button
+                    type="button"
+                    onClick={() => setShowNotificationCenter(true)}
+                    className="relative p-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all cursor-pointer shadow-2xs border border-white/20"
+                    title="Worksite & Booking Notifications"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-[#FFC928]" />
+                    {unreadNotifCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] rounded-full bg-[#FFC928] text-[#202124] text-[9px] font-black flex items-center justify-center px-0.5 border border-[#D71920]">
+                        {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                      </span>
+                    )}
+                  </button>
+
                   {/* Customer Wallet Balance Chip */}
                   <button
                     type="button"
@@ -2627,66 +2720,22 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   />
                 )}
 
-                {/* 4. MESSAGES TAB */}
+                {/* 4. MESSAGES TAB - WhatsApp-Style Real-Time Chat with Delivery Receipts & Typing */}
                 {activeTab === 'messages' && (
-                  <div className="h-full flex flex-col space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#D71920] text-white font-bold flex items-center justify-center text-xs">
-                          RK
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-bold text-[#202124]">Ramesh Kumar</h4>
-                          <span className="text-[10px] text-[#D71920] flex items-center gap-1 font-semibold">
-                            ● Accepted Worker (Order #1045)
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Chat Bubble Stream */}
-                    <div className="space-y-2 flex-1 overflow-y-auto">
-                      {chatMessages.map((msg, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex flex-col ${msg.sender === 'customer' ? 'items-end' : 'items-start'}`}
-                        >
-                          <div
-                            className={`p-2.5 rounded-2xl max-w-[80%] text-xs ${
-                              msg.sender === 'customer'
-                                ? 'bg-[#D71920] text-white rounded-br-none'
-                                : 'bg-white border border-[#202124]/10 text-[#202124] rounded-bl-none shadow-2xs'
-                            }`}
-                          >
-                            <p>{msg.text}</p>
-                            <span
-                              className={`text-[9px] block text-right mt-1 ${
-                                msg.sender === 'customer' ? 'text-white/70' : 'text-[#686868]'
-                              }`}
-                            >
-                              {msg.time}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Chat Input */}
-                    <form onSubmit={handleSendMessage} className="flex gap-1.5 pt-1">
-                      <input
-                        type="text"
-                        value={inputMessage}
-                        onChange={(e) => setInputMessage(e.target.value)}
-                        placeholder="Type worksite instruction..."
-                        className="flex-1 px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                      />
-                      <button
-                        type="submit"
-                        className="px-3 py-2 bg-[#D71920] text-white rounded-xl cursor-pointer"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                      </button>
-                    </form>
+                  <div className="h-[520px] flex flex-col -mx-4 -my-4 rounded-b-2xl overflow-hidden bg-slate-50">
+                    <RealtimeChatView
+                      bookingId={activeChatBookingId || 'b-1045'}
+                      orderNumber="ORD-1045"
+                      categoryName="Loading & Unloading"
+                      currentRole="customer"
+                      currentUserId={customer?.id || 'c-1'}
+                      currentUserName={customer?.name || 'Apex Logistics'}
+                      partnerRole="employee"
+                      partnerId="w-1"
+                      partnerName="Ramesh Kumar (Worker)"
+                      partnerPhone="+91 98765 43210"
+                      onClose={() => setActiveTab('home')}
+                    />
                   </div>
                 )}
 
@@ -2940,6 +2989,45 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Centralized In-App & Push Notification Center Modal */}
+              <NotificationCenterModal
+                isOpen={showNotificationCenter}
+                onClose={() => {
+                  setShowNotificationCenter(false);
+                  setUnreadNotifCount(dataService.getUnreadNotificationsCount('customer', customer?.id || 'c-1'));
+                }}
+                role="customer"
+                recipientId={customer?.id || 'c-1'}
+                onNavigate={(tab?: string, bookingId?: string) => {
+                  if (tab === 'messages') {
+                    if (bookingId) setActiveChatBookingId(bookingId);
+                    setActiveTab('messages');
+                  } else if (tab === 'profile' || tab === 'wallet' || tab === 'payment') {
+                    setActiveTab('profile');
+                  } else if (tab === 'post-job') {
+                    setActiveTab('post-job');
+                  } else {
+                    if (bookingId) {
+                      setActiveBookingId(bookingId);
+                      const target = bookings.find((b) => b.id === bookingId);
+                      if (target) setSelectedBookingForTimeline(target);
+                    }
+                    setActiveTab('bookings');
+                  }
+                }}
+              />
+
+              {/* Employer Direct Online Payment Modal to Admin Escrow */}
+              <DirectOnlinePaymentModal
+                isOpen={showDirectOnlinePaymentModal}
+                onClose={() => setShowDirectOnlinePaymentModal(false)}
+                orderNumber="ORD-1045"
+                amount={10000}
+                onPaymentSuccess={(details) => {
+                  triggerAppRingAlert(`Direct Online Payment of ₹${details.amount} verified via ${details.method} (TX: ${details.transactionId})`);
+                }}
+              />
             </>
           )}
         </div>

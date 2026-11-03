@@ -624,13 +624,16 @@ export interface AppNotification {
     | 'PRICE_REVISED'
     | 'DISPUTE_OPENED'
     | 'DISPUTE_RESOLVED'
-    | 'CHAT_MESSAGE_RECEIVED';
+    | 'CHAT_MESSAGE_RECEIVED'
+    | 'ADMIN_ANNOUNCEMENT';
+  category?: 'booking' | 'payment' | 'chat' | 'announcement' | 'system';
   bookingId?: string;
   orderNumber?: string;
   read: boolean;
   timestamp: string;
   soundType: 'chime' | 'urgent_ring' | 'silent';
   actionUrl?: string;
+  actionTab?: string;
 }
 
 // Bidirectional Real-time Chat Message
@@ -638,12 +641,38 @@ export interface ChatMessage {
   id: string;
   bookingId: string;
   orderNumber?: string;
-  sender: 'worker' | 'customer';
+  sender: 'worker' | 'customer' | 'admin';
   senderName: string;
-  recipientRole: 'customer' | 'employee';
+  senderId?: string;
+  recipientRole: 'customer' | 'employee' | 'admin';
+  receiverId?: string;
   text: string;
   time: string;
   timestamp: number;
+  status?: 'sent' | 'delivered' | 'read';
+  attachmentUrl?: string;
+  attachmentType?: 'image' | 'file';
+  readAt?: string;
+}
+
+// Chat Conversation Summary for Inbox
+export interface ConversationSummary {
+  id: string;
+  bookingId: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  customerAvatar?: string;
+  workerId: string;
+  workerName: string;
+  workerAvatar?: string;
+  serviceCategory: string;
+  workLocation: string;
+  lastMessage: string;
+  lastMessageTime: string;
+  lastMessageTimestamp: number;
+  unreadCount: number;
+  isOnline: boolean;
 }
 
 // GPS Attendance Location Stamp (Client Feedback #5)

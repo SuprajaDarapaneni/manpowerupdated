@@ -15,6 +15,7 @@ import { DisputesView } from './components/Admin/DisputesView';
 import { SafetyPrivacyView } from './components/Admin/SafetyPrivacyView';
 import { ReportsView } from './components/Admin/ReportsView';
 import { AuditTrailView } from './components/Admin/AuditTrailView';
+import { PublishNotificationsView } from './components/Admin/PublishNotificationsView';
 import { SettingsManagement } from './components/Admin/SettingsManagement';
 import { CustomerApp } from './apps/customer/CustomerApp';
 import { EmployeeApp } from './apps/employee/EmployeeApp';
@@ -34,28 +35,33 @@ type AppRoute = 'admin' | 'customer' | 'employee' | 'dual' | 'handover' | 'dev-h
 
 function getInitialRoute(): AppRoute {
   if (typeof window === 'undefined') return 'dual';
-  const customMode = (window as any).__APP_MODE__ || localStorage.getItem('manpower_app_mode');
-  if (customMode === 'customer') return 'customer';
-  if (customMode === 'employee') return 'employee';
-  if (customMode === 'admin') return 'admin';
-  if (customMode === 'dual') return 'dual';
-
-  const hash = window.location.hash.toLowerCase();
-  if (hash.includes('customer')) return 'customer';
-  if (hash.includes('employee')) return 'employee';
-  if (hash.includes('admin')) return 'admin';
-  if (hash.includes('dual') || hash.includes('preview')) return 'dual';
 
   const params = new URLSearchParams(window.location.search);
   const preview = params.get('preview') || params.get('app') || params.get('view');
   if (preview === 'customer') return 'customer';
   if (preview === 'employee') return 'employee';
   if (preview === 'admin') return 'admin';
-  if (preview === 'handover') return 'handover';
   if (preview === 'dual' || preview === 'split' || preview === 'apps') return 'dual';
+  if (preview === 'handover') return 'handover';
   if (params.get('dev') === 'true' || params.get('hub') === 'true' || preview === 'hub') return 'dev-hub';
 
-  // Check if locked into client delivery mode
+  const hash = window.location.hash.toLowerCase();
+  if (hash === '#customer' || hash.includes('preview-customer')) return 'customer';
+  if (hash === '#employee' || hash.includes('preview-employee')) return 'employee';
+  if (hash === '#admin') return 'admin';
+  if (hash === '#dual' || hash.includes('preview-dual') || hash.includes('apps')) return 'dual';
+  if (hash === '#handover') return 'handover';
+
+  // Check saved mode
+  const storedMode = localStorage.getItem('manpower_app_mode');
+  if (storedMode === 'customer' || storedMode === 'employee' || storedMode === 'admin' || storedMode === 'dual') {
+    if (localStorage.getItem('manpower_client_locked') === 'true') {
+      return 'admin';
+    }
+    return storedMode as AppRoute;
+  }
+
+  // If client delivery lock is explicitly activated
   if (localStorage.getItem('manpower_client_locked') === 'true') {
     return 'admin';
   }
@@ -78,11 +84,6 @@ export default function App() {
 
   // Active sub-tab inside Dev Hub if opened via ?dev=true
   const [hubTab, setHubTab] = useState<'admin' | 'dual' | 'customer' | 'employee' | 'handover'>('dual');
-  const [isDevMode, setIsDevMode] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    const params = new URLSearchParams(window.location.search);
-    return params.get('dev') === 'true' || params.get('debug') === 'true';
-  });
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Reactive platform state
@@ -202,6 +203,9 @@ export default function App() {
         return <ReportsView bookings={bookings} />;
       case 'audit':
         return <AuditTrailView logs={auditLogs} />;
+      case 'Publish_notifications':
+      case 'publish-notifications':
+        return <PublishNotificationsView />;
       case 'settings':
       case 'settings-general':
       case 'settings-branding':
@@ -236,42 +240,64 @@ export default function App() {
   // Accessible cleanly via ?app=customer or ?preview=customer
   // =========================================================================
   if (route === 'customer') {
-    if (isStandalone) {
-      return (
-        <div className="min-h-screen bg-[#FFFDF8] text-[#202124] antialiased">
-          <CustomerApp onBackToAdmin={undefined} showExitBar={false} />
-        </div>
-      );
-    }
     return (
-      <div className="min-h-screen bg-[#121316] text-[#202124] flex flex-col antialiased">
-        <div className="w-full bg-[#1A1B1E] text-white px-4 py-2.5 border-b border-white/10 flex items-center justify-between text-xs sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#FFC928]" />
-            <span className="font-bold text-white text-xs">Customer App Preview (Employer)</span>
+      <div className="min-h-screen bg-[#1E1F23] text-white flex flex-col antialiased">
+        <div className="bg-[#121316] border-b border-white/10 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-[#FFC928] text-[#202124] flex items-center justify-center font-extrabold text-xs shadow-xs">
+              C
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-white">Customer App Preview (Employer)</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFC928] text-[#202124]">
+                  ACTIVE
+                </span>
+              </div>
+              <p className="text-[10px] text-white/50">Post Job, Interactive GPS Map, Radar Broadcast, Direct Payment</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-xl border border-white/10">
             <button
               onClick={() => navigateTo('dual')}
-              className="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white/80 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
             >
-              📱 Dual Apps View
+              <Columns className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Dual Split</span>
+            </button>
+            <button
+              onClick={() => navigateTo('customer')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-[#FFC928] text-[#202124] cursor-pointer shadow-xs"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+              <span>Customer App</span>
             </button>
             <button
               onClick={() => navigateTo('employee')}
-              className="px-2.5 py-1 rounded-md bg-[#D71920] hover:bg-[#A80F18] text-white font-medium cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white/80 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
             >
-              👷 Worker App
+              <HardHat className="w-3.5 h-3.5 text-[#D71920]" />
+              <span>Employee App</span>
             </button>
             <button
               onClick={() => navigateTo('admin')}
-              className="px-2.5 py-1 rounded-md bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors border border-white/15"
             >
-              🛡️ Admin
+              <LayoutDashboard className="w-3.5 h-3.5 text-[#FFC928]" />
+              <span>Admin Dashboard</span>
+            </button>
+            <button
+              onClick={() => toggleClientLock(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-red-600/30 hover:bg-red-600/50 text-red-200 cursor-pointer transition-colors border border-red-500/30"
+              title="Lock web app for client delivery (hides all preview headers and switchers)"
+            >
+              <Lock className="w-3 h-3 text-red-300" />
+              <span className="hidden sm:inline">Lock for Client</span>
             </button>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center p-3 sm:p-6 bg-[#F0F2F5]">
+        <div className="flex-1 flex items-center justify-center p-4 bg-[#F0F2F5]">
           <CustomerApp showExitBar={false} />
         </div>
       </div>
@@ -283,42 +309,64 @@ export default function App() {
   // Accessible cleanly via ?app=employee or ?preview=employee
   // =========================================================================
   if (route === 'employee') {
-    if (isStandalone) {
-      return (
-        <div className="min-h-screen bg-[#FFFDF8] text-[#202124] antialiased">
-          <EmployeeApp onBackToAdmin={undefined} showExitBar={false} />
-        </div>
-      );
-    }
     return (
-      <div className="min-h-screen bg-[#121316] text-[#202124] flex flex-col antialiased">
-        <div className="w-full bg-[#1A1B1E] text-white px-4 py-2.5 border-b border-white/10 flex items-center justify-between text-xs sticky top-0 z-50">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-[#D71920]" />
-            <span className="font-bold text-white text-xs">Employee App Preview (Worker)</span>
+      <div className="min-h-screen bg-[#1E1F23] text-white flex flex-col antialiased">
+        <div className="bg-[#121316] border-b border-white/10 px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-40">
+          <div className="flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-[#D71920] text-white flex items-center justify-center font-extrabold text-xs shadow-xs border border-[#FFC928]">
+              W
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm text-white">Employee App Preview (Worker)</span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#D71920] text-white">
+                  ACTIVE
+                </span>
+              </div>
+              <p className="text-[10px] text-white/50">Duty Radar, Bidding, Geofence GPS Arrival, OTP, Wallet Top-Up</p>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+
+          <div className="flex items-center gap-1.5 bg-white/5 p-1 rounded-xl border border-white/10">
             <button
               onClick={() => navigateTo('dual')}
-              className="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white/80 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
             >
-              📱 Dual Apps View
+              <Columns className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Dual Split</span>
             </button>
             <button
               onClick={() => navigateTo('customer')}
-              className="px-2.5 py-1 rounded-md bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-bold cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg text-white/80 hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
             >
-              🏢 Customer App
+              <Smartphone className="w-3.5 h-3.5 text-[#FFC928]" />
+              <span>Customer App</span>
+            </button>
+            <button
+              onClick={() => navigateTo('employee')}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-[#D71920] text-white cursor-pointer shadow-xs"
+            >
+              <HardHat className="w-3.5 h-3.5" />
+              <span>Employee App</span>
             </button>
             <button
               onClick={() => navigateTo('admin')}
-              className="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white font-medium cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer transition-colors border border-white/15"
             >
-              🛡️ Admin
+              <LayoutDashboard className="w-3.5 h-3.5 text-[#FFC928]" />
+              <span>Admin Dashboard</span>
+            </button>
+            <button
+              onClick={() => toggleClientLock(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-red-600/30 hover:bg-red-600/50 text-red-200 cursor-pointer transition-colors border border-red-500/30"
+              title="Lock web app for client delivery (hides all preview headers and switchers)"
+            >
+              <Lock className="w-3 h-3 text-red-300" />
+              <span className="hidden sm:inline">Lock for Client</span>
             </button>
           </div>
         </div>
-        <div className="flex-1 flex items-center justify-center p-3 sm:p-6 bg-[#F0F2F5]">
+        <div className="flex-1 flex items-center justify-center p-4 bg-[#F0F2F5]">
           <EmployeeApp showExitBar={false} />
         </div>
       </div>
@@ -376,6 +424,14 @@ export default function App() {
             >
               <LayoutDashboard className="w-3.5 h-3.5 text-[#FFC928]" />
               <span>Admin Dashboard</span>
+            </button>
+            <button
+              onClick={() => toggleClientLock(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-red-600/30 hover:bg-red-600/50 text-red-200 cursor-pointer transition-colors border border-red-500/30"
+              title="Lock web app for client delivery (hides all preview headers and switchers)"
+            >
+              <Lock className="w-3 h-3 text-red-300" />
+              <span className="hidden sm:inline">Lock for Client</span>
             </button>
           </div>
         </div>

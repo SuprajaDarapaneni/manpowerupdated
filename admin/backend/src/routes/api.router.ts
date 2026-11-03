@@ -153,6 +153,106 @@ apiRouter.post('/auth/logout', (req: Request, res: Response) => {
   });
 });
 
+// ==========================================
+// --- Push Notifications Hub (Open for Mobile Apps & Cross-App Event Bus) ---
+// ==========================================
+export interface BroadcastNotification {
+  id: string;
+  target: string;
+  recipientRole?: 'customer' | 'employee' | 'admin' | 'all';
+  recipientId?: string;
+  eventType: string;
+  title: string;
+  body: string;
+  data?: Record<string, any>;
+  timestamp: string;
+}
+
+export const broadcastNotificationsState: BroadcastNotification[] = [
+  {
+    id: 'notif-seed-1',
+    target: 'all_customers',
+    recipientRole: 'customer',
+    eventType: 'BOOKING_CREATED',
+    title: '📢 Shift Broadcast: Baikampady Industrial Area',
+    body: 'Loading & Unloading shift scheduled for 02:00 PM today.',
+    data: { type: 'JOB_CREATED', orderNumber: '1046' },
+    timestamp: new Date().toISOString(),
+  },
+];
+
+// Device Token Storage for FCM
+export const deviceTokensState: Map<string, { token: string; role: string; platform: string; updatedAt: string }> = new Map();
+
+apiRouter.post('/notifications/register-token', (req: Request, res: Response) => {
+  const { userId, role, token, platform } = req.body;
+  if (!userId || !token) {
+    return res.status(400).json({ success: false, message: 'userId and token are required.' });
+  }
+
+  deviceTokensState.set(`${role || 'user'}_${userId}`, {
+    token,
+    role: role || 'customer',
+    platform: platform || 'android',
+    updatedAt: new Date().toISOString(),
+  });
+
+  res.json({
+    success: true,
+    message: 'Device FCM token successfully registered for push notifications.',
+    data: { userId, tokenCount: deviceTokensState.size },
+  });
+});
+
+apiRouter.post('/notifications/send', (req: Request, res: Response) => {
+  const { target, topic, notification, data, recipientRole, recipientId, eventType } = req.body;
+  const title = notification?.title || req.body.title || 'ManPowerLink Alert';
+  const body = notification?.body || req.body.body || 'New operational update.';
+
+  const resolvedEventType = eventType || data?.type || 'GENERAL_UPDATE';
+  const resolvedTarget = target || topic || recipientRole || 'all';
+
+  const newNotif: BroadcastNotification = {
+    id: `notif-${Date.now()}`,
+    target: resolvedTarget,
+    recipientRole: recipientRole || (resolvedTarget.includes('employee') ? 'employee' : 'customer'),
+    recipientId: recipientId || 'all',
+    eventType: resolvedEventType,
+    title,
+    body,
+    data: data || {},
+    timestamp: new Date().toISOString(),
+  };
+
+  broadcastNotificationsState.unshift(newNotif);
+  if (broadcastNotificationsState.length > 100) {
+    broadcastNotificationsState.pop();
+  }
+
+  console.log(`[PUSH NOTIFICATION DISPATCHED] Event: ${resolvedEventType} -> Target: ${resolvedTarget}: "${title}" - "${body}"`);
+
+  res.status(201).json({
+    success: true,
+    message: 'Notification successfully dispatched to mobile apps & subscribers.',
+    data: newNotif,
+  });
+});
+
+apiRouter.get('/notifications/recent', (req: Request, res: Response) => {
+  const { role, userId } = req.query;
+  let filtered = broadcastNotificationsState;
+  if (role) {
+    filtered = filtered.filter((n) => n.recipientRole === role || n.target === 'all' || n.target === `all_${role}s`);
+  }
+  if (userId) {
+    filtered = filtered.filter((n) => !n.recipientId || n.recipientId === 'all' || n.recipientId === userId);
+  }
+  res.json({
+    success: true,
+    data: filtered,
+  });
+});
+
 // Apply JWT authentication to admin routes
 apiRouter.use(authenticateJwt);
 
@@ -918,59 +1018,5 @@ apiRouter.get('/admin/settings/audit-history', requireRole(['super_admin', 'admi
   res.json({ success: true, data: settingsAuditState });
 });
 
-// --- Push Notifications Hub (Employee App -> Customer App) ---
-interface BroadcastNotification {
-  id: string;
-  target: string;
-  title: string;
-  body: string;
-  data?: Record<string, any>;
-  timestamp: string;
-}
 
-const broadcastNotificationsState: BroadcastNotification[] = [
-  {
-    id: 'notif-seed-1',
-    target: 'all_customers',
-    title: '📢 Shift Broadcast: Baikampady Industrial Area',
-    body: 'Loading & Unloading shift scheduled for 02:00 PM today.',
-    data: { type: 'JOB_CREATED', orderNumber: '1046' },
-    timestamp: new Date().toISOString(),
-  },
-];
-
-apiRouter.post('/notifications/send', (req: Request, res: Response) => {
-  const { target, topic, notification, data } = req.body;
-  const title = notification?.title || req.body.title || 'ManPowerLink Alert';
-  const body = notification?.body || req.body.body || 'New update received.';
-
-  const newNotif: BroadcastNotification = {
-    id: `notif-${Date.now()}`,
-    target: target || topic || 'all_customers',
-    title,
-    body,
-    data: data || {},
-    timestamp: new Date().toISOString(),
-  };
-
-  broadcastNotificationsState.unshift(newNotif);
-  if (broadcastNotificationsState.length > 50) {
-    broadcastNotificationsState.pop();
-  }
-
-  console.log(`[PUSH NOTIFICATION] Dispatched to ${newNotif.target}: "${title}" - "${body}"`);
-
-  res.status(201).json({
-    success: true,
-    message: 'Notification successfully dispatched to Customer App channel.',
-    data: newNotif,
-  });
-});
-
-apiRouter.get('/notifications/recent', (req: Request, res: Response) => {
-  res.json({
-    success: true,
-    data: broadcastNotificationsState,
-  });
-});
 

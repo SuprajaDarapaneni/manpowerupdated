@@ -662,6 +662,136 @@ export const LegalAcceptanceSchema = new Schema<ILegalAcceptance>(
   { timestamps: true }
 );
 
+// 13. In-App & Push Notification Schema
+export interface INotification extends Document {
+  recipientRole: 'customer' | 'employee' | 'admin' | 'all';
+  recipientId?: string;
+  title: string;
+  message: string;
+  category: 'booking' | 'payment' | 'chat' | 'announcement' | 'system';
+  bookingId?: string;
+  actionTab?: string;
+  read: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const NotificationSchema = new Schema<INotification>(
+  {
+    recipientRole: {
+      type: String,
+      enum: ['customer', 'employee', 'admin', 'all'],
+      required: true,
+      index: true,
+    },
+    recipientId: { type: String, index: true },
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    category: {
+      type: String,
+      enum: ['booking', 'payment', 'chat', 'announcement', 'system'],
+      default: 'booking',
+      index: true,
+    },
+    bookingId: { type: String, index: true },
+    actionTab: { type: String },
+    read: { type: Boolean, default: false, index: true },
+  },
+  { timestamps: true }
+);
+
+// 14. Customer-Worker Chat Conversation Schema
+export interface IConversation extends Document {
+  bookingId: string;
+  customerId: string;
+  customerName: string;
+  workerId: string;
+  workerName: string;
+  lastMessageText: string;
+  lastMessageTime: Date;
+  unreadCustomerCount: number;
+  unreadWorkerCount: number;
+  status: 'active' | 'archived' | 'disputed';
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const ConversationSchema = new Schema<IConversation>(
+  {
+    bookingId: { type: String, required: true, unique: true, index: true },
+    customerId: { type: String, required: true, index: true },
+    customerName: { type: String, required: true },
+    workerId: { type: String, required: true, index: true },
+    workerName: { type: String, required: true },
+    lastMessageText: { type: String, default: '' },
+    lastMessageTime: { type: Date, default: Date.now },
+    unreadCustomerCount: { type: Number, default: 0 },
+    unreadWorkerCount: { type: Number, default: 0 },
+    status: { type: String, enum: ['active', 'archived', 'disputed'], default: 'active' },
+  },
+  { timestamps: true }
+);
+
+// 15. Real-Time Chat Message Schema
+export interface IMessage extends Document {
+  conversationId: string;
+  bookingId: string;
+  senderId: string;
+  senderRole: 'customer' | 'employee' | 'admin';
+  senderName: string;
+  receiverId: string;
+  receiverRole: 'customer' | 'employee' | 'admin';
+  text: string;
+  attachmentUrl?: string;
+  attachmentType?: 'image' | 'location' | 'document';
+  status: 'sent' | 'delivered' | 'read';
+  readAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const MessageSchema = new Schema<IMessage>(
+  {
+    conversationId: { type: String, required: true, index: true },
+    bookingId: { type: String, required: true, index: true },
+    senderId: { type: String, required: true, index: true },
+    senderRole: { type: String, enum: ['customer', 'employee', 'admin'], required: true },
+    senderName: { type: String, required: true },
+    receiverId: { type: String, required: true, index: true },
+    receiverRole: { type: String, enum: ['customer', 'employee', 'admin'], required: true },
+    text: { type: String, default: '' },
+    attachmentUrl: { type: String },
+    attachmentType: { type: String, enum: ['image', 'location', 'document'] },
+    status: { type: String, enum: ['sent', 'delivered', 'read'], default: 'sent', index: true },
+    readAt: { type: Date },
+  },
+  { timestamps: true }
+);
+
+// 16. FCM Push Device Token Schema
+export interface IDeviceToken extends Document {
+  userId: string;
+  role: 'customer' | 'employee' | 'admin';
+  token: string;
+  platform: 'android' | 'ios' | 'web';
+  isActive: boolean;
+  lastUsedAt: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export const DeviceTokenSchema = new Schema<IDeviceToken>(
+  {
+    userId: { type: String, required: true, index: true },
+    role: { type: String, enum: ['customer', 'employee', 'admin'], required: true },
+    token: { type: String, required: true, unique: true },
+    platform: { type: String, enum: ['android', 'ios', 'web'], default: 'android' },
+    isActive: { type: Boolean, default: true },
+    lastUsedAt: { type: Date, default: Date.now },
+  },
+  { timestamps: true }
+);
+
 // Model Exports
 export const UserModel = mongoose.model<IUser>('User', UserSchema);
 export const ServiceCategoryModel = mongoose.model<IServiceCategory>('ServiceCategory', ServiceCategorySchema);
@@ -675,3 +805,8 @@ export const AuditLogModel = mongoose.model<IAuditLog>('AuditLog', AuditLogSchem
 export const AppSettingsModel = mongoose.model<IAppSettings>('AppSettings', AppSettingsSchema);
 export const LegalDocumentModel = mongoose.model<ILegalDocument>('LegalDocument', LegalDocumentSchema);
 export const LegalAcceptanceModel = mongoose.model<ILegalAcceptance>('LegalAcceptance', LegalAcceptanceSchema);
+export const NotificationModel = mongoose.model<INotification>('Notification', NotificationSchema);
+export const ConversationModel = mongoose.model<IConversation>('Conversation', ConversationSchema);
+export const MessageModel = mongoose.model<IMessage>('Message', MessageSchema);
+export const DeviceTokenModel = mongoose.model<IDeviceToken>('DeviceToken', DeviceTokenSchema);
+

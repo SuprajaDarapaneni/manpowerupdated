@@ -53,6 +53,9 @@ import {
   playIncomingJobRingtone,
 } from '../../services/storage';
 import { subscribeToFirebaseNotifications } from '../../services/firebase';
+import { NotificationCenterModal } from '../Common/NotificationCenterModal';
+import { RealtimeChatView } from '../Common/RealtimeChatView';
+import { WalletTopUpModal } from '../Common/WalletTopUpModal';
 
 interface EmployeeAppSimulatorProps {
   workers: Worker[];
@@ -137,7 +140,15 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   // Wallet & Earnings State
   const [walletBalance, setWalletBalance] = useState<number>(currentWorker.walletBalance || 4850);
   const [showRechargeModal, setShowRechargeModal] = useState(false);
+  const [showRechargeTopUpModal, setShowRechargeTopUpModal] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState(1000);
+
+  // Centralized Notification & Chat State
+  const [showNotificationCenter, setShowNotificationCenter] = useState(false);
+  const [activeChatBookingId, setActiveChatBookingId] = useState<string | null>(null);
+  const [unreadNotifCount, setUnreadNotifCount] = useState<number>(() => {
+    return dataService.getUnreadNotificationsCount('employee', currentWorker.id);
+  });
 
   // Dedicated Worker Withdrawal (Payout of Work Earnings) State
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
@@ -257,10 +268,31 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
           if (prev.some((m) => m.id === msg.id)) return prev;
           return [...prev, msg];
         });
+        setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
       }
     };
 
     window.addEventListener('manpowerlink_chat_message', handleChatMessage);
+
+    // 2.5 Centralized In-App & Push Notification Event listener
+    const handleNotificationDispatched = (e: any) => {
+      if (!isAuthenticated || !isOnline) return;
+      const notif = e.detail;
+      if (!notif) return;
+      if (notif.recipientRole === 'employee' || notif.recipientRole === 'all') {
+        if (!notif.recipientId || notif.recipientId === 'all' || notif.recipientId === currentWorker.id) {
+          playNotificationSound();
+          showRealAppPush(
+            notif.title,
+            notif.message,
+            notif.eventType === 'BOOKING_CREATED' ? 'job' : notif.category === 'payment' ? 'payment' : 'system'
+          );
+          setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
+        }
+      }
+    };
+
+    window.addEventListener('manpowerlink_notification_dispatched', handleNotificationDispatched);
 
     // 3. Real-time Firebase notification subscription
     const unsubscribeFirebase = subscribeToFirebaseNotifications(
@@ -272,13 +304,15 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
         showRealAppPush(
           notif.title,
           notif.message,
-          notif.eventType === 'BOOKING_CREATED' ? 'job' : 'system'
+          notif.eventType === 'BOOKING_CREATED' ? 'job' : notif.category === 'payment' ? 'payment' : 'system'
         );
+        setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
       }
     );
 
-    // 4. Storage subscription watcher for NEW job broadcasts (ONLY for jobs created during active session)
+    // 4. Storage subscription watcher for NEW job broadcasts and badge sync
     const unsubscribeStorage = dataService.subscribe(() => {
+      setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
       if (!isAuthenticated || !isOnline) return;
       const all = dataService.getBookings();
       const newest = all[0];
@@ -302,6 +336,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     return () => {
       window.removeEventListener('manpowerlink_new_job_broadcast', handleNewJobBroadcast);
       window.removeEventListener('manpowerlink_chat_message', handleChatMessage);
+      window.removeEventListener('manpowerlink_notification_dispatched', handleNotificationDispatched);
       unsubscribeFirebase();
       unsubscribeStorage();
     };
@@ -1449,24 +1484,38 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
+                  {/* Worker Notification Center Bell */}
                   <button
                     type="button"
-                    onClick={() => {
-                      setWithdrawAmount(Math.min(walletBalance, 2000));
-                      setShowWithdrawModal(true);
-                    }}
+                    onClick={() => setShowNotificationCenter(true)}
+                    className="relative p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-[#FFC928] border border-[#FFC928]/30 transition-all cursor-pointer shadow-2xs"
+                    title="Worker Notifications & Shift Alerts"
+                  >
+                    <Bell className="w-3.5 h-3.5 text-[#FFC928]" />
+                    {unreadNotifCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] rounded-full bg-[#D71920] text-white text-[9px] font-black flex items-center justify-center px-0.5 border border-[#FFC928]">
+                        {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Worker Prepaid Wallet Balance & Top-Up Button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowRechargeTopUpModal(true)}
                     className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-[#FFC928] border border-[#FFC928]/30 px-2 py-1 rounded-xl text-[10px] font-extrabold transition-all cursor-pointer shadow-2xs"
-                    title="Tap to Withdraw Earnings"
+                    title="Tap to Top Up Worker Wallet Balance"
                   >
                     <Wallet className="w-3 h-3 text-[#FFC928]" />
                     <span>₹{walletBalance.toLocaleString()}</span>
+                    <span className="text-[9px] bg-[#FFC928] text-[#202124] px-1 rounded font-black">+</span>
                   </button>
 
                   <button
                     type="button"
                     onClick={() => setIsOnline(!isOnline)}
-                    className={`px-2.5 py-1 text-[10px] font-bold rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-xs ${
+                    className={`px-2 py-1 text-[10px] font-bold rounded-full transition-all cursor-pointer flex items-center gap-1 shadow-xs ${
                       isOnline
                         ? 'bg-[#FFC928] text-[#202124]'
                         : 'bg-white/10 text-white/60 hover:text-white'
@@ -1909,7 +1958,14 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            triggerAppRingAlert('📍 GPS Arrival Recorded! You have reached the worksite. Please request Start OTP from employer.');
+                            if (selectedBooking) {
+                              dataService.recordWorksiteArrival(
+                                selectedBooking.id,
+                                currentWorker.id,
+                                currentGpsLocation.address
+                              );
+                            }
+                            triggerAppRingAlert('📍 GPS Arrival Recorded! Worksite entrance reached. Start OTP notification dispatched to employer.');
                           }}
                           className="w-full py-1.5 px-3 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-xs font-bold text-[#202124] flex items-center justify-center gap-1.5 shadow-2xs transition-all cursor-pointer"
                         >
@@ -2093,117 +2149,22 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </div>
                 )}
 
-                {/* 4. MESSAGES TAB */}
+                {/* 4. MESSAGES TAB - WhatsApp-Style Real-Time Chat with Delivery Receipts & Typing */}
                 {activeTab === 'messages' && (
-                  <div className="h-full flex flex-col space-y-2.5">
-                    <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#FFC928] text-[#202124] font-bold flex items-center justify-center text-xs">
-                          {(selectedBooking?.customerName || 'AL').slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <h4 className="text-xs font-bold text-[#202124]">{selectedBooking?.customerName || 'Apex Logistics (Employer)'}</h4>
-                          <span className="text-[10px] text-[#D71920] flex items-center gap-1 font-semibold">
-                            ● {selectedBooking?.orderNumber || 'Order #1045'} ({selectedBooking?.categoryName || 'Shift'})
-                          </span>
-                        </div>
-                      </div>
-                      {/* If this worker has not yet accepted this shift, show pre-acceptance action */}
-                      {selectedBooking && !selectedBooking.assignedWorkers.some(w => w.workerId === currentWorker.id) && (
-                        isBelowMinBalance ? (
-                          <button
-                            type="button"
-                            onClick={() => setShowRechargeModal(true)}
-                            className="px-2 py-1 bg-[#D71920] text-white text-[10px] font-bold rounded-lg shadow-xs hover:bg-[#A80F18] cursor-pointer"
-                          >
-                            Recharge to Accept
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => promptAcceptJob(selectedBooking)}
-                            className="px-2.5 py-1 bg-[#16834A] text-white text-[10px] font-bold rounded-lg shadow-xs hover:bg-[#126b3c] cursor-pointer flex items-center gap-1"
-                          >
-                            <CheckCircle2 className="w-3 h-3 text-[#FFC928]" />
-                            <span>Accept (₹{selectedBooking.offeredPricePerWorker})</span>
-                          </button>
-                        )
-                      )}
-                    </div>
-
-                    {/* Pre-acceptance help notice */}
-                    {selectedBooking && !selectedBooking.assignedWorkers.some(w => w.workerId === currentWorker.id) && (
-                      <div className="p-2 bg-amber-50 border border-amber-200 rounded-xl text-[10px] text-amber-900 flex items-center justify-between">
-                        <span>💬 Chat with employer before accepting shift. Ask about reporting gate, PPE or tools.</span>
-                      </div>
-                    )}
-
-                    <div className="space-y-2 flex-1 overflow-y-auto">
-                      {chatMessages.map((msg, idx) => (
-                        <div
-                          key={idx}
-                          className={`flex flex-col ${msg.sender === 'worker' ? 'items-end' : 'items-start'}`}
-                        >
-                          <div
-                            className={`p-2.5 rounded-2xl max-w-[80%] text-xs ${
-                              msg.sender === 'worker'
-                                ? 'bg-[#D71920] text-white rounded-br-none'
-                                : 'bg-white border border-[#202124]/10 text-[#202124] rounded-bl-none shadow-2xs'
-                            }`}
-                          >
-                            <p>{msg.text}</p>
-                            <span
-                              className={`text-[9px] block text-right mt-1 ${
-                                msg.sender === 'worker' ? 'text-white/70' : 'text-[#686868]'
-                              }`}
-                            >
-                              {msg.time}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Quick inquiry chips */}
-                    <div className="flex gap-1.5 overflow-x-auto py-1 scrollbar-none">
-                      <button
-                        type="button"
-                        onClick={() => setInputMessage('What specific PPE gear or tools are required on site?')}
-                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-[#202124] text-[10px] rounded-lg shrink-0 font-medium cursor-pointer"
-                      >
-                        PPE / Tools required?
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setInputMessage('Which specific gate or supervisor should I report to?')}
-                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-[#202124] text-[10px] rounded-lg shrink-0 font-medium cursor-pointer"
-                      >
-                        Reporting gate?
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setInputMessage('Can you confirm lunch/tea break timings?')}
-                        className="px-2 py-1 bg-slate-100 hover:bg-slate-200 text-[#202124] text-[10px] rounded-lg shrink-0 font-medium cursor-pointer"
-                      >
-                        Break timings?
-                      </button>
-                    </div>
-
-                    <form onSubmit={handleSendMessage} className="flex gap-1.5 pt-0.5">
-                      <input
-                        type="text"
-                        value={inputMessage}
-                        onChange={(e) => setInputMessage(e.target.value)}
-                        placeholder="Type message to employer..."
-                        className="flex-1 px-3 py-2 text-xs bg-white border border-[#202124]/15 rounded-xl focus:outline-none focus:border-[#D71920]"
-                      />
-                      <button
-                        type="submit"
-                        className="px-3 py-2 bg-[#D71920] hover:bg-[#A80F18] text-white rounded-xl cursor-pointer"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                      </button>
-                    </form>
+                  <div className="h-[520px] flex flex-col -mx-4 -my-4 rounded-b-2xl overflow-hidden bg-slate-50">
+                    <RealtimeChatView
+                      bookingId={activeChatBookingId || selectedBooking?.id || 'b-1045'}
+                      orderNumber={selectedBooking?.orderNumber || 'ORD-1045'}
+                      categoryName={selectedBooking?.categoryName || 'Loading & Unloading'}
+                      currentRole="employee"
+                      currentUserId={currentWorker.id}
+                      currentUserName={currentWorker.name}
+                      partnerRole="customer"
+                      partnerId="c-1"
+                      partnerName={selectedBooking?.customerName || 'Apex Logistics (Employer)'}
+                      partnerPhone="+91 99001 55432"
+                      onClose={() => setActiveTab('home')}
+                    />
                   </div>
                 )}
 
@@ -2750,6 +2711,41 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* Centralized Worker Notification Center Modal */}
+              <NotificationCenterModal
+                isOpen={showNotificationCenter}
+                onClose={() => {
+                  setShowNotificationCenter(false);
+                  setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
+                }}
+                role="employee"
+                recipientId={currentWorker.id}
+                onNavigate={(tab?: string, bookingId?: string) => {
+                  if (tab === 'messages') {
+                    if (bookingId) setActiveChatBookingId(bookingId);
+                    setActiveTab('messages');
+                  } else if (tab === 'my-work') {
+                    setActiveTab('my-work');
+                  } else if (tab === 'find-jobs') {
+                    setActiveTab('find-jobs');
+                  }
+                }}
+              />
+
+              {/* Worker Wallet Prepaid Top-Up Modal (Direct Recharge to maintain balance) */}
+              <WalletTopUpModal
+                isOpen={showRechargeTopUpModal}
+                onClose={() => setShowRechargeTopUpModal(false)}
+                workerId={currentWorker.id}
+                workerName={currentWorker.name}
+                currentBalance={walletBalance}
+                minBalanceRequired={minWorkerWalletBalance}
+                onTopUpSuccess={(addedAmount) => {
+                  setWalletBalance((prev) => prev + addedAmount);
+                  setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
+                }}
+              />
             </>
           )}
         </div>
