@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/customer_notification_service.dart';
-import '../main.dart';
+import '../theme/worker_theme.dart';
+import '../providers/worker_jobs_provider.dart';
 
 class WorkerCreateJobSheet extends ConsumerStatefulWidget {
   const WorkerCreateJobSheet({super.key});
