@@ -17,6 +17,8 @@ import { SafetyPrivacyView } from './components/Admin/SafetyPrivacyView';
 import { ReportsView } from './components/Admin/ReportsView';
 import { AuditTrailView } from './components/Admin/AuditTrailView';
 import { SettingsManagement } from './components/Admin/SettingsManagement';
+import { PublishNotificationsView } from './components/Admin/PublishNotificationsView';
+import { ReleaseApksView } from './components/Admin/ReleaseApksView';
 import { Server, Wifi, WifiOff, RefreshCw } from 'lucide-react';
 
 const TAB_NAMES: Record<AdminTab, string> = {
@@ -32,6 +34,10 @@ const TAB_NAMES: Record<AdminTab, string> = {
   safety: 'Safety Incidents & Emergency Hotline',
   reports: 'Reports & Revenue Analytics',
   audit: 'Security Audit Trail',
+  'Publish_notifications': 'Publish Push Notifications & Broadcasts',
+  'publish-notifications': 'Publish Push Notifications & Broadcasts',
+  'release-apks': 'Release APKs & Downloads',
+  'release_apks': 'Release APKs & Downloads',
   settings: 'Platform Settings',
   'settings-general': 'General Company Settings',
   'settings-branding': 'Branding & Theme Settings',
@@ -161,6 +167,12 @@ export default function AdminApp() {
         return <ReportsView bookings={bookings} />;
       case 'audit':
         return <AuditTrailView logs={auditLogs} />;
+      case 'Publish_notifications':
+      case 'publish-notifications':
+        return <PublishNotificationsView />;
+      case 'release-apks':
+      case 'release_apks':
+        return <ReleaseApksView />;
       case 'settings':
       case 'settings-general':
       case 'settings-branding':
@@ -247,6 +259,7 @@ export default function AdminApp() {
         {/* Admin Content Area */}
         <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
           <AdminHeader
+            onNavigateTab={(tab) => setAdminTab(tab)}
             currentTabName={TAB_NAMES[adminTab] || 'Workforce Command'}
             onLogout={handleLogout}
           />

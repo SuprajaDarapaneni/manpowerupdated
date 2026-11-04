@@ -14,6 +14,7 @@ import {
 import { dataService } from '../../services/storage';
 
 interface AdminHeaderProps {
+  onNavigateTab?: (tab: any) => void;
   currentTabName: string;
   onLogout: () => void;
   onOpenPreview?: (route: 'customer' | 'employee' | 'dual' | 'handover') => void;

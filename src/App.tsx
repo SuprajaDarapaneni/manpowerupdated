@@ -16,6 +16,7 @@ import { SafetyPrivacyView } from './components/Admin/SafetyPrivacyView';
 import { ReportsView } from './components/Admin/ReportsView';
 import { AuditTrailView } from './components/Admin/AuditTrailView';
 import { PublishNotificationsView } from './components/Admin/PublishNotificationsView';
+import { ReleaseApksView } from './components/Admin/ReleaseApksView';
 import { SettingsManagement } from './components/Admin/SettingsManagement';
 import { CustomerApp } from './apps/customer/CustomerApp';
 import { EmployeeApp } from './apps/employee/EmployeeApp';
@@ -206,6 +207,9 @@ export default function App() {
       case 'Publish_notifications':
       case 'publish-notifications':
         return <PublishNotificationsView />;
+      case 'release-apks':
+      case 'release_apks':
+        return <ReleaseApksView />;
       case 'settings':
       case 'settings-general':
       case 'settings-branding':
@@ -602,6 +606,7 @@ export default function App() {
                   />
                   <div className="flex-1 flex flex-col min-w-0">
                     <AdminHeader
+                      onNavigateTab={(tab) => setAdminTab(tab)}
                       currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
                       onLogout={handleLogout}
                       onOpenPreview={(mode) => navigateTo(mode)}
@@ -665,6 +670,7 @@ export default function App() {
 
         <div className="flex-1 flex flex-col min-w-0">
           <AdminHeader
+                      onNavigateTab={(tab) => setAdminTab(tab)}
             currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
             onLogout={handleLogout}
             onOpenPreview={(mode) => navigateTo(mode)}

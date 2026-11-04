@@ -10,3 +10,5 @@ coverage/
 **/.gradle/
 **/.idea/
 
+public/release-apks/
+admin/frontend/public/

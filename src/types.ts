@@ -107,7 +107,7 @@ export interface ZoneCategoryPrice {
   overtimeHourlyRate: number;
   nightShiftAllowance: number;
   platformCommissionPercent: number;
-  minWorkerWalletBalance: number;
+  minWorkerWalletBalance?: number;
   updatedAt: string;
 }
 
@@ -319,7 +319,7 @@ export interface CommissionSettings {
   payer: 'customer' | 'worker' | 'split';
   taxRate: number;
   categoryRates?: Record<string, number>;
-  minWorkerWalletBalance: number; // Minimum balance required to receive requests (can be negative like -200 or positive like 100)
+  minWorkerWalletBalance?: number; // Minimum balance required to receive requests (can be negative like -200 or positive like 100)
 }
 
 export interface OtpVerificationSettings {

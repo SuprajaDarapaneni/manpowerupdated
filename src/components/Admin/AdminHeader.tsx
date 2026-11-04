@@ -19,6 +19,7 @@ interface AdminHeaderProps {
   currentTabName: string;
   onLogout: () => void;
   onOpenPreview?: (route: 'customer' | 'employee' | 'dual' | 'handover') => void;
+  onNavigateTab?: (tab: any) => void;
   showPreviews?: boolean;
   onToggleMobileSidebar?: () => void;
 }
@@ -27,6 +28,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   currentTabName,
   onLogout,
   onOpenPreview,
+  onNavigateTab,
   showPreviews = false,
   onToggleMobileSidebar,
 }) => {
@@ -182,6 +184,18 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
               </div>
             )}
           </div>
+        )}
+
+        {onNavigateTab && (
+          <button
+            type="button"
+            onClick={() => onNavigateTab('publish-notifications')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D71920] hover:bg-[#A80F18] text-white text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+            title="Publish Push Notifications & Broadcasts"
+          >
+            <Bell className="w-3.5 h-3.5 text-[#FFC928]" />
+            <span className="hidden sm:inline">Publish Notification</span>
+          </button>
         )}
 
         {/* Notifications Center Bell with Unread Badge */}

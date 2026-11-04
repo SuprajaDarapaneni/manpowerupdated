@@ -19,7 +19,11 @@ import {
   PaymentControlSettings,
   PaymentMethodSetting,
   AppNotification,
+  ChatMessage,
+  ConversationSummary,
   GpsLocationStamp,
+  ServiceZone,
+  ZoneCategoryPrice,
 } from '../types';
 import {
   initialCategories,
@@ -34,6 +38,7 @@ import {
   initialSafetyIncidents,
   initialMatchingSettings,
 } from '../mockData';
+import { dispatchFirebaseNotification } from './firebase';
 
 const STORAGE_KEYS = {
   CATEGORIES: 'manpowerlink_categories_v1',
@@ -47,6 +52,10 @@ const STORAGE_KEYS = {
   VIEW_MODE: 'manpowerlink_view_mode_v2',
   ADMIN_AUTH: 'manpowerlink_admin_auth_v1',
   UPI_PAYOUT_REQUESTS: 'manpowerlink_upi_payout_requests_v1',
+  ZONES: 'manpowerlink_service_zones_v2',
+  ZONE_PRICES: 'manpowerlink_zone_prices_v2',
+  NOTIFICATIONS: 'manpowerlink_notifications_v1',
+  CHAT_MESSAGES: 'manpowerlink_chat_messages_v1',
 };
 
 // Official Kotak / PhonePe UPI Account for Platform Recharges & Payments
@@ -93,15 +102,253 @@ export const initialPayoutRequests: UpiPayoutRequest[] = [
   },
 ];
 
+export const initialServiceZones: ServiceZone[] = [
+  {
+    id: 'zone-1',
+    name: 'Baikampady Industrial Hub',
+    code: 'ZONE-MNG-BAIKAMPADY',
+    city: 'Mangalore',
+    state: 'Karnataka',
+    description: 'Heavy industrial estate, manufacturing units, logistics warehouses, and container freight stations.',
+    pincodes: ['575011', '575010', '575019'],
+    geofenceRadiusKm: 12,
+    centerCoordinates: { lat: 12.942, lng: 74.818 },
+    isActive: true,
+    surgeMultiplier: 1.0,
+    createdAt: '2026-09-01',
+  },
+  {
+    id: 'zone-2',
+    name: 'Panambur Port & Dock Corridor',
+    code: 'ZONE-MNG-PANAMBUR',
+    city: 'Mangalore',
+    state: 'Karnataka',
+    description: 'New Mangalore Port, maritime cargo handling, container de-stuffing berths, and customs CFS.',
+    pincodes: ['575010', '575024'],
+    geofenceRadiusKm: 10,
+    centerCoordinates: { lat: 12.928, lng: 74.809 },
+    isActive: true,
+    surgeMultiplier: 1.15,
+    createdAt: '2026-09-01',
+  },
+  {
+    id: 'zone-3',
+    name: 'Mangalore City Central & Commercial',
+    code: 'ZONE-MNG-CENTRAL',
+    city: 'Mangalore',
+    state: 'Karnataka',
+    description: 'Commercial retail hubs, domestic packing & shifting, restaurants, banquet event halls.',
+    pincodes: ['575001', '575002', '575003', '575004'],
+    geofenceRadiusKm: 15,
+    centerCoordinates: { lat: 12.871, lng: 74.843 },
+    isActive: true,
+    surgeMultiplier: 1.0,
+    createdAt: '2026-09-01',
+  },
+  {
+    id: 'zone-4',
+    name: 'Surathkal & Mukka Industrial Belt',
+    code: 'ZONE-MNG-SURATHKAL',
+    city: 'Mangalore',
+    state: 'Karnataka',
+    description: 'Academic logistics, infrastructure projects, NITK corridor, and construction hubs.',
+    pincodes: ['575014', '575025'],
+    geofenceRadiusKm: 12,
+    centerCoordinates: { lat: 13.011, lng: 74.793 },
+    isActive: true,
+    surgeMultiplier: 1.0,
+    createdAt: '2026-09-15',
+  },
+  {
+    id: 'zone-5',
+    name: 'Udupi & Manipal Commercial Zone',
+    code: 'ZONE-UDU-MANIPAL',
+    city: 'Udupi',
+    state: 'Karnataka',
+    description: 'Hospitality catering, educational institutional labor, healthcare shifting, and tourism events.',
+    pincodes: ['576101', '576104'],
+    geofenceRadiusKm: 16,
+    centerCoordinates: { lat: 13.341, lng: 74.742 },
+    isActive: true,
+    surgeMultiplier: 1.05,
+    createdAt: '2026-09-20',
+  },
+];
+
+export const initialZonePrices: ZoneCategoryPrice[] = [
+  // Baikampady Zone
+  {
+    id: 'zp-1',
+    zoneId: 'zone-1',
+    zoneName: 'Baikampady Industrial Hub',
+    categoryId: 'cat-1',
+    categoryName: 'Loading & Unloading',
+    hourlyRate: 280,
+    fullDayRate: 2200,
+    halfDayRate: 1200,
+    lumpSumBasePrice: 8000,
+    overtimeHourlyRate: 350,
+    nightShiftAllowance: 250,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 150,
+    updatedAt: '2026-10-15',
+  },
+  {
+    id: 'zp-2',
+    zoneId: 'zone-1',
+    zoneName: 'Baikampady Industrial Hub',
+    categoryId: 'cat-6',
+    categoryName: 'Packing & Moving',
+    hourlyRate: 260,
+    fullDayRate: 2000,
+    halfDayRate: 1100,
+    lumpSumBasePrice: 7500,
+    overtimeHourlyRate: 320,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 150,
+    updatedAt: '2026-10-15',
+  },
+  {
+    id: 'zp-3',
+    zoneId: 'zone-1',
+    zoneName: 'Baikampady Industrial Hub',
+    categoryId: 'cat-5',
+    categoryName: 'Construction & Masonry Support',
+    hourlyRate: 270,
+    fullDayRate: 2100,
+    halfDayRate: 1150,
+    lumpSumBasePrice: 8500,
+    overtimeHourlyRate: 340,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 150,
+    updatedAt: '2026-10-15',
+  },
+
+  // Panambur Port Zone
+  {
+    id: 'zp-4',
+    zoneId: 'zone-2',
+    zoneName: 'Panambur Port & Dock Corridor',
+    categoryId: 'cat-1',
+    categoryName: 'Loading & Unloading',
+    hourlyRate: 300,
+    fullDayRate: 2400,
+    halfDayRate: 1300,
+    lumpSumBasePrice: 9500,
+    overtimeHourlyRate: 400,
+    nightShiftAllowance: 300,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 200,
+    updatedAt: '2026-10-16',
+  },
+  {
+    id: 'zp-5',
+    zoneId: 'zone-2',
+    zoneName: 'Panambur Port & Dock Corridor',
+    categoryId: 'cat-4',
+    categoryName: 'Commercial Cleaning',
+    hourlyRate: 220,
+    fullDayRate: 1800,
+    halfDayRate: 1000,
+    lumpSumBasePrice: 6500,
+    overtimeHourlyRate: 280,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 100,
+    updatedAt: '2026-10-16',
+  },
+
+  // Mangalore City Central
+  {
+    id: 'zp-6',
+    zoneId: 'zone-3',
+    zoneName: 'Mangalore City Central & Commercial',
+    categoryId: 'cat-6',
+    categoryName: 'Packing & Moving',
+    hourlyRate: 250,
+    fullDayRate: 1900,
+    halfDayRate: 1050,
+    lumpSumBasePrice: 7000,
+    overtimeHourlyRate: 300,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 100,
+    updatedAt: '2026-10-17',
+  },
+  {
+    id: 'zp-7',
+    zoneId: 'zone-3',
+    zoneName: 'Mangalore City Central & Commercial',
+    categoryId: 'cat-2',
+    categoryName: 'Food & Catering Service',
+    hourlyRate: 200,
+    fullDayRate: 1600,
+    halfDayRate: 900,
+    lumpSumBasePrice: 6000,
+    overtimeHourlyRate: 250,
+    nightShiftAllowance: 200,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 100,
+    updatedAt: '2026-10-17',
+  },
+  {
+    id: 'zp-8',
+    zoneId: 'zone-3',
+    zoneName: 'Mangalore City Central & Commercial',
+    categoryId: 'cat-3',
+    categoryName: 'Event Staffing',
+    hourlyRate: 300,
+    fullDayRate: 2400,
+    halfDayRate: 1300,
+    lumpSumBasePrice: 8500,
+    overtimeHourlyRate: 380,
+    nightShiftAllowance: 250,
+    platformCommissionPercent: 10,
+    minWorkerWalletBalance: 150,
+    updatedAt: '2026-10-17',
+  },
+];
+
 export type ViewMode = 'admin-only' | 'interactive-hub';
+
+// Persistent Shared Web Audio Context Manager (Unlocks on first user interaction)
+let sharedAudioCtx: AudioContext | null = null;
+
+export const unlockAudioEngine = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContextClass) return;
+    if (!sharedAudioCtx) {
+      sharedAudioCtx = new AudioContextClass();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+  } catch {
+    // Ignore audio permission errors until user gesture
+  }
+};
+
+// Global automatic unlock on first touch/click/key anywhere in viewport
+if (typeof window !== 'undefined') {
+  const unlockEvents = ['click', 'touchstart', 'pointerdown', 'keydown'];
+  const handleFirstInteraction = () => {
+    unlockAudioEngine();
+    unlockEvents.forEach((ev) => window.removeEventListener(ev, handleFirstInteraction));
+  };
+  unlockEvents.forEach((ev) => window.addEventListener(ev, handleFirstInteraction, { passive: true }));
+}
 
 // Web Audio API Ringtone / Chime Synthesizer
 export const playNotificationSound = () => {
   if (typeof window === 'undefined') return;
   try {
-    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContextClass) return;
-    const ctx = new AudioContextClass();
+    unlockAudioEngine();
+    if (!sharedAudioCtx) return;
+    const ctx = sharedAudioCtx;
     const now = ctx.currentTime;
     
     // Play a friendly two-tone mobile ring chime
@@ -124,11 +371,183 @@ export const playNotificationSound = () => {
   }
 };
 
+// Energetic Multi-Burst Incoming Job Ringtone (Dual 850Hz & 1050Hz Telephone Ring Cadence)
+export const playIncomingJobRingtone = () => {
+  if (typeof window === 'undefined') return;
+  try {
+    // Haptic vibration feedback for mobile devices
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([400, 150, 400, 150, 600]);
+      } catch {}
+    }
+
+    unlockAudioEngine();
+    if (!sharedAudioCtx) return;
+    const ctx = sharedAudioCtx;
+    const now = ctx.currentTime;
+
+    // Create 3 bursts of dual-frequency rings (high-urgency taxi/gig incoming call)
+    for (let burst = 0; burst < 3; burst++) {
+      const burstStart = now + burst * 0.65;
+      
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'triangle';
+      osc2.type = 'sine';
+      osc1.frequency.setValueAtTime(850, burstStart);
+      osc2.frequency.setValueAtTime(1050, burstStart);
+
+      gain.gain.setValueAtTime(0, burstStart);
+      gain.gain.linearRampToValueAtTime(0.4, burstStart + 0.05);
+      gain.gain.setValueAtTime(0.4, burstStart + 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.001, burstStart + 0.5);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(burstStart);
+      osc2.start(burstStart);
+      osc1.stop(burstStart + 0.52);
+      osc2.stop(burstStart + 0.52);
+    }
+  } catch (e) {
+    console.warn('Audio ringtone playback error:', e);
+  }
+};
+
+export const initialNotifications: AppNotification[] = [
+  {
+    id: 'notif-upgrade',
+    recipientId: 'all',
+    recipientRole: 'all',
+    title: '📢 Important Platform Upgrade Notice',
+    message: 'ManPowerLink platform has been updated with real-time GPS location tracking and instant online payment gateway verification.',
+    eventType: 'ADMIN_ANNOUNCEMENT',
+    category: 'announcement',
+    read: false,
+    timestamp: '05:54 AM',
+    soundType: 'chime',
+    actionTab: 'home',
+  },
+  {
+    id: 'notif-1',
+    recipientId: 'all',
+    recipientRole: 'employee',
+    title: '🚨 Radar Alert: Heavy Container Destuffing',
+    message: 'New job order #Order 1045 posted in Panambur Port Corridor for 4 workers. Rate: ₹2,400/day.',
+    eventType: 'BOOKING_CREATED',
+    category: 'booking',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    read: false,
+    timestamp: '15 Oct 2026, 08:30 AM',
+    soundType: 'urgent_ring',
+    actionTab: 'find-jobs',
+  },
+  {
+    id: 'notif-2',
+    recipientId: 'c-1',
+    recipientRole: 'customer',
+    title: 'Worker Dispatched & In Transit',
+    message: 'Worker Ramesh Kumar accepted shift #Order 1045 and is travelling to Dock 4.',
+    eventType: 'BID_ACCEPTED',
+    category: 'booking',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    read: true,
+    timestamp: '15 Oct 2026, 08:45 AM',
+    soundType: 'chime',
+    actionTab: 'bookings',
+  },
+];
+
+export const initialChatMessages: ChatMessage[] = [
+  {
+    id: 'msg-1',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    sender: 'customer',
+    senderName: 'Apex Logistics Corp',
+    recipientRole: 'employee',
+    text: 'Hello Ramesh, please report at Dock 4 Container Bay at 9:00 AM.',
+    time: '09:12 AM',
+    timestamp: Date.now() - 3600000,
+  },
+  {
+    id: 'msg-2',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    sender: 'worker',
+    senderName: 'Ramesh Kumar',
+    recipientRole: 'customer',
+    text: 'Understood sir. I have my safety gear ready and will verify Start OTP on arrival.',
+    time: '09:14 AM',
+    timestamp: Date.now() - 3500000,
+  },
+  {
+    id: 'msg-3',
+    bookingId: 'b-1',
+    orderNumber: 'Order #1045',
+    sender: 'customer',
+    senderName: 'Apex Logistics Corp',
+    recipientRole: 'employee',
+    text: 'Start OTP will be provided at worksite upon supervisor gate inspection.',
+    time: '09:15 AM',
+    timestamp: Date.now() - 3400000,
+  },
+];
+
+let syncChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    syncChannel = new BroadcastChannel('manpowerlink_broadcast_bus');
+  } catch (err) {
+    console.warn('BroadcastChannel unavailable:', err);
+  }
+}
+
 class DataService {
   private listeners: (() => void)[] = [];
 
+  constructor() {
+    if (typeof window !== 'undefined') {
+      // 1. Cross-tab storage event synchronization
+      window.addEventListener('storage', (event) => {
+        if (
+          event.key === STORAGE_KEYS.NOTIFICATIONS ||
+          event.key === STORAGE_KEYS.BOOKINGS ||
+          event.key === STORAGE_KEYS.WORKERS ||
+          event.key === STORAGE_KEYS.CUSTOMERS ||
+          event.key === STORAGE_KEYS.CHAT_MESSAGES
+        ) {
+          this.notify();
+        }
+      });
+
+      // 2. Cross-tab BroadcastChannel listener
+      if (syncChannel) {
+        syncChannel.onmessage = (event) => {
+          if (event.data?.type === 'NOTIFICATION_DISPATCHED') {
+            const notif = event.data.payload;
+            window.dispatchEvent(
+              new CustomEvent('manpowerlink_notification_dispatched', { detail: notif })
+            );
+            this.notify();
+          } else if (event.data?.type === 'DATA_MUTATED') {
+            this.notify();
+          }
+        };
+      }
+    }
+  }
+
   private getItem<T>(key: string, defaultValue: T): T {
     try {
+      if (typeof localStorage === 'undefined') return defaultValue;
       const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : defaultValue;
     } catch {
@@ -138,7 +557,7 @@ class DataService {
 
   private setItem<T>(key: string, value: T): void {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      if (typeof localStorage !== 'undefined') { localStorage.setItem(key, JSON.stringify(value)); }
       this.notify();
     } catch (e) {
       console.warn('Storage set error:', e);
@@ -187,7 +606,15 @@ class DataService {
 
   // Categories
   public getCategories(): ServiceCategory[] {
-    return this.getItem(STORAGE_KEYS.CATEGORIES, initialCategories);
+    const raw = this.getItem<ServiceCategory[]>(STORAGE_KEYS.CATEGORIES, initialCategories);
+    return raw.map((c) => {
+      const init = initialCategories.find((ic) => ic.id === c.id || ic.slug === c.slug);
+      return {
+        ...c,
+        bannerUrl: c.bannerUrl || init?.bannerUrl || 'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?w=800&auto=format&fit=crop&q=80',
+        requiresOnlinePaymentOnly: c.requiresOnlinePaymentOnly !== undefined ? c.requiresOnlinePaymentOnly : (init?.requiresOnlinePaymentOnly ?? false),
+      };
+    });
   }
 
   public setCategories(categories: ServiceCategory[]): void {
@@ -336,6 +763,19 @@ class DataService {
 
     this.updateCustomer(updatedCustomer);
     this.logAudit('Customer Wallet Recharged', `${customer.name} credited ₹${amount} via PhonePe/UPI QR. UTR: ${utrRef}. New balance: ₹${newBal}`);
+    
+    // Dispatch in-app and push notification
+    this.addNotification({
+      recipientId: customerId,
+      recipientRole: 'customer',
+      title: '💰 Wallet Recharged Successfully',
+      message: `₹${amount.toLocaleString()} credited to your wallet via UPI QR (UTR: ${utrRef}). New balance: ₹${newBal.toLocaleString()}.`,
+      eventType: 'WALLET_RECHARGED',
+      category: 'payment',
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
     return { success: true, newBalance: newBal };
   }
@@ -380,6 +820,84 @@ class DataService {
     return { success: true, newBalance: newBal };
   }
 
+  // Admin issues refund to Employer Wallet
+  public issueCustomerRefund(
+    customerId: string,
+    amount: number,
+    comments: string,
+    customTxnId?: string
+  ): { success: boolean; newBalance: number; transaction?: any; error?: string } {
+    const customers = this.getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return { success: false, newBalance: 0, error: 'Customer not found' };
+
+    const currentBal = customer.walletBalance || 0;
+    const newBal = currentBal + amount;
+    const txnId = customTxnId?.trim() || `TXN-REF-${Date.now().toString().slice(-6)}`;
+
+    const newTx = {
+      id: `ctx-${Date.now()}`,
+      transactionId: txnId,
+      type: 'credit' as const,
+      amount,
+      comments: comments.trim() || 'Refund issued by Platform Administrator',
+      description: comments.trim() || 'Refund issued by Platform Administrator',
+      timestamp: new Date().toLocaleString(),
+      category: 'refund' as const,
+      adminNote: 'Admin Refund Credit',
+    };
+
+    const updatedCustomer: Customer = {
+      ...customer,
+      walletBalance: newBal,
+      walletTransactions: [newTx, ...(customer.walletTransactions || [])],
+    };
+
+    this.updateCustomer(updatedCustomer);
+    this.logAudit('Employer Refund Issued', `Refunded ₹${amount} to ${customer.name}. Txn ID: ${txnId}. Reason: ${newTx.comments}`);
+    playNotificationSound();
+    return { success: true, newBalance: newBal, transaction: newTx };
+  }
+
+  // Admin debits penalty from Employer Wallet
+  public applyCustomerPenaltyDebit(
+    customerId: string,
+    amount: number,
+    comments: string,
+    customTxnId?: string
+  ): { success: boolean; newBalance: number; transaction?: any; error?: string } {
+    const customers = this.getCustomers();
+    const customer = customers.find((c) => c.id === customerId);
+    if (!customer) return { success: false, newBalance: 0, error: 'Customer not found' };
+
+    const currentBal = customer.walletBalance || 0;
+    const newBal = Math.max(0, currentBal - amount);
+    const txnId = customTxnId?.trim() || `TXN-PEN-${Date.now().toString().slice(-6)}`;
+
+    const newTx = {
+      id: `ctx-${Date.now()}`,
+      transactionId: txnId,
+      type: 'debit' as const,
+      amount,
+      comments: comments.trim() || 'Penalty / Compliance charge deducted by Admin',
+      description: comments.trim() || 'Penalty / Compliance charge deducted by Admin',
+      timestamp: new Date().toLocaleString(),
+      category: 'penalty' as const,
+      adminNote: 'Admin Penalty Deduction',
+    };
+
+    const updatedCustomer: Customer = {
+      ...customer,
+      walletBalance: newBal,
+      walletTransactions: [newTx, ...(customer.walletTransactions || [])],
+    };
+
+    this.updateCustomer(updatedCustomer);
+    this.logAudit('Employer Penalty Debited', `Debited ₹${amount} penalty from ${customer.name}. Txn ID: ${txnId}. Comments: ${newTx.comments}`);
+    playNotificationSound();
+    return { success: true, newBalance: newBal, transaction: newTx };
+  }
+
   // ==========================================
   // UPI Payout & Credit Requests (Ask & Accept)
   // ==========================================
@@ -406,6 +924,31 @@ class DataService {
       'UPI Payout Requested',
       `${data.requesterName} (${data.requesterRole}) asked for ₹${data.amount} credit to UPI: ${data.beneficiaryUpiId}`
     );
+
+    // Notify requester
+    this.addNotification({
+      recipientId: data.requesterId,
+      recipientRole: data.requesterRole,
+      title: '💸 Payout Request Submitted',
+      message: `Your withdrawal request for ₹${data.amount.toLocaleString()} to ${data.beneficiaryUpiId} has been sent for admin approval.`,
+      eventType: 'PAYOUT_REQUESTED',
+      category: 'payment',
+      read: false,
+      soundType: 'chime',
+    });
+
+    // Notify admin
+    this.addNotification({
+      recipientId: 'admin',
+      recipientRole: 'admin',
+      title: '⚡ New Payout Request',
+      message: `${data.requesterName} (${data.requesterRole}) requested ₹${data.amount.toLocaleString()} payout to UPI: ${data.beneficiaryUpiId}.`,
+      eventType: 'PAYOUT_REQUESTED',
+      category: 'payment',
+      read: false,
+      soundType: 'urgent_ring',
+    });
+
     playNotificationSound();
     return newRequest;
   }
@@ -483,6 +1026,19 @@ class DataService {
       'UPI Payout Accepted & Credited',
       `Transferred ₹${req.amount} to UPI: ${req.beneficiaryUpiId} for ${req.requesterName} (${req.requesterRole}). UTR: ${utr}`
     );
+
+    // Notify requester of successful payout credit
+    this.addNotification({
+      recipientId: req.requesterId,
+      recipientRole: req.requesterRole,
+      title: '✅ Payout Approved & Credited!',
+      message: `₹${req.amount.toLocaleString()} has been transferred to your UPI: ${req.beneficiaryUpiId}. Bank UTR: ${utr}.`,
+      eventType: 'PAYOUT_APPROVED',
+      category: 'payment',
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
     return { success: true };
   }
@@ -507,6 +1063,19 @@ class DataService {
       'UPI Payout Rejected',
       `Declined payout request for ₹${req.amount} to ${req.beneficiaryUpiId} (${req.requesterName}). Reason: ${reason || 'N/A'}`
     );
+
+    // Notify requester of decline
+    this.addNotification({
+      recipientId: req.requesterId,
+      recipientRole: req.requesterRole,
+      title: '⚠️ Payout Request Declined',
+      message: `Your withdrawal request for ₹${req.amount.toLocaleString()} was declined: ${reason || 'Administrative review'}. Funds remain in your wallet.`,
+      eventType: 'PAYOUT_REJECTED',
+      category: 'payment',
+      read: false,
+      soundType: 'urgent_ring',
+    });
+
     return { success: true };
   }
 
@@ -590,9 +1159,20 @@ class DataService {
       upiTransactionRef: bookingData.upiTransactionRef,
       walletDebited: bookingData.walletDebited || false,
       foodDetails: bookingData.foodDetails,
+      zoneId: bookingData.zoneId || 'zone-1',
+      zoneName: bookingData.zoneName || 'Baikampady Industrial Hub',
       status: 'SEARCHING_EMPLOYEES',
-      paymentStatus: bookingData.walletDebited || bookingData.upiTransactionRef ? 'successful' : 'pending',
+      paymentStatus: bookingData.paymentProofScreenshot
+        ? 'pending'
+        : bookingData.walletDebited || bookingData.upiTransactionRef
+        ? 'successful'
+        : 'pending',
       paymentMethod: (bookingData.paymentMethod as any) || (bookingData.paymentMode === 'wallet' ? 'wallet' : 'cash'),
+      paymentProofScreenshot: bookingData.paymentProofScreenshot,
+      paymentVerificationStatus: bookingData.paymentProofScreenshot
+        ? 'pending'
+        : (bookingData.paymentVerificationStatus || 'verified'),
+      paymentRejectionReason: bookingData.paymentRejectionReason,
       startOtp,
       endOtp,
       createdAt: new Date().toLocaleString(),
@@ -602,7 +1182,7 @@ class DataService {
           id: `node-${Date.now()}-1`,
           stageKey: 'JOB_POSTED',
           title: 'Job Order Published',
-          description: `Customer posted requirement for ${bookingData.requiredWorkers || 2} workers at ₹${bookingData.offeredPricePerWorker || 2000}/day. Broadcast to eligible workers.`,
+          description: `Customer posted requirement for ${bookingData.requiredWorkers || 2} workers at ₹${bookingData.offeredPricePerWorker || 2000}/day in ${bookingData.zoneName || 'Baikampady Zone'}. Broadcast to eligible workers.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           location: {
             address: bookingData.workLocation?.address || 'Mangalore Port Warehouse',
@@ -627,7 +1207,7 @@ class DataService {
           id: `node-${Date.now()}-3`,
           stageKey: 'START_OTP_VERIFIED',
           title: 'Arrival & Start OTP Check-in',
-          description: `Worker provides Start OTP (${startOtp}) upon arrival at worksite to verify attendance.`,
+          description: 'Employer tells 4-digit Start OTP to worker upon arrival at worksite to verify attendance.',
           timestamp: 'Pending Check-in',
           location: { address: bookingData.workLocation?.address || 'Worksite', lat: 12.914, lng: 74.856 },
           actor: 'Customer & Worker',
@@ -637,7 +1217,7 @@ class DataService {
           id: `node-${Date.now()}-4`,
           stageKey: 'WORK_COMPLETED_OTP',
           title: 'Work Completed & End OTP Verification',
-          description: `Shift completion verified via End OTP (${endOtp}). Direct cash wage collected.`,
+          description: 'Shift completion verified via 4-digit End OTP provided by employer upon satisfactory work.',
           timestamp: 'Pending Completion',
           location: { address: bookingData.workLocation?.address || 'Worksite', lat: 12.914, lng: 74.856 },
           actor: 'Customer & Worker',
@@ -646,9 +1226,9 @@ class DataService {
         {
           id: `node-${Date.now()}-5`,
           stageKey: 'CASH_PAYMENT',
-          title: 'Direct Cash / UPI Settlement',
-          description: 'Customer pays full wages in Cash or direct Worker UPI upon shift end.',
-          timestamp: 'Pending Cash Payment',
+          title: 'Online Payment Settlement',
+          description: 'Employer pays full wages online via platform escrow. Credited to worker wallet.',
+          timestamp: 'Pending Online Payment',
           location: { address: 'Worksite Pay Counter', lat: 12.914, lng: 74.856 },
           actor: 'Customer to Worker',
           completed: false,
@@ -668,8 +1248,655 @@ class DataService {
 
     this.setBookings([newBooking, ...existing]);
     this.logAudit('New Job Created', `${newBooking.orderNumber} by ${newBooking.customerName}`);
-    playNotificationSound();
+
+    // Real-Time Push Notifications dispatched to all stakeholders
+    this.addNotification({
+      recipientId: 'all',
+      recipientRole: 'employee',
+      title: `🚨 NEW JOB ALERT: ${newBooking.categoryName}`,
+      message: `New shift #${newBooking.orderNumber} in ${newBooking.zoneName}. Wage: ₹${newBooking.offeredPricePerWorker}/worker. Accept now!`,
+      eventType: 'BOOKING_CREATED',
+      bookingId: newBooking.id,
+      orderNumber: newBooking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'urgent_ring',
+    });
+
+    this.addNotification({
+      recipientId: newBooking.customerId,
+      recipientRole: 'customer',
+      title: 'Job Order Published',
+      message: `Job ${newBooking.orderNumber} broadcasted. ${newBooking.paymentProofScreenshot ? 'UPI payment proof submitted for Admin verification.' : 'Nearby workers notified.'}`,
+      eventType: 'BOOKING_CREATED',
+      bookingId: newBooking.id,
+      orderNumber: newBooking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'chime',
+    });
+
+    this.addNotification({
+      recipientId: 'admin',
+      recipientRole: 'admin',
+      title: newBooking.paymentProofScreenshot ? '⚡ New Payment Verification' : 'New Order Created',
+      message: `${newBooking.customerName} created ${newBooking.orderNumber} (₹${newBooking.totalEstimatedAmount.toLocaleString()}). ${newBooking.paymentProofScreenshot ? 'UPI payment screenshot requires admin review.' : ''}`,
+      eventType: 'PAYMENT_RECEIVED',
+      bookingId: newBooking.id,
+      orderNumber: newBooking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'urgent_ring',
+    });
+
+    // Energetic Incoming Job Ringtone for Worker/Employer Ecosystem
+    playIncomingJobRingtone();
+
+    // Broadcast live event across browser simulators and tabs
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('manpowerlink_new_job_broadcast', { detail: newBooking })
+      );
+    }
+
     return newBooking;
+  }
+
+  // ==========================================
+  // Centralized In-App & Push Notifications System
+  // ==========================================
+  public getNotifications(): AppNotification[] {
+    return this.getItem<AppNotification[]>(STORAGE_KEYS.NOTIFICATIONS, initialNotifications);
+  }
+
+  public getNotificationsForRole(
+    role: 'customer' | 'employee' | 'admin',
+    recipientId?: string
+  ): AppNotification[] {
+    const all = this.getNotifications();
+    return all.filter((n) => {
+      if (role === 'admin') {
+        return n.recipientRole === 'admin' || n.recipientRole === 'all';
+      }
+      if (n.recipientRole === 'all') return true;
+      if (n.recipientRole !== role) return false;
+      if (recipientId && n.recipientId && n.recipientId !== 'all') {
+        return n.recipientId === recipientId;
+      }
+      return true;
+    });
+  }
+
+  public getUnreadNotificationsCount(
+    role: 'customer' | 'employee' | 'admin',
+    recipientId?: string
+  ): number {
+    return this.getNotificationsForRole(role, recipientId).filter((n) => !n.read).length;
+  }
+
+  public setNotifications(notifications: AppNotification[]): void {
+    this.setItem(STORAGE_KEYS.NOTIFICATIONS, notifications);
+  }
+
+  public addNotification(notification: Omit<AppNotification, 'id'>): AppNotification {
+    const list = this.getNotifications();
+    
+    // Auto-infer intelligent action destination tab if not explicitly specified
+    let inferredActionTab = notification.actionTab;
+    if (!inferredActionTab) {
+      const t = (notification.title || '').toLowerCase();
+      const m = (notification.message || '').toLowerCase();
+      const cat = notification.category || '';
+      const evt = notification.eventType || '';
+
+      if (cat === 'chat' || evt.includes('CHAT') || t.includes('message') || m.includes('message')) {
+        inferredActionTab = 'messages';
+      } else if (cat === 'payment' || evt.includes('PAYMENT') || evt.includes('PAYOUT') || evt.includes('WALLET') || t.includes('wallet') || t.includes('upi') || t.includes('payout')) {
+        inferredActionTab = 'profile';
+      } else if (t.includes('attendance') || t.includes('otp') || t.includes('geofence') || t.includes('arrival') || t.includes('gear') || t.includes('worksite')) {
+        inferredActionTab = notification.recipientRole === 'employee' ? 'my-work' : 'bookings';
+      } else if (t.includes('surge') || t.includes('bonus') || t.includes('zone') || t.includes('demand') || t.includes('dispatch') || t.includes('offer')) {
+        inferredActionTab = notification.recipientRole === 'employee' ? 'find-jobs' : 'home';
+      } else {
+        inferredActionTab = notification.recipientRole === 'employee' ? 'find-jobs' : 'bookings';
+      }
+    }
+
+    const newNotif: AppNotification = {
+      ...notification,
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      timestamp: notification.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      category: notification.category || (
+        notification.eventType.includes('CHAT') ? 'chat' :
+        notification.eventType.includes('PAYMENT') || notification.eventType.includes('PAYOUT') ? 'payment' :
+        notification.eventType === 'ADMIN_ANNOUNCEMENT' ? 'announcement' : 'booking'
+      ),
+      soundType: notification.soundType || 'chime',
+      actionTab: inferredActionTab,
+    };
+    this.setNotifications([newNotif, ...list]);
+
+    // 1. Cross-tab BroadcastChannel broadcast for instantaneous delivery across separate tabs/windows
+    if (syncChannel) {
+      try {
+        syncChannel.postMessage({
+          type: 'NOTIFICATION_DISPATCHED',
+          payload: newNotif,
+        });
+      } catch (e) {
+        console.warn('BroadcastChannel sync error:', e);
+      }
+    }
+
+    // 2. Instant local window event broadcast
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('manpowerlink_notification_dispatched', { detail: newNotif })
+      );
+    }
+
+    // 3. Mirror to Firebase Firestore in real-time
+    const fbPayload: any = {
+      recipientId: newNotif.recipientId,
+      recipientRole: newNotif.recipientRole,
+      title: newNotif.title,
+      message: newNotif.message,
+      eventType: newNotif.eventType,
+      read: false,
+      timestamp: new Date().toISOString(),
+      soundType: newNotif.soundType || 'chime',
+      actionTab: newNotif.actionTab || 'home',
+      category: newNotif.category || 'booking',
+    };
+    if (newNotif.bookingId) fbPayload.bookingId = newNotif.bookingId;
+    if (newNotif.orderNumber) fbPayload.orderNumber = newNotif.orderNumber;
+
+    dispatchFirebaseNotification(fbPayload).catch((err) => console.warn('Firebase notification sync warning:', err));
+
+    // 4. Mirror to Node.js Backend Push API Hub (for Mobile Apps / FCM / Webhooks)
+    if (typeof window !== 'undefined') {
+      const backendPayload = {
+        target:
+          newNotif.recipientRole === 'all'
+            ? 'all'
+            : newNotif.recipientRole === 'customer'
+            ? 'all_customers'
+            : 'all_employees',
+        recipientRole: newNotif.recipientRole,
+        recipientId: newNotif.recipientId,
+        eventType: newNotif.eventType,
+        title: newNotif.title,
+        body: newNotif.message,
+        data: {
+          type: newNotif.eventType,
+          bookingId: newNotif.bookingId,
+          orderNumber: newNotif.orderNumber,
+          category: newNotif.category,
+          actionTab: newNotif.actionTab,
+          soundType: newNotif.soundType,
+        },
+      };
+
+      const sendToBackend = async (url: string) => {
+        try {
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(backendPayload),
+          });
+        } catch {
+          // offline backend fallback
+        }
+      };
+
+      sendToBackend('/api/notifications/send');
+      if (window.location && window.location.port !== '5000') {
+        sendToBackend('http://localhost:5000/api/notifications/send');
+      }
+    }
+
+    // 5. Play audio chime or urgent ringtone & trigger device vibration
+    if (newNotif.soundType === 'urgent_ring') {
+      playIncomingJobRingtone();
+    } else {
+      playNotificationSound();
+    }
+
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([100, 50, 100]);
+      } catch {}
+    }
+
+    // 6. Trigger Native Web / OS Push Notification if granted
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const sysNotif = new Notification(newNotif.title, {
+          body: newNotif.message,
+          icon: '/favicon.svg',
+          badge: '/favicon.svg',
+          tag: newNotif.id,
+          data: {
+            id: newNotif.id,
+            actionTab: newNotif.actionTab,
+            bookingId: newNotif.bookingId,
+            recipientRole: newNotif.recipientRole,
+          },
+        });
+        sysNotif.onclick = () => {
+          window.focus();
+          window.dispatchEvent(
+            new CustomEvent('manpowerlink_notification_clicked', { detail: newNotif })
+          );
+        };
+      } catch (err) {
+        console.warn('Native notification display warning:', err);
+      }
+    }
+
+    return newNotif;
+  }
+
+  // ==========================================
+  // Device & Push Notification Token Management
+  // ==========================================
+  public async bindNotificationToken(
+    userId: string,
+    role: 'customer' | 'employee' | 'admin',
+    customToken?: string
+  ): Promise<{ token: string; boundAt: string; status: 'active'; role: string; userId: string }> {
+    const existing = this.getBoundNotificationToken(userId);
+    const token = customToken || existing?.token || `device_token_${role}_${userId}_${Math.random().toString(36).substring(2, 10)}`;
+    const record = {
+      token,
+      boundAt: new Date().toISOString(),
+      status: 'active' as const,
+      userId,
+      role,
+    };
+    this.setItem(`manpower_push_token_${userId}`, record);
+    this.setItem(`manpower_push_token_${role}`, record);
+
+    if (typeof window !== 'undefined') {
+      try {
+        fetch('/api/notifications/bind-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record),
+        }).catch(() => {});
+      } catch {}
+    }
+
+    return record;
+  }
+
+  public getBoundNotificationToken(userId: string): { token: string; boundAt: string; status: 'active'; role: string; userId: string } | null {
+    return this.getItem<{ token: string; boundAt: string; status: 'active'; role: string; userId: string } | null>(
+      `manpower_push_token_${userId}`,
+      null
+    );
+  }
+
+  public async requestPushPermissionAndBind(
+    userId: string,
+    role: 'customer' | 'employee' | 'admin'
+  ): Promise<'granted' | 'denied' | 'default'> {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      await this.bindNotificationToken(userId, role);
+      return 'granted';
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        await this.bindNotificationToken(userId, role);
+      }
+      return permission;
+    } catch {
+      await this.bindNotificationToken(userId, role);
+      return 'granted';
+    }
+  }
+
+  public markNotificationRead(id: string): void {
+    const list = this.getNotifications().map((n) => (n.id === id ? { ...n, read: true } : n));
+    this.setNotifications(list);
+  }
+
+  public markAllNotificationsRead(
+    role?: 'customer' | 'employee' | 'admin',
+    recipientId?: string
+  ): void {
+    const list = this.getNotifications().map((n) => {
+      if (!role) return { ...n, read: true };
+      if (n.recipientRole === role || n.recipientRole === 'all') {
+        if (!recipientId || n.recipientId === 'all' || n.recipientId === recipientId) {
+          return { ...n, read: true };
+        }
+      }
+      return n;
+    });
+    this.setNotifications(list);
+  }
+
+  public deleteNotification(id: string): void {
+    const list = this.getNotifications().filter((n) => n.id !== id);
+    this.setNotifications(list);
+  }
+
+  public clearNotifications(role?: 'customer' | 'employee' | 'admin'): void {
+    if (!role) {
+      this.setNotifications([]);
+      return;
+    }
+    const list = this.getNotifications().filter((n) => n.recipientRole !== role && n.recipientRole !== 'all');
+    this.setNotifications(list);
+  }
+
+  public broadcastAnnouncement(
+    title: string,
+    message: string,
+    targetRole: 'customer' | 'employee' | 'all'
+  ): AppNotification {
+    const notif = this.addNotification({
+      recipientId: 'all',
+      recipientRole: targetRole,
+      title: `📢 ${title}`,
+      message,
+      eventType: 'ADMIN_ANNOUNCEMENT',
+      category: 'announcement',
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: 'chime',
+    });
+    this.logAudit('Admin Announcement Broadcasted', `Title: "${title}" to target: ${targetRole}`);
+    playNotificationSound();
+    return notif;
+  }
+
+  // ==========================================
+  // Admin Payment Proof Verification Workflow
+  // ==========================================
+  public verifyBookingPayment(
+    bookingId: string,
+    isApproved: boolean,
+    reason?: string
+  ): { success: boolean; error?: string } {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    const updated: Booking = {
+      ...booking,
+      paymentVerificationStatus: isApproved ? 'verified' : 'rejected',
+      paymentStatus: isApproved ? 'successful' : 'failed',
+      status: isApproved ? 'CONFIRMED' : 'DISPUTED',
+      paymentRejectionReason: isApproved ? undefined : (reason || 'Payment screenshot verification rejected by administrator.'),
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updated);
+
+    // Notify Customer of Verification Decision
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: isApproved ? '✅ Payment Verified & Order Confirmed' : '❌ Payment Proof Rejected',
+      message: isApproved
+        ? `Admin verified your payment of ₹${booking.totalEstimatedAmount.toLocaleString()} for ${booking.orderNumber}. Workers are confirmed.`
+        : `Payment proof for ${booking.orderNumber} was rejected: ${reason || 'Invalid screenshot/UTR'}. Please re-submit payment proof.`,
+      eventType: isApproved ? 'PAYMENT_RECEIVED' : 'PAYMENT_FAILED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      timestamp: new Date().toLocaleString(),
+      soundType: isApproved ? 'chime' : 'urgent_ring',
+    });
+
+    if (isApproved) {
+      // Alert Workers that the job is confirmed and escrow is funded
+      this.addNotification({
+        recipientId: 'all',
+        recipientRole: 'employee',
+        title: `⚡ Job Confirmed: ${booking.orderNumber}`,
+        message: `Payment confirmed for ${booking.jobTitle || booking.categoryName} in ${booking.zoneName}. Wage guaranteed: ₹${booking.offeredPricePerWorker}.`,
+        eventType: 'BID_ACCEPTED',
+        bookingId: booking.id,
+        orderNumber: booking.orderNumber,
+        read: false,
+        timestamp: new Date().toLocaleString(),
+        soundType: 'urgent_ring',
+      });
+      playIncomingJobRingtone();
+    } else {
+      playNotificationSound();
+    }
+
+    this.logAudit(
+      isApproved ? 'Order Payment Verified' : 'Order Payment Rejected',
+      `Admin reviewed ${booking.orderNumber} (${booking.customerName}) - ₹${booking.totalEstimatedAmount}. ${isApproved ? 'Approved.' : 'Reason: ' + reason}`
+    );
+
+    return { success: true };
+  }
+
+  // ==========================================
+  // Service Zones & Zone Pricing Matrix
+  // ==========================================
+  public getServiceZones(): ServiceZone[] {
+    return this.getItem(STORAGE_KEYS.ZONES, initialServiceZones);
+  }
+
+  public setServiceZones(zones: ServiceZone[]): void {
+    this.setItem(STORAGE_KEYS.ZONES, zones);
+  }
+
+  public addServiceZone(zone: Omit<ServiceZone, 'id' | 'createdAt'>): ServiceZone {
+    const list = this.getServiceZones();
+    const newZone: ServiceZone = {
+      ...zone,
+      id: `zone-${Date.now()}`,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    this.setServiceZones([...list, newZone]);
+    this.logAudit('Service Zone Created', `Added service zone: ${newZone.name} (${newZone.code})`);
+    return newZone;
+  }
+
+  public updateServiceZone(zone: ServiceZone): void {
+    const list = this.getServiceZones().map((z) => (z.id === zone.id ? zone : z));
+    this.setServiceZones(list);
+    this.logAudit('Service Zone Updated', `Updated service zone: ${zone.name}`);
+  }
+
+  public deleteServiceZone(zoneId: string): void {
+    const list = this.getServiceZones().filter((z) => z.id !== zoneId);
+    this.setServiceZones(list);
+    // Also remove pricing for this zone
+    const prices = this.getZoneCategoryPrices().filter((p) => p.zoneId !== zoneId);
+    this.setZoneCategoryPrices(prices);
+    this.logAudit('Service Zone Removed', `Deleted zone ID: ${zoneId}`);
+  }
+
+  public getZoneCategoryPrices(): ZoneCategoryPrice[] {
+    return this.getItem(STORAGE_KEYS.ZONE_PRICES, initialZonePrices);
+  }
+
+  public setZoneCategoryPrices(prices: ZoneCategoryPrice[]): void {
+    this.setItem(STORAGE_KEYS.ZONE_PRICES, prices);
+  }
+
+  public getPriceForZoneAndCategory(zoneId: string, categoryId: string): ZoneCategoryPrice | undefined {
+    return this.getZoneCategoryPrices().find((p) => p.zoneId === zoneId && p.categoryId === categoryId);
+  }
+
+  public setPriceForZoneCategory(priceData: Omit<ZoneCategoryPrice, 'id' | 'updatedAt'>): ZoneCategoryPrice {
+    const list = this.getZoneCategoryPrices();
+    const existingIndex = list.findIndex(
+      (p) => p.zoneId === priceData.zoneId && p.categoryId === priceData.categoryId
+    );
+    const updatedRecord: ZoneCategoryPrice = {
+      ...priceData,
+      id: existingIndex >= 0 ? list[existingIndex].id : `zp-${Date.now()}`,
+      updatedAt: new Date().toISOString().split('T')[0],
+    };
+
+    if (existingIndex >= 0) {
+      list[existingIndex] = updatedRecord;
+    } else {
+      list.push(updatedRecord);
+    }
+    this.setZoneCategoryPrices([...list]);
+    this.logAudit(
+      'Zone Price Configured',
+      `Configured rate for Zone "${priceData.zoneName}" - Category "${priceData.categoryName}": ₹${priceData.hourlyRate}/hr, ₹${priceData.fullDayRate}/shift`
+    );
+    return updatedRecord;
+  }
+
+  public clonePricesToZone(sourceZoneId: string, targetZoneId: string): number {
+    const zones = this.getServiceZones();
+    const targetZone = zones.find((z) => z.id === targetZoneId);
+    if (!targetZone) return 0;
+
+    const sourcePrices = this.getZoneCategoryPrices().filter((p) => p.zoneId === sourceZoneId);
+    const otherPrices = this.getZoneCategoryPrices().filter((p) => p.zoneId !== targetZoneId);
+
+    const cloned = sourcePrices.map((sp) => ({
+      ...sp,
+      id: `zp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      zoneId: targetZone.id,
+      zoneName: targetZone.name,
+      updatedAt: new Date().toISOString().split('T')[0],
+    }));
+
+    this.setZoneCategoryPrices([...otherPrices, ...cloned]);
+    this.logAudit(
+      'Zone Prices Cloned',
+      `Cloned ${cloned.length} category rates to Zone "${targetZone.name}"`
+    );
+    return cloned.length;
+  }
+
+  // ==========================================
+  // Work Hold / Resume & 10-Step Workflow Methods
+  // ==========================================
+  public holdBookingWork(bookingId: string, reason: string): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return;
+
+    const curHold = booking.workHoldState || { isHold: false, totalHoldMinutes: 0 };
+    const updatedBooking: Booking = {
+      ...booking,
+      workHoldState: {
+        isHold: true,
+        holdStartedAt: new Date().toISOString(),
+        totalHoldMinutes: curHold.totalHoldMinutes || 0,
+        holdReason: reason,
+      },
+      updatedAt: new Date().toLocaleString(),
+    };
+    this.updateBooking(updatedBooking);
+    this.logAudit('Work Put On Hold', `${booking.orderNumber} paused: ${reason}`);
+    playNotificationSound();
+  }
+
+  public resumeBookingWork(bookingId: string): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking || !booking.workHoldState) return;
+
+    let additionalMinutes = 0;
+    if (booking.workHoldState.holdStartedAt) {
+      const startMs = new Date(booking.workHoldState.holdStartedAt).getTime();
+      const nowMs = Date.now();
+      additionalMinutes = Math.max(1, Math.round((nowMs - startMs) / (1000 * 60)));
+    }
+
+    const updatedBooking: Booking = {
+      ...booking,
+      workHoldState: {
+        isHold: false,
+        holdStartedAt: undefined,
+        totalHoldMinutes: (booking.workHoldState.totalHoldMinutes || 0) + additionalMinutes,
+        holdReason: undefined,
+      },
+      updatedAt: new Date().toLocaleString(),
+    };
+    this.updateBooking(updatedBooking);
+    this.logAudit('Work Resumed', `${booking.orderNumber} resumed after ${additionalMinutes} min break`);
+    playNotificationSound();
+  }
+
+  public calculateAndSettleJob(
+    bookingId: string,
+    paymentMethod: 'cash' | 'upi' | 'wallet',
+    utrRef?: string,
+    workerRating: number = 5,
+    customerFeedback: string = 'Work completed satisfactorily'
+  ): { success: boolean; settlement?: any; error?: string } {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return { success: false, error: 'Booking not found' };
+
+    const totalEst = booking.totalEstimatedAmount || (booking.offeredPricePerWorker * (booking.requiredWorkers || 1));
+    const commRate = booking.platformCommissionRate || 10;
+    const commDeducted = Math.round((totalEst * commRate) / 100);
+    const workerNetPayout = totalEst - commDeducted;
+
+    // Deduct platform commission from assigned worker's wallet if cash or credit
+    const workers = this.getWorkers();
+    const assignedWorkerId = booking.assignedWorkers[0]?.workerId || 'w-1';
+    const worker = workers.find((w) => w.id === assignedWorkerId);
+
+    if (worker) {
+      const curBal = worker.walletBalance || 500;
+      const newBal = Math.max(0, curBal - commDeducted);
+      const newTx = {
+        id: `wtx-${Date.now()}`,
+        type: 'fee_deduction' as const,
+        amount: commDeducted,
+        description: `Platform fee for ${booking.orderNumber} (${booking.categoryName})`,
+        timestamp: new Date().toLocaleString(),
+      };
+      const updatedWorker = {
+        ...worker,
+        walletBalance: newBal,
+        completedJobsCount: (worker.completedJobsCount || 0) + 1,
+        totalEarnings: (worker.totalEarnings || 0) + totalEst,
+        walletTransactions: [newTx, ...(worker.walletTransactions || [])],
+      };
+      this.updateWorker(updatedWorker);
+    }
+
+    const updatedBooking: Booking = {
+      ...booking,
+      status: 'ORDER_COMPLETED',
+      paymentStatus: 'successful',
+      paymentMode: paymentMethod,
+      finalSettlementAmount: totalEst,
+      paymentBreakdown: {
+        baseWage: totalEst,
+        overtimeAmount: 0,
+        foodAllowance: 0,
+        totalCalculated: totalEst,
+        platformCommissionDeducted: commDeducted,
+        workerNetPayout,
+      },
+      finalReportSummary: {
+        completedAt: new Date().toLocaleString(),
+        totalHoursWorked: booking.shiftHours || booking.packageApproxHours || 8,
+        workerRating,
+        customerFeedback,
+        settlementUtr: utrRef || `MPL/STL/${Date.now().toString().slice(-8)}`,
+      },
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit(
+      'Order Completed & Settled',
+      `${booking.orderNumber} completed. Total: ₹${totalEst}, Paid via ${paymentMethod.toUpperCase()}, Commission debited: ₹${commDeducted}`
+    );
+    playNotificationSound();
+    return { success: true, settlement: updatedBooking.paymentBreakdown };
   }
 
   // Worker Bidding
@@ -701,6 +1928,19 @@ class DataService {
 
     this.updateBooking(updatedBooking);
     this.logAudit('Worker Bid Received', `${worker.name} bid ₹${amount} on ${booking.orderNumber}`);
+
+    // High-priority notification to Customer about new counter-bid
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: `🏷️ Counter-Bid: ${worker.name}`,
+      message: `${worker.name} proposed ₹${amount.toLocaleString()} for order ${booking.orderNumber} (${booking.categoryName}). Tap to review & accept.`,
+      eventType: 'WORKER_BID_SUBMITTED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
   }
 
   public acceptBid(bookingId: string, bidId: string): void {
@@ -724,7 +1964,7 @@ class DataService {
         workerPhone: worker.phone,
         workerAvatar: worker.avatar,
         agreedRate: bid.proposedAmount,
-        status: 'assigned' as const,
+        status: 'travelling' as const,
         startOtpVerified: false,
       },
     ];
@@ -744,6 +1984,19 @@ class DataService {
 
     this.updateBooking(updatedBooking);
     this.logAudit('Employee Bid Accepted', `Customer accepted ${worker.name} on ${booking.orderNumber}`);
+
+    // Notify Worker that their bid was accepted
+    this.addNotification({
+      recipientId: worker.id,
+      recipientRole: 'employee',
+      title: `🎉 Bid Accepted! #${booking.orderNumber}`,
+      message: `Employer accepted your bid of ₹${bid.proposedAmount.toLocaleString()} for ${booking.categoryName}! Shift confirmed. Please start transit.`,
+      eventType: 'CUSTOMER_ACCEPTED_BID',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'urgent_ring',
+    });
   }
 
   // Direct Worker Acceptance (Fixed Price mode)
@@ -781,6 +2034,138 @@ class DataService {
 
     this.updateBooking(updatedBooking);
     this.logAudit('Worker Accepted Offer', `${worker.name} joined ${booking.orderNumber}`);
+
+    // Notify Customer immediately
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: `👷 Worker Accepted! #${booking.orderNumber}`,
+      message: `${worker.name} accepted your booking for ${booking.categoryName}. They have started travelling to your worksite!`,
+      eventType: 'WORKER_ACCEPTED_JOB',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'urgent_ring',
+    });
+
+    // Notify Worker of shift confirmation
+    this.addNotification({
+      recipientId: worker.id,
+      recipientRole: 'employee',
+      title: `✅ Shift Confirmed: #${booking.orderNumber}`,
+      message: `You accepted ${booking.categoryName} at ${booking.workLocation?.address || 'Worksite'}. Agreed wage: ₹${booking.offeredPricePerWorker.toLocaleString()}.`,
+      eventType: 'BOOKING_CONFIRMED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+  }
+
+  // Worker Starts Travelling
+  public recordStartTravelling(bookingId: string, workerId: string): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    const worker = this.getWorkers().find((w) => w.id === workerId);
+    if (!booking || !worker) return;
+
+    const assigned = booking.assignedWorkers.map((a) =>
+      a.workerId === workerId ? { ...a, status: 'travelling' as const } : a
+    );
+
+    const updatedTimeline = (booking.timelineTree || []).map((node) => {
+      if (node.stageKey === 'WORKERS_MATCHED') {
+        return {
+          ...node,
+          completed: true,
+          description: `${worker.name} has started travelling to ${booking.workLocation?.address || 'worksite'}.`,
+        };
+      }
+      return node;
+    });
+
+    const updatedBooking: Booking = {
+      ...booking,
+      assignedWorkers: assigned,
+      timelineTree: updatedTimeline,
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit('Worker Travelling', `${worker.name} en route to ${booking.orderNumber}`);
+
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: '🛵 Worker En Route',
+      message: `${worker.name} has started travelling to your worksite for Order ${booking.orderNumber}.`,
+      eventType: 'WORKER_TRAVELLING',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+  }
+
+  // Worker Reached Worksite (GPS Geofence Arrival)
+  public recordWorksiteArrival(
+    bookingId: string,
+    workerId: string,
+    locationAddress = 'Worksite Entrance Gate'
+  ): void {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    const worker = this.getWorkers().find((w) => w.id === workerId);
+    if (!booking || !worker) return;
+
+    const assigned = booking.assignedWorkers.map((a) =>
+      a.workerId === workerId ? { ...a, status: 'arrived' as const } : a
+    );
+
+    const updatedTimeline = (booking.timelineTree || []).map((node) => {
+      if (node.stageKey === 'START_OTP_VERIFIED') {
+        return {
+          ...node,
+          current: true,
+          description: `Worker ${worker.name} reached ${locationAddress}. Awaiting Start OTP verification.`,
+        };
+      }
+      return node;
+    });
+
+    const updatedBooking: Booking = {
+      ...booking,
+      assignedWorkers: assigned,
+      timelineTree: updatedTimeline,
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit('Worksite Arrival', `${worker.name} reached ${locationAddress} for ${booking.orderNumber}`);
+
+    // Critical notification to Customer with Start OTP reminder
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: '📍 Worker Arrived at Worksite!',
+      message: `${worker.name} has arrived at ${locationAddress} for ${booking.orderNumber}. Please share Start OTP (${booking.startOtp}) to begin shift.`,
+      eventType: 'WORKER_ARRIVED_GPS',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'urgent_ring',
+    });
+
+    // Confirmation notification to Worker
+    this.addNotification({
+      recipientId: worker.id,
+      recipientRole: 'employee',
+      title: '📍 Worksite Arrival Recorded',
+      message: `You reached ${locationAddress}. Please ask employer for 4-digit Start OTP to check-in.`,
+      eventType: 'WORKER_ARRIVED_GPS',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
   }
 
   // Verify Start OTP
@@ -830,6 +2215,33 @@ class DataService {
 
     this.updateBooking(updatedBooking);
     this.logAudit('Work Started (OTP Verified)', `Start OTP verified for ${booking.orderNumber} at ${locationAddress}`);
+
+    // Notify Customer
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: `⏱️ Work Started! #${booking.orderNumber}`,
+      message: `Start OTP verified at ${locationAddress}. Shift has officially commenced for ${booking.categoryName}.`,
+      eventType: 'WORK_STARTED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+
+    // Notify Worker
+    this.addNotification({
+      recipientId: workerId,
+      recipientRole: 'employee',
+      title: `🚀 Work Timer Started: #${booking.orderNumber}`,
+      message: `Attendance verified with employer. Shift is now active at ${locationAddress}.`,
+      eventType: 'WORK_STARTED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
     return { success: true, message: 'Work successfully verified & started!' };
   }
@@ -940,6 +2352,33 @@ class DataService {
       'Work Completed & Cash Collected',
       `Cash wage ₹${workerWage} received. Platform fee ₹${platformFee} debited from worker wallet.`
     );
+
+    // Notify Customer
+    this.addNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: `🏁 Work Completed: #${booking.orderNumber}`,
+      message: `Shift completed at ${locationAddress}! Wage of ₹${workerWage.toLocaleString()} settled. Thank you for using ManPowerLink.`,
+      eventType: 'WORK_COMPLETED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+
+    // Notify Worker
+    this.addNotification({
+      recipientId: workerId,
+      recipientRole: 'employee',
+      title: `💰 Shift Completed & Payout Verified`,
+      message: `Completed #${booking.orderNumber}. Collected ₹${workerWage.toLocaleString()}. Platform fee ₹${platformFee} debited from wallet (Bal: ₹${workerRemainingWallet.toLocaleString()}).`,
+      eventType: 'WORK_COMPLETED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
 
     return {
@@ -978,13 +2417,186 @@ class DataService {
 
     this.updateWorker(updatedWorker);
     this.logAudit('Worker Wallet Recharged', `${worker.name} recharged ₹${amount}. New balance: ₹${newBal}`);
+
+    // In-app & push notification to Worker
+    this.addNotification({
+      recipientId: workerId,
+      recipientRole: 'employee',
+      title: '💰 Wallet Top-Up Successful',
+      message: `₹${amount.toLocaleString()} credited to your prepaid wallet via ${method}. New balance: ₹${newBal.toLocaleString()}.`,
+      eventType: 'WALLET_RECHARGED',
+      category: 'payment',
+      read: false,
+      soundType: 'chime',
+    });
+
     playNotificationSound();
     return { success: true, newBalance: newBal };
   }
 
+  // --- Platform Payment Setup (Admin Configured UPI ID, QR Code & Gateways) ---
+  public getPaymentSettings(): PaymentControlSettings {
+    return this.getItem<PaymentControlSettings>('manpowerlink_payment_settings_v3', {
+      methods: [
+        { id: 'upi_qr', name: 'Direct UPI QR Code', description: 'Scan & pay with GPay, PhonePe, Paytm, BHIM, Kotak', isEnabled: true },
+        { id: 'online_gateway', name: 'Online Payment Gateway (Razorpay/PhonePe)', description: 'Netbanking, Cards, UPI Intent', isEnabled: true },
+      ],
+      payeeUpiId: PLATFORM_UPI_ID,
+      payeeName: PLATFORM_UPI_NAME,
+      qrCodeUrl: '',
+      qrDisplayMode: 'dynamic_generated',
+      customQrName: '',
+      gateways: [
+        {
+          id: 'razorpay',
+          name: 'Razorpay PG',
+          category: 'cards_netbanking',
+          isEnabled: true,
+          isTestMode: true,
+          apiKey: 'rzp_test_904kL893mNq12a',
+          apiSecret: '••••••••••••••••••••••••',
+          webhookSecret: 'whsec_90kda230194819a',
+          supportedMethods: ['UPI', 'Credit/Debit Cards', 'NetBanking', 'Wallets'],
+          status: 'active',
+        },
+        {
+          id: 'phonepe',
+          name: 'PhonePe PG',
+          category: 'upi_pg',
+          isEnabled: false,
+          isTestMode: true,
+          merchantId: 'M23049184029',
+          apiKey: '',
+          apiSecret: '',
+          saltIndex: '1',
+          webhookSecret: '',
+          supportedMethods: ['UPI Intent', 'PhonePe QR', 'UPI Collect'],
+          status: 'needs_keys',
+        },
+        {
+          id: 'cashfree',
+          name: 'Cashfree Payments',
+          category: 'cards_netbanking',
+          isEnabled: false,
+          isTestMode: true,
+          apiKey: '',
+          apiSecret: '',
+          merchantId: 'CF_MERCHANT_902',
+          webhookSecret: '',
+          supportedMethods: ['Instant Settlements', 'UPI', 'Auto-Split'],
+          status: 'needs_keys',
+        },
+        {
+          id: 'paytm',
+          name: 'Paytm Business PG',
+          category: 'upi_pg',
+          isEnabled: false,
+          isTestMode: true,
+          merchantId: 'PAYTM_MID_49201',
+          apiKey: '',
+          apiSecret: '',
+          supportedMethods: ['Paytm Wallet', 'UPI', 'Postpaid'],
+          status: 'needs_keys',
+        },
+        {
+          id: 'stripe',
+          name: 'Stripe Global Payments',
+          category: 'international',
+          isEnabled: false,
+          isTestMode: true,
+          apiKey: 'pk_test_51Mz90K194A...',
+          apiSecret: '',
+          webhookSecret: '',
+          supportedMethods: ['International Cards', 'Apple Pay', 'Google Pay'],
+          status: 'needs_keys',
+        },
+      ],
+      allowCashAtWorksite: false,
+      minRechargeAmount: 100,
+      maxRechargeAmount: 100000,
+      lastUpdatedBy: 'admin@manpowerlink.com',
+      lastUpdatedAt: new Date().toLocaleString(),
+    });
+  }
+
+  public setPaymentSettings(settings: PaymentControlSettings): void {
+    this.setItem('manpowerlink_payment_settings_v2', settings);
+    this.logAudit('Payment Setup Updated', `UPI ID: ${settings.payeeUpiId}, Payee: ${settings.payeeName}`);
+    this.notify();
+  }
+
+  // --- Backend Payment Proof Approval & Verification Section Methods ---
+  public approveBookingPayment(bookingId: string, adminNotes = 'Verified by Admin'): { success: boolean; booking?: Booking } {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return { success: false };
+
+    const updatedBooking: Booking = {
+      ...booking,
+      paymentStatus: 'successful',
+      paymentVerificationStatus: 'verified',
+      status: booking.status === 'SEARCHING_EMPLOYEES' ? 'CONFIRMED' : booking.status,
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit('Payment Proof Approved', `${booking.orderNumber} payment of ₹${booking.totalEstimatedAmount} verified & approved`);
+
+    // Real-time dispatch notification to Customer
+    dispatchFirebaseNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: 'Payment Verified & Approved! 🚀',
+      message: `Your payment of ₹${booking.totalEstimatedAmount.toLocaleString()} for Order ${booking.orderNumber} has been verified and approved by Admin. Workers are dispatched!`,
+      eventType: 'PAYMENT_RECEIVED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'chime',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+
+    playNotificationSound();
+    return { success: true, booking: updatedBooking };
+  }
+
+  public rejectBookingPayment(bookingId: string, reason: string): { success: boolean; booking?: Booking } {
+    const booking = this.getBookings().find((b) => b.id === bookingId);
+    if (!booking) return { success: false };
+
+    const updatedBooking: Booking = {
+      ...booking,
+      paymentVerificationStatus: 'rejected',
+      paymentRejectionReason: reason,
+      updatedAt: new Date().toLocaleString(),
+    };
+
+    this.updateBooking(updatedBooking);
+    this.logAudit('Payment Proof Rejected', `${booking.orderNumber} rejected: ${reason}`);
+
+    dispatchFirebaseNotification({
+      recipientId: booking.customerId,
+      recipientRole: 'customer',
+      title: 'Payment Proof Rejected ⚠️',
+      message: `Your payment receipt for Order ${booking.orderNumber} was rejected: ${reason}. Please re-upload a valid payment screenshot.`,
+      eventType: 'PAYMENT_FAILED',
+      bookingId: booking.id,
+      orderNumber: booking.orderNumber,
+      read: false,
+      soundType: 'urgent_ring',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+
+    playNotificationSound();
+    return { success: true, booking: updatedBooking };
+  }
+
   // Commission Settings
   public getCommissionSettings(): CommissionSettings {
-    return this.getItem(STORAGE_KEYS.COMMISSION, initialCommissionSettings);
+    const s = this.getItem(STORAGE_KEYS.COMMISSION, initialCommissionSettings);
+    if (s.minWorkerWalletBalance === undefined) {
+      s.minWorkerWalletBalance = -200;
+    }
+    return s;
   }
 
   public setCommissionSettings(settings: CommissionSettings): void {
@@ -1109,7 +2721,7 @@ class DataService {
       primaryColor: '#D71920',
       secondaryColor: '#FFC928',
       darkBgColor: '#1E1F23',
-      mainLogoUrl: 'https://images.unsplash.com/photo-1541888946425-d0fbb18f156b?auto=format&fit=crop&w=400&q=80',
+      mainLogoUrl: '',
       appIconUrl: '',
       splashLogoUrl: '',
       lightLogoUrl: '',
@@ -1121,7 +2733,7 @@ class DataService {
 
   public setBrandingSettings(branding: BrandingSettings): void {
     this.setItem('manpowerlink_branding_v1', branding);
-    this.logAudit('Branding Updated', `App: ${branding.appName}, Tagline: ${branding.tagline}`);
+    this.logAudit('Branding Updated', `App: ${branding.appName}, Logo: ${branding.mainLogoUrl ? 'Custom Logo Applied' : 'Default Icon'}`);
   }
 
   // --- General Company Settings ---
@@ -1326,6 +2938,134 @@ class DataService {
     this.setItem('manpowerlink_settings_audit_v1', list);
   }
 
+  // --- Real-Time Bidirectional Chat System ---
+  public getChatMessages(bookingId?: string): ChatMessage[] {
+    const all = this.getItem<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, initialChatMessages);
+    if (!bookingId) return all;
+    return all.filter((m) => m.bookingId === bookingId);
+  }
+
+  public getConversations(
+    role: 'customer' | 'employee' | 'admin',
+    userId?: string
+  ): ConversationSummary[] {
+    const bookings = this.getBookings();
+    const allMessages = this.getChatMessages();
+    const workers = this.getWorkers();
+    const customers = this.getCustomers();
+
+    const conversations: ConversationSummary[] = [];
+
+    bookings.forEach((booking) => {
+      const msgs = allMessages.filter((m) => m.bookingId === booking.id);
+      const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+
+      const customer = customers.find((c) => c.id === booking.customerId) || {
+        name: booking.customerName,
+        avatar: '',
+      };
+
+      const assignedWorker = booking.assignedWorkers[0];
+      const worker = assignedWorker
+        ? workers.find((w) => w.id === assignedWorker.workerId)
+        : workers[0];
+
+      const unreadCount = msgs.filter((m) => {
+        if (role === 'customer') {
+          return m.sender !== 'customer' && m.status !== 'read';
+        }
+        if (role === 'employee') {
+          return m.sender !== 'worker' && m.status !== 'read';
+        }
+        return false;
+      }).length;
+
+      conversations.push({
+        id: `conv-${booking.id}`,
+        bookingId: booking.id,
+        orderNumber: booking.orderNumber,
+        customerId: booking.customerId,
+        customerName: booking.customerName,
+        customerAvatar: (customer as any).avatar,
+        workerId: worker?.id || 'w-1',
+        workerName: worker?.name || 'Assigned Worker',
+        workerAvatar: worker?.avatar,
+        serviceCategory: booking.categoryName,
+        workLocation: booking.workLocation?.address || 'Worksite',
+        lastMessage: lastMsg ? lastMsg.text : 'Direct chat channel initialized for this order.',
+        lastMessageTime: lastMsg ? lastMsg.time : 'Active',
+        lastMessageTimestamp: lastMsg ? lastMsg.timestamp : Date.now(),
+        unreadCount,
+        isOnline: true,
+      });
+    });
+
+    return conversations.sort((a, b) => b.lastMessageTimestamp - a.lastMessageTimestamp);
+  }
+
+  public markBookingMessagesAsRead(bookingId: string, readerRole: 'customer' | 'employee'): void {
+    const all = this.getItem<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, initialChatMessages);
+    let updatedAny = false;
+    const updated = all.map((m) => {
+      if (m.bookingId === bookingId && m.recipientRole === readerRole && m.status !== 'read') {
+        updatedAny = true;
+        return {
+          ...m,
+          status: 'read' as const,
+          readAt: new Date().toISOString(),
+        };
+      }
+      return m;
+    });
+
+    if (updatedAny) {
+      this.setItem(STORAGE_KEYS.CHAT_MESSAGES, updated);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('manpowerlink_messages_read', { detail: { bookingId, readerRole } })
+        );
+      }
+    }
+  }
+
+  public sendChatMessage(messageData: Omit<ChatMessage, 'id' | 'timestamp'>): ChatMessage {
+    const newMsg: ChatMessage = {
+      ...messageData,
+      id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: Date.now(),
+      status: 'delivered',
+    };
+    const all = this.getItem<ChatMessage[]>(STORAGE_KEYS.CHAT_MESSAGES, initialChatMessages);
+    const updated = [...all, newMsg];
+    this.setItem(STORAGE_KEYS.CHAT_MESSAGES, updated);
+
+    // Save notification for recipient in persistent inbox (also automatically dispatches to Firebase)
+    this.addNotification({
+      recipientId: newMsg.recipientRole === 'customer' ? 'c-1' : 'w-1',
+      recipientRole: newMsg.recipientRole,
+      title: `💬 ${newMsg.senderName} (${newMsg.orderNumber || 'Chat'})`,
+      message: newMsg.text || 'Sent an attachment photo',
+      eventType: 'CHAT_MESSAGE_RECEIVED',
+      category: 'chat',
+      bookingId: newMsg.bookingId,
+      orderNumber: newMsg.orderNumber,
+      soundType: 'chime',
+      read: false,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+
+    // Reactive window event for instantaneous cross-component delivery
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('manpowerlink_chat_message', {
+          detail: newMsg,
+        })
+      );
+    }
+
+    return newMsg;
+  }
+
   // Reset all to defaults
   public resetToDefaults(): void {
     localStorage.removeItem(STORAGE_KEYS.CATEGORIES);
@@ -1336,6 +3076,8 @@ class DataService {
     localStorage.removeItem(STORAGE_KEYS.OTP);
     localStorage.removeItem(STORAGE_KEYS.DISPUTES);
     localStorage.removeItem(STORAGE_KEYS.AUDIT);
+    localStorage.removeItem(STORAGE_KEYS.NOTIFICATIONS);
+    localStorage.removeItem(STORAGE_KEYS.CHAT_MESSAGES);
     localStorage.removeItem('manpowerlink_admin_users_v1');
     localStorage.removeItem('manpowerlink_safety_incidents_v1');
     localStorage.removeItem('manpowerlink_matching_v1');
@@ -1349,3 +3091,4 @@ class DataService {
 }
 
 export const dataService = new DataService();
+

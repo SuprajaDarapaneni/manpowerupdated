@@ -421,17 +421,32 @@ export const playIncomingJobRingtone = () => {
 
 export const initialNotifications: AppNotification[] = [
   {
+    id: 'notif-upgrade',
+    recipientId: 'all',
+    recipientRole: 'all',
+    title: '📢 Important Platform Upgrade Notice',
+    message: 'ManPowerLink platform has been updated with real-time GPS location tracking and instant online payment gateway verification.',
+    eventType: 'ADMIN_ANNOUNCEMENT',
+    category: 'announcement',
+    read: false,
+    timestamp: '05:54 AM',
+    soundType: 'chime',
+    actionTab: 'home',
+  },
+  {
     id: 'notif-1',
     recipientId: 'all',
     recipientRole: 'employee',
     title: '🚨 Radar Alert: Heavy Container Destuffing',
     message: 'New job order #Order 1045 posted in Panambur Port Corridor for 4 workers. Rate: ₹2,400/day.',
     eventType: 'BOOKING_CREATED',
+    category: 'booking',
     bookingId: 'b-1',
     orderNumber: 'Order #1045',
     read: false,
     timestamp: '15 Oct 2026, 08:30 AM',
     soundType: 'urgent_ring',
+    actionTab: 'find-jobs',
   },
   {
     id: 'notif-2',
@@ -440,11 +455,13 @@ export const initialNotifications: AppNotification[] = [
     title: 'Worker Dispatched & In Transit',
     message: 'Worker Ramesh Kumar accepted shift #Order 1045 and is travelling to Dock 4.',
     eventType: 'BID_ACCEPTED',
+    category: 'booking',
     bookingId: 'b-1',
     orderNumber: 'Order #1045',
     read: true,
     timestamp: '15 Oct 2026, 08:45 AM',
     soundType: 'chime',
+    actionTab: 'bookings',
   },
 ];
 
@@ -530,6 +547,7 @@ class DataService {
 
   private getItem<T>(key: string, defaultValue: T): T {
     try {
+      if (typeof localStorage === 'undefined') return defaultValue;
       const data = localStorage.getItem(key);
       return data ? JSON.parse(data) : defaultValue;
     } catch {
@@ -539,7 +557,7 @@ class DataService {
 
   private setItem<T>(key: string, value: T): void {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      if (typeof localStorage !== 'undefined') { localStorage.setItem(key, JSON.stringify(value)); }
       this.notify();
     } catch (e) {
       console.warn('Storage set error:', e);

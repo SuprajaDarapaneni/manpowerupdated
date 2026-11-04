@@ -1,5 +1,7 @@
 import React from 'react';
 import {
+  Bell,
+  Smartphone,
   LayoutDashboard,
   Layers,
   ClipboardList,
@@ -28,6 +30,10 @@ export type AdminTab =
   | 'safety'
   | 'reports'
   | 'audit'
+  | 'Publish_notifications'
+  | 'publish-notifications'
+  | 'release-apks'
+  | 'release_apks'
   | 'settings'
   | 'settings-general'
   | 'settings-branding'
@@ -86,6 +92,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     },
     { id: 'reports' as AdminTab, label: 'Reports & Revenue', icon: BarChart3 },
     { id: 'audit' as AdminTab, label: 'Security Audit Trail', icon: ShieldCheck },
+    { id: 'publish-notifications' as AdminTab, label: 'Publish Notifications', icon: Bell },
+    { id: 'release-apks' as AdminTab, label: 'Release APKs', icon: Smartphone },
     { id: 'settings' as AdminTab, label: 'Platform Settings', icon: Settings },
   ];
 

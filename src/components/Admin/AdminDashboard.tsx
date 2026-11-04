@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Smartphone,
   Users,
   Briefcase,
   TrendingUp,
@@ -10,6 +11,7 @@ import {
   ShieldAlert,
   ChevronRight,
   DollarSign,
+  Bell,
   Calendar,
   RefreshCw,
   AlertTriangle,
@@ -91,11 +93,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <button
                 key={range}
                 onClick={() => setDateRange(range)}
-                className={`px-2.5 py-1 font-semibold rounded-lg capitalize transition-colors cursor-pointer ${
-                  dateRange === range
-                    ? 'bg-[#D71920] text-white shadow-xs'
-                    : 'text-[#686868] hover:text-[#202124]'
-                }`}
+                className={`px-2.5 py-1 font-semibold rounded-lg capitalize transition-colors cursor-pointer ${dateRange === range
+                  ? 'bg-[#D71920] text-white shadow-xs'
+                  : 'text-[#686868] hover:text-[#202124]'
+                  }`}
               >
                 {range}
               </button>
@@ -281,13 +282,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     </td>
                     <td className="py-3">
                       <span
-                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                          booking.status === 'CONFIRMED'
-                            ? 'bg-[#FFC928] text-[#202124]'
-                            : booking.status === 'ORDER_COMPLETED'
+                        className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${booking.status === 'CONFIRMED'
+                          ? 'bg-[#FFC928] text-[#202124]'
+                          : booking.status === 'ORDER_COMPLETED'
                             ? 'bg-[#FFC928]/30 text-[#A80F18]'
                             : 'bg-[#D71920]/10 text-[#D71920]'
-                        }`}
+                          }`}
                       >
                         {booking.status.replace(/_/g, ' ')}
                       </span>
@@ -341,6 +341,36 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               Quick Admin Actions
             </h3>
             <div className="space-y-2">
+              <button
+                onClick={() => onNavigateTab('publish-notifications')}
+                className="w-full text-left p-2.5 bg-red-50/80 hover:bg-red-50 rounded-lg border border-[#D71920]/30 flex items-center justify-between text-xs cursor-pointer group transition-colors shadow-2xs"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-[#D71920] text-white flex items-center justify-center shrink-0">
+                    <Bell className="w-3.5 h-3.5 text-[#FFC928]" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-[#D71920] block">Publish Push Notifications & Broadcasts</span>
+                    <span className="text-[10px] text-slate-500">Dispatch live banners, urgent ringtones & Firebase push</span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-[#D71920] group-hover:translate-x-0.5 transition-transform" />
+              </button>
+              <button
+                onClick={() => onNavigateTab('release-apks')}
+                className="w-full text-left p-2.5 bg-emerald-50/80 hover:bg-emerald-50 rounded-lg border border-emerald-300/40 flex items-center justify-between text-xs cursor-pointer group transition-colors shadow-2xs"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-md bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <Smartphone className="w-3.5 h-3.5 text-white" />
+                  </div>
+                  <div>
+                    <span className="font-bold text-emerald-800 block">Download Mobile APKs (v2.4.0)</span>
+                    <span className="text-[10px] text-slate-500">Customer & Employee Android binaries ready</span>
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-emerald-700 group-hover:translate-x-0.5 transition-transform" />
+              </button>
               <button
                 onClick={() => onNavigateTab('categories')}
                 className="w-full text-left p-2.5 bg-[#FFFDF8] hover:bg-slate-50 rounded-lg border border-[#202124]/10 flex items-center justify-between text-xs cursor-pointer"

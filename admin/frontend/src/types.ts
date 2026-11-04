@@ -36,13 +36,28 @@ export interface AdminUser {
   lastLogin: string;
 }
 
+export interface WalletTransaction {
+  id: string;
+  transactionId?: string;
+  type: 'credit' | 'debit';
+  amount: number;
+  comments?: string;
+  description: string;
+  timestamp: string;
+  utrRef?: string;
+  category?: 'refund' | 'penalty' | 'order_payment' | 'wallet_topup' | 'adjustment';
+  adminNote?: string;
+}
+
 export interface ServiceCategory {
   id: string;
   name: string;
   slug: string;
   description: string;
   icon: string;
+  bannerUrl?: string;
   isActive: boolean;
+  requiresOnlinePaymentOnly?: boolean; // Employers must pay online only (No cash on worksite)
   minPrice: number;
   maxPrice: number;
   hourlyRate: number;
@@ -57,6 +72,43 @@ export interface ServiceCategory {
     eveningTea?: boolean;
     peopleCountPrompt?: boolean;
   };
+}
+
+export interface ServiceZone {
+  id: string;
+  name: string;
+  code: string;
+  city: string;
+  state: string;
+  description: string;
+  pincodes: string[];
+  geofenceRadiusKm: number;
+  centerCoordinates: {
+    lat: number;
+    lng: number;
+  };
+  isActive: boolean;
+  surgeMultiplier?: number;
+  isNoGpsZone?: boolean;
+  noGpsReason?: string;
+  createdAt: string;
+}
+
+export interface ZoneCategoryPrice {
+  id: string;
+  zoneId: string;
+  zoneName: string;
+  categoryId: string;
+  categoryName: string;
+  hourlyRate: number;
+  fullDayRate: number;
+  halfDayRate: number;
+  lumpSumBasePrice: number;
+  overtimeHourlyRate: number;
+  nightShiftAllowance: number;
+  platformCommissionPercent: number;
+  minWorkerWalletBalance?: number;
+  updatedAt: string;
 }
 
 export interface Worker {
@@ -110,14 +162,7 @@ export interface Customer {
   totalBookings: number;
   status: 'active' | 'restricted' | 'suspended';
   walletBalance?: number;
-  walletTransactions?: {
-    id: string;
-    type: 'credit' | 'debit';
-    amount: number;
-    description: string;
-    timestamp: string;
-    utrRef?: string;
-  }[];
+  walletTransactions?: WalletTransaction[];
 }
 
 export interface UpiPayoutRequest {
@@ -198,6 +243,7 @@ export interface Booking {
   packageApproxHours?: number;
   packageTitle?: string;
   upiTransactionRef?: string;
+  paymentUtr?: string;
   walletDebited?: boolean;
   priceRevisions?: {
     revisedAt: string;
@@ -216,9 +262,35 @@ export interface Booking {
   paymentStatus: PaymentStatus;
   paymentMethod: PaymentMethod;
   paymentMode?: 'cash' | 'upi' | 'wallet';
+  paymentProofScreenshot?: string;
+  paymentVerificationStatus?: 'pending' | 'verified' | 'rejected';
+  paymentRejectionReason?: string;
   startOtp: string;
   endOtp: string;
   jobTitle?: string;
+  zoneId?: string;
+  zoneName?: string;
+  workHoldState?: {
+    isHold: boolean;
+    holdStartedAt?: string;
+    totalHoldMinutes: number;
+    holdReason?: string;
+  };
+  paymentBreakdown?: {
+    baseWage: number;
+    overtimeAmount: number;
+    foodAllowance: number;
+    totalCalculated: number;
+    platformCommissionDeducted: number;
+    workerNetPayout: number;
+  };
+  finalReportSummary?: {
+    completedAt: string;
+    totalHoursWorked: number;
+    workerRating: number;
+    customerFeedback?: string;
+    settlementUtr?: string;
+  };
   timelineTree?: StatusTimelineNode[];
   createdAt: string;
   updatedAt: string;
@@ -247,6 +319,7 @@ export interface CommissionSettings {
   payer: 'customer' | 'worker' | 'split';
   taxRate: number;
   categoryRates?: Record<string, number>;
+  minWorkerWalletBalance?: number; // Minimum balance required to receive requests (can be negative like -200 or positive like 100)
 }
 
 export interface OtpVerificationSettings {
@@ -265,6 +338,7 @@ export interface MatchingSettings {
   retryLimit: number;
   workerLimitPerBooking: number;
   escalationThresholdMins: number;
+  minWorkerWalletBalance?: number;
 }
 
 export interface PricingSettings {
@@ -493,11 +567,29 @@ export interface PaymentMethodSetting {
   icon?: string;
 }
 
+export interface PaymentGatewayConfig {
+  id: string; // 'razorpay' | 'phonepe' | 'cashfree' | 'paytm' | 'stripe'
+  name: string;
+  category: 'upi_pg' | 'cards_netbanking' | 'international';
+  isEnabled: boolean;
+  isTestMode: boolean;
+  apiKey: string;
+  apiSecret: string;
+  merchantId?: string;
+  webhookSecret?: string;
+  saltIndex?: string; // For PhonePe
+  supportedMethods: string[];
+  status: 'active' | 'needs_keys' | 'disabled';
+}
+
 export interface PaymentControlSettings {
   methods: PaymentMethodSetting[];
   payeeUpiId: string; // e.g. 'prnm@kotak'
   payeeName: string;  // e.g. 'PRAVEEN'
-  qrCodeUrl: string;
+  qrCodeUrl: string;  // Custom uploaded QR code image URL or Base64
+  qrDisplayMode?: 'dynamic_generated' | 'custom_uploaded';
+  customQrName?: string;
+  gateways?: PaymentGatewayConfig[];
   allowCashAtWorksite: boolean;
   minRechargeAmount: number;
   maxRechargeAmount: number;
@@ -509,35 +601,87 @@ export interface PaymentControlSettings {
 export interface AppNotification {
   id: string;
   recipientId: string;
-  recipientRole: 'customer' | 'employee' | 'admin';
+  recipientRole: 'customer' | 'employee' | 'admin' | 'all';
   title: string;
   message: string;
   eventType:
     | 'BOOKING_CREATED'
+    | 'BOOKING_CONFIRMED'
     | 'MATCHING_STARTED'
     | 'BID_RECEIVED'
     | 'BID_ACCEPTED'
-    | 'CAPACITY_REACHED'
+    | 'WORKER_BID_SUBMITTED'
+    | 'CUSTOMER_ACCEPTED_BID'
+    | 'WORKER_ACCEPTED_JOB'
+    | 'WORKER_TRAVELLING'
     | 'WORKER_ARRIVED'
+    | 'WORKER_ARRIVED_GPS'
+    | 'CAPACITY_REACHED'
     | 'START_OTP_VERIFIED'
     | 'WORK_STARTED'
     | 'END_OTP_VERIFIED'
     | 'WORK_COMPLETED'
     | 'PAYMENT_RECEIVED'
     | 'PAYMENT_FAILED'
+    | 'WALLET_RECHARGED'
     | 'PAYOUT_REQUESTED'
+    | 'PAYOUT_APPROVED'
     | 'PAYOUT_CREDITED'
     | 'PAYOUT_REJECTED'
     | 'BOOKING_CANCELLED'
     | 'PRICE_REVISED'
     | 'DISPUTE_OPENED'
-    | 'DISPUTE_RESOLVED';
+    | 'DISPUTE_RESOLVED'
+    | 'CHAT_MESSAGE_RECEIVED'
+    | 'ADMIN_ANNOUNCEMENT'
+    | (string & {});
+  category?: 'booking' | 'payment' | 'chat' | 'announcement' | 'system';
   bookingId?: string;
   orderNumber?: string;
   read: boolean;
-  timestamp: string;
-  soundType: 'chime' | 'urgent_ring' | 'silent';
+  timestamp?: string;
+  soundType?: 'chime' | 'urgent_ring' | 'silent';
   actionUrl?: string;
+  actionTab?: string;
+}
+
+// Bidirectional Real-time Chat Message
+export interface ChatMessage {
+  id: string;
+  bookingId: string;
+  orderNumber?: string;
+  sender: 'worker' | 'customer' | 'admin';
+  senderName: string;
+  senderId?: string;
+  recipientRole: 'customer' | 'employee' | 'admin';
+  receiverId?: string;
+  text: string;
+  time: string;
+  timestamp: number;
+  status?: 'sent' | 'delivered' | 'read';
+  attachmentUrl?: string;
+  attachmentType?: 'image' | 'file';
+  readAt?: string;
+}
+
+// Chat Conversation Summary for Inbox
+export interface ConversationSummary {
+  id: string;
+  bookingId: string;
+  orderNumber: string;
+  customerId: string;
+  customerName: string;
+  customerAvatar?: string;
+  workerId: string;
+  workerName: string;
+  workerAvatar?: string;
+  serviceCategory: string;
+  workLocation: string;
+  lastMessage: string;
+  lastMessageTime: string;
+  lastMessageTimestamp: number;
+  unreadCount: number;
+  isOnline: boolean;
 }
 
 // GPS Attendance Location Stamp (Client Feedback #5)
@@ -550,3 +694,4 @@ export interface GpsLocationStamp {
   isGeofenceValid?: boolean;
   provider: 'gps' | 'network' | 'manual_fallback';
 }
+
