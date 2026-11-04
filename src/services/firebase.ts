@@ -28,16 +28,20 @@ async function testConnection() {
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     console.info('Firebase Firestore connection verified.');
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.name === 'AbortError' || error?.message?.includes('aborted')) {
+      return;
+    }
     if (error instanceof Error && error.message.includes('the client is offline')) {
       console.warn('Firebase client is offline. Local caching active.');
     }
   }
 }
-testConnection();
+testConnection().catch(() => {});
 
 // Safe error handler for Firestore operations
 export function handleFirestoreError(error: unknown, operation: string) {
+  if ((error as any)?.name === 'AbortError' || (error as any)?.message?.includes('aborted')) return;
   console.error(`Firestore error during [${operation}]:`, error);
 }
 

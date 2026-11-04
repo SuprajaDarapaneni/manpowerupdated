@@ -16,6 +16,7 @@ import {
   MapPin,
   X,
   Bell,
+  Smartphone,
 } from 'lucide-react';
 import { dataService } from '../../services/storage';
 
