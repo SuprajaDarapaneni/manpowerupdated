@@ -35,7 +35,7 @@ import {
 type AppRoute = 'admin' | 'customer' | 'employee' | 'dual' | 'handover' | 'dev-hub';
 
 function getInitialRoute(): AppRoute {
-  if (typeof window === 'undefined') return 'dual';
+  if (typeof window === 'undefined') return 'admin';
 
   const params = new URLSearchParams(window.location.search);
   const preview = params.get('preview') || params.get('app') || params.get('view');
@@ -53,22 +53,8 @@ function getInitialRoute(): AppRoute {
   if (hash === '#dual' || hash.includes('preview-dual') || hash.includes('apps')) return 'dual';
   if (hash === '#handover') return 'handover';
 
-  // Check saved mode
-  const storedMode = localStorage.getItem('manpower_app_mode');
-  if (storedMode === 'customer' || storedMode === 'employee' || storedMode === 'admin' || storedMode === 'dual') {
-    if (localStorage.getItem('manpower_client_locked') === 'true') {
-      return 'admin';
-    }
-    return storedMode as AppRoute;
-  }
-
-  // If client delivery lock is explicitly activated
-  if (localStorage.getItem('manpower_client_locked') === 'true') {
-    return 'admin';
-  }
-
-  // Default during development & cross-checking review is dual apps preview
-  return 'dual';
+  // Production Client Handover: default directly to pure Admin Dashboard
+  return 'admin';
 }
 
 export default function App() {
@@ -77,11 +63,8 @@ export default function App() {
   const [adminTab, setAdminTab] = useState<AdminTab>('dashboard');
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
 
-  // Client Delivery Lock Toggle: when locked, all previews and dev headers are completely hidden
-  const [isClientLocked, setIsClientLocked] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('manpower_client_locked') === 'true';
-  });
+  // Client Delivery Lock: permanently locked to true so all preview headers and switchers are removed
+  const [isClientLocked, setIsClientLocked] = useState<boolean>(true);
 
   // Active sub-tab inside Dev Hub if opened via ?dev=true
   const [hubTab, setHubTab] = useState<'admin' | 'dual' | 'customer' | 'employee' | 'handover'>('dual');
@@ -643,7 +626,7 @@ export default function App() {
         <div className="flex-1">
           <AdminLogin
             onSuccess={() => setAdminAuth(dataService.getAdminAuth())}
-            showPreviews={!isClientLocked}
+            showPreviews={false}
             onOpenPreview={(target) => navigateTo(target)}
           />
         </div>
@@ -674,7 +657,7 @@ export default function App() {
             currentTabName={adminTab.charAt(0).toUpperCase() + adminTab.slice(1)}
             onLogout={handleLogout}
             onOpenPreview={(mode) => navigateTo(mode)}
-            showPreviews={!isClientLocked}
+            showPreviews={false}
             onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
           />
           <main className="flex-1 p-4 sm:p-6 overflow-y-auto max-w-7xl w-full mx-auto">

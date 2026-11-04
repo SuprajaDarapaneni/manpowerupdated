@@ -107,7 +107,7 @@ export interface ZoneCategoryPrice {
   overtimeHourlyRate: number;
   nightShiftAllowance: number;
   platformCommissionPercent: number;
-  minWorkerWalletBalance?: number;
+  minWorkerWalletBalance: number;
   updatedAt: string;
 }
 
@@ -319,7 +319,7 @@ export interface CommissionSettings {
   payer: 'customer' | 'worker' | 'split';
   taxRate: number;
   categoryRates?: Record<string, number>;
-  minWorkerWalletBalance?: number; // Minimum balance required to receive requests (can be negative like -200 or positive like 100)
+  minWorkerWalletBalance: number; // Minimum balance required to receive requests (can be negative like -200 or positive like 100)
 }
 
 export interface OtpVerificationSettings {
@@ -606,41 +606,40 @@ export interface AppNotification {
   message: string;
   eventType:
     | 'BOOKING_CREATED'
-    | 'BOOKING_CONFIRMED'
     | 'MATCHING_STARTED'
     | 'BID_RECEIVED'
     | 'BID_ACCEPTED'
-    | 'WORKER_BID_SUBMITTED'
-    | 'CUSTOMER_ACCEPTED_BID'
-    | 'WORKER_ACCEPTED_JOB'
-    | 'WORKER_TRAVELLING'
+    | 'CAPACITY_REACHED'
     | 'WORKER_ARRIVED'
     | 'WORKER_ARRIVED_GPS'
-    | 'CAPACITY_REACHED'
     | 'START_OTP_VERIFIED'
     | 'WORK_STARTED'
     | 'END_OTP_VERIFIED'
     | 'WORK_COMPLETED'
     | 'PAYMENT_RECEIVED'
     | 'PAYMENT_FAILED'
-    | 'WALLET_RECHARGED'
     | 'PAYOUT_REQUESTED'
-    | 'PAYOUT_APPROVED'
     | 'PAYOUT_CREDITED'
+    | 'PAYOUT_APPROVED'
     | 'PAYOUT_REJECTED'
+    | 'WALLET_RECHARGED'
+    | 'WORKER_BID_SUBMITTED'
+    | 'CUSTOMER_ACCEPTED_BID'
+    | 'WORKER_ACCEPTED_JOB'
+    | 'BOOKING_CONFIRMED'
+    | 'WORKER_TRAVELLING'
     | 'BOOKING_CANCELLED'
     | 'PRICE_REVISED'
     | 'DISPUTE_OPENED'
     | 'DISPUTE_RESOLVED'
     | 'CHAT_MESSAGE_RECEIVED'
-    | 'ADMIN_ANNOUNCEMENT'
-    | (string & {});
+    | 'ADMIN_ANNOUNCEMENT';
   category?: 'booking' | 'payment' | 'chat' | 'announcement' | 'system';
   bookingId?: string;
   orderNumber?: string;
   read: boolean;
   timestamp?: string;
-  soundType?: 'chime' | 'urgent_ring' | 'silent';
+  soundType: 'chime' | 'urgent_ring' | 'silent';
   actionUrl?: string;
   actionTab?: string;
 }

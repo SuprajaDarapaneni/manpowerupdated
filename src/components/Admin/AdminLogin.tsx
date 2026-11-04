@@ -173,46 +173,6 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({
                 </>
               )}
             </button>
-
-            {/* Quick Mobile Apps Preview Launchers (ONLY shown when developer mode is enabled for testing) */}
-            {(showPreviews || devUnlocked) && (
-              <div className="pt-3 border-t border-[#202124]/10 space-y-2 animate-fadeIn">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold text-[#202124] uppercase tracking-wider">
-                    Developer Cross-Check & Testing
-                  </span>
-                  <span className="text-[10px] font-bold bg-[#FFC928] text-[#202124] px-2 py-0.5 rounded-full">
-                    Preview Mode
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => onOpenPreview ? onOpenPreview('customer') : undefined}
-                    className="py-2.5 px-3 bg-[#FFC928] hover:bg-[#E5A900] text-[#202124] font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer border border-amber-300"
-                  >
-                    <Smartphone className="w-4 h-4 text-[#D71920]" />
-                    <span>Customer App</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onOpenPreview ? onOpenPreview('employee') : undefined}
-                    className="py-2.5 px-3 bg-[#D71920] hover:bg-[#A80F18] text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all cursor-pointer border border-[#FFC928]"
-                  >
-                    <Smartphone className="w-4 h-4 text-[#FFC928]" />
-                    <span>Employee App</span>
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => onOpenPreview ? onOpenPreview('dual') : undefined}
-                  className="w-full py-2.5 px-3 bg-linear-to-r from-[#D71920] via-[#E5A900] to-[#FFC928] hover:opacity-95 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
-                >
-                  <span className="bg-[#202124] text-[#FFC928] px-1.5 py-0.5 rounded text-[10px] font-mono">LIVE</span>
-                  <span>Launch Dual Side-by-Side Apps Simulator</span>
-                </button>
-              </div>
-            )}
           </form>
 
           {/* Credentials notice */}
