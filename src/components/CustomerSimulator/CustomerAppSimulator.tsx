@@ -150,8 +150,12 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     });
   }, []);
 
-  // Authentication State - Starts at Sign In Screen first
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Authentication State - Defaults to signed in for seamless production experience, remembers session
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem('manpower_customer_auth');
+    return stored !== null ? stored === 'true' : true;
+  });
   const [authScreen, setAuthScreen] = useState<CustomerAuthScreen>('sign-in');
   const [loginPhoneOrEmail, setLoginPhoneOrEmail] = useState('apex@logistics.in');
   const [loginPassword, setLoginPassword] = useState('Customer@2026');
@@ -213,6 +217,34 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     bookingId?: string;
     actionTab?: string;
   } | null>(null);
+
+  // Proactive Push Notification Permission & Token Binding on App Open
+  const [notificationPermissionPrompt, setNotificationPermissionPrompt] = useState(false);
+  const [pushTokenBound, setPushTokenBound] = useState<boolean>(() => {
+    return !!dataService.getBoundNotificationToken('c-1');
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        dataService.bindNotificationToken('c-1', 'customer').then(() => {
+          setPushTokenBound(true);
+        });
+      } else if (Notification.permission === 'default') {
+        const dismissed = sessionStorage.getItem('manpower_customer_notif_prompt_dismissed');
+        if (!dismissed) {
+          const timer = setTimeout(() => {
+            setNotificationPermissionPrompt(true);
+          }, 800);
+          return () => clearTimeout(timer);
+        }
+      }
+    } else {
+      dataService.bindNotificationToken('c-1', 'customer').then(() => {
+        setPushTokenBound(true);
+      });
+    }
+  }, [isAuthenticated]);
 
   // Authentic Payment Gateway Recharge States
   const [rechargeMethod, setRechargeMethod] = useState<'upi' | 'card' | 'netbanking'>('upi');
@@ -451,7 +483,6 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
 
     // 2. Centralized In-App & Push Notification Event listener
     const handleNotificationDispatched = (e: any) => {
-      if (!isAuthenticated) return;
       const notif = e.detail;
       if (!notif) return;
       if (notif.recipientRole === 'customer' || notif.recipientRole === 'all') {
@@ -460,6 +491,9 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
             playIncomingJobRingtone();
           } else {
             playNotificationSound();
+          }
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            try { navigator.vibrate([100, 50, 100]); } catch {}
           }
           showRealAppPush(
             notif.title,
@@ -478,11 +512,13 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
 
     // 3. Real-Time Firebase Firestore listener
     const unsubscribeFirebase = subscribeToFirebaseNotifications('customer', 'c-1', (notif) => {
-      if (!isAuthenticated) return;
       if (notif.soundType === 'urgent_ring') {
         playIncomingJobRingtone();
       } else {
         playNotificationSound();
+      }
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate([100, 50, 100]); } catch {}
       }
       showRealAppPush(
         notif.title,
@@ -494,10 +530,16 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       setUnreadNotifCount(dataService.getUnreadNotificationsCount('customer', 'c-1'));
     });
 
+    // 4. Reactive storage subscriber for immediate badge count sync
+    const unsubscribeStorage = dataService.subscribe(() => {
+      setUnreadNotifCount(dataService.getUnreadNotificationsCount('customer', 'c-1'));
+    });
+
     return () => {
       window.removeEventListener('manpowerlink_chat_message', handleChatMessage);
       window.removeEventListener('manpowerlink_notification_dispatched', handleNotificationDispatched);
       unsubscribeFirebase();
+      unsubscribeStorage();
     };
   }, [isAuthenticated]);
 
@@ -589,6 +631,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       if (loginPhoneOrEmail.trim() && loginPassword.length >= 6) {
         setIsAuthLoading(false);
         setIsAuthenticated(true);
+        localStorage.setItem('manpower_customer_auth', 'true');
         setActiveTab('home');
         triggerAppRingAlert('Welcome back! Signed in to ManPowerLink.');
       } else {
@@ -614,6 +657,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
     setTimeout(() => {
       setIsAuthLoading(false);
       setIsAuthenticated(true);
+      localStorage.setItem('manpower_customer_auth', 'true');
       setActiveTab('home');
       triggerAppRingAlert('Employer Account Created successfully!');
     }, 500);
@@ -641,6 +685,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       description: 'Are you sure you want to sign out from your Customer account?',
       onConfirm: () => {
         setIsAuthenticated(false);
+        localStorage.setItem('manpower_customer_auth', 'false');
         setAuthScreen('sign-in');
         setAuthError(null);
         setPendingConfirmAction(null);
@@ -759,6 +804,7 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
       setIsDeletingAccount(false);
       setShowDeleteAccountModal(false);
       setIsAuthenticated(false);
+      localStorage.setItem('manpower_customer_auth', 'false');
       setAuthScreen('sign-in');
       setAuthError('Your employer account and all company telemetry data have been permanently erased.');
     }, 800);
@@ -986,19 +1032,37 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
             <div className="absolute top-2 left-2 right-2 z-50 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
               <div
                 onClick={() => {
-                  if (pushBanner.actionTab === 'messages' || pushBanner.type === 'system' || pushBanner.title.includes('Message') || pushBanner.message.includes('Message')) {
+                  const t = (pushBanner.title || '').toLowerCase();
+                  const m = (pushBanner.message || '').toLowerCase();
+                  let destTab: CustomerTab = 'home';
+                  let destName = 'Home';
+
+                  if (pushBanner.actionTab === 'messages' || pushBanner.type === 'system' || t.includes('message') || m.includes('message') || t.includes('chat')) {
                     if (pushBanner.bookingId) setActiveChatBookingId(pushBanner.bookingId);
-                    navigateToTab('messages');
-                  } else if (pushBanner.actionTab === 'profile' || pushBanner.type === 'payment' || pushBanner.title.includes('Wallet') || pushBanner.title.includes('Payment') || pushBanner.title.includes('Payout')) {
-                    navigateToTab('profile');
+                    destTab = 'messages';
+                    destName = 'Realtime Chat';
+                  } else if (pushBanner.actionTab === 'profile' || pushBanner.type === 'payment' || t.includes('wallet') || t.includes('payment') || t.includes('payout') || t.includes('upi') || m.includes('upi')) {
+                    destTab = 'profile';
+                    destName = 'Prepaid Wallet & Payments';
+                  } else if (pushBanner.actionTab === 'home' || t.includes('dispatch') || t.includes('offer') || t.includes('monsoon') || t.includes('manpower')) {
+                    destTab = 'home';
+                    destName = 'Post Job / Labor Radar';
                   } else {
                     if (pushBanner.bookingId) {
                       setActiveBookingId(pushBanner.bookingId);
                       const target = bookings.find((b) => b.id === pushBanner.bookingId);
                       if (target) setSelectedBookingForTimeline(target);
                     }
-                    navigateToTab('bookings');
+                    destTab = 'bookings';
+                    destName = 'Active Bookings';
                   }
+
+                  if (!isAuthenticated) {
+                    setIsAuthenticated(true);
+                    localStorage.setItem('manpower_customer_auth', 'true');
+                  }
+                  navigateToTab(destTab);
+                  triggerAppRingAlert(`➔ Opened ${destName}`);
                   setPushBanner(null);
                 }}
                 className="bg-[#1E1F23]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-2xl border border-[#FFC928]/40 flex items-start gap-3 cursor-pointer hover:bg-[#1E1F23] transition-colors"
@@ -1015,10 +1079,18 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                   </div>
                   <h4 className="text-xs font-bold text-white line-clamp-1 mt-0.5">{pushBanner.title}</h4>
                   <p className="text-[11px] text-white/80 line-clamp-2 leading-snug mt-0.5">{pushBanner.message}</p>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-emerald-400">
+                      Tap to open ➔
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setPushBanner(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPushBanner(null);
+                  }}
                   className="text-white/40 hover:text-white p-1 text-xs shrink-0 cursor-pointer"
                 >
                   ✕
@@ -1034,6 +1106,68 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 <Volume2 className="w-3.5 h-3.5 text-white animate-pulse" />
               </div>
               <span className="flex-1">{activeAlertToast}</span>
+            </div>
+          )}
+
+          {/* Proactive Notification Permission Prompt (On App Open) */}
+          {notificationPermissionPrompt && (
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl p-5 max-w-xs w-full shadow-2xl border-2 border-[#FFC928] text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D71920] to-[#FFC928] mx-auto flex items-center justify-center shadow-lg shadow-red-500/20">
+                  <Bell className="w-7 h-7 text-white animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[#202124]">Allow Push Notifications?</h3>
+                  <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
+                    Stay updated in real time with instant shift alerts, worker GPS radar arrival, attendance OTP verification, and payment receipts.
+                  </p>
+                </div>
+                
+                <div className="bg-amber-50 rounded-xl p-2.5 text-[10px] text-amber-900 border border-amber-200/60 flex items-center gap-2 text-left">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Real-time delivery for vital worksite operations only. No spam.</span>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setNotificationPermissionPrompt(false);
+                      sessionStorage.setItem('manpower_customer_notif_prompt_dismissed', 'true');
+                      try {
+                        await dataService.requestPushPermissionAndBind('c-1', 'customer');
+                        setPushTokenBound(true);
+                        dataService.addNotification({
+                          recipientId: 'c-1',
+                          recipientRole: 'customer',
+                          title: '🔔 Push Notifications Active',
+                          message: 'Push alerts & device token bound successfully. Real-time worksite and worker updates are active.',
+                          eventType: 'SYSTEM_ALERT',
+                          category: 'announcement',
+                          actionTab: 'bookings',
+                          read: false,
+                        });
+                        triggerAppRingAlert('✅ Notifications Allowed & Device Token Bound!');
+                      } catch (e) {
+                        console.warn(e);
+                      }
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#D71920] to-[#E62E05] text-white text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                  >
+                    Allow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotificationPermissionPrompt(false);
+                      sessionStorage.setItem('manpower_customer_notif_prompt_dismissed', 'true');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Later
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2159,20 +2293,32 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  {/* Notification Center Bell */}
-                  <button
-                    type="button"
-                    onClick={() => setShowNotificationCenter(true)}
-                    className="relative p-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all cursor-pointer shadow-2xs border border-white/20"
-                    title="Worksite & Booking Notifications"
-                  >
-                    <Bell className="w-3.5 h-3.5 text-[#FFC928]" />
-                    {unreadNotifCount > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] rounded-full bg-[#FFC928] text-[#202124] text-[9px] font-black flex items-center justify-center px-0.5 border border-[#D71920]">
-                        {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-                      </span>
+                  {/* Notification Center Bell & Device Token Badge */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowNotificationCenter(true)}
+                      className="relative p-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white transition-all cursor-pointer shadow-2xs border border-white/20"
+                      title="Worksite & Booking Notifications"
+                    >
+                      <Bell className="w-3.5 h-3.5 text-[#FFC928]" />
+                      {unreadNotifCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] rounded-full bg-[#FFC928] text-[#202124] text-[9px] font-black flex items-center justify-center px-0.5 border border-[#D71920]">
+                          {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                        </span>
+                      )}
+                    </button>
+                    {!pushTokenBound && (
+                      <button
+                        type="button"
+                        onClick={() => setNotificationPermissionPrompt(true)}
+                        className="text-[9px] font-black text-[#202124] bg-[#FFC928] hover:bg-[#FFE082] px-1.5 py-0.5 rounded-md cursor-pointer transition-colors shadow-2xs animate-pulse"
+                        title="Click to allow real push notifications"
+                      >
+                        Enable
+                      </button>
                     )}
-                  </button>
+                  </div>
 
                   {/* Customer Wallet Balance Chip */}
                   <button
@@ -3005,8 +3151,8 @@ export const CustomerAppSimulator: React.FC<CustomerAppSimulatorProps> = ({
                     setActiveTab('messages');
                   } else if (tab === 'profile' || tab === 'wallet' || tab === 'payment') {
                     setActiveTab('profile');
-                  } else if (tab === 'post-job') {
-                    setActiveTab('post-job');
+                  } else if (tab === 'home' || tab === 'post-job') {
+                    setActiveTab('home');
                   } else {
                     if (bookingId) {
                       setActiveBookingId(bookingId);

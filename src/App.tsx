@@ -249,9 +249,9 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-white">Customer App Preview (Employer)</span>
+                <span className="font-bold text-sm text-white">Customer Mobile App (Employer)</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFC928] text-[#202124]">
-                  ACTIVE
+                  LIVE ACTIVE
                 </span>
               </div>
               <p className="text-[10px] text-white/50">Post Job, Interactive GPS Map, Radar Broadcast, Direct Payment</p>
@@ -318,9 +318,9 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-white">Employee App Preview (Worker)</span>
+                <span className="font-bold text-sm text-white">Employee Mobile App (Worker)</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#D71920] text-white">
-                  ACTIVE
+                  LIVE ACTIVE
                 </span>
               </div>
               <p className="text-[10px] text-white/50">Duty Radar, Bidding, Geofence GPS Arrival, OTP, Wallet Top-Up</p>
@@ -386,9 +386,9 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm text-white">Dual Mobile Apps Simulation</span>
+                <span className="font-bold text-sm text-white">Dual Live Mobile Apps</span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-[#FFC928] text-[#202124]">
-                  LIVE RADAR
+                  LIVE REAL-TIME
                 </span>
               </div>
               <p className="text-[10px] text-white/50">Side-by-side Customer & Employee 10-Step Workflow</p>

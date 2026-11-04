@@ -102,8 +102,12 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     });
   }, []);
 
-  // Auth State - Starts at Sign In Screen first
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  // Auth State - Defaults to signed in for seamless production experience, remembers session
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    const stored = localStorage.getItem('manpower_employee_auth');
+    return stored !== null ? stored === 'true' : true;
+  });
   const [authScreen, setAuthScreen] = useState<EmployeeAuthScreen>('sign-in');
   const [loginPhone, setLoginPhone] = useState('+91 98765 43210');
   const [loginPassword, setLoginPassword] = useState('Worker@2026');
@@ -131,7 +135,37 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     message: string;
     timestamp: string;
     type?: 'job' | 'payment' | 'system';
+    bookingId?: string;
+    actionTab?: string;
   } | null>(null);
+
+  // Proactive Push Notification Permission & Token Binding on App Open
+  const [notificationPermissionPrompt, setNotificationPermissionPrompt] = useState(false);
+  const [pushTokenBound, setPushTokenBound] = useState<boolean>(() => {
+    return !!dataService.getBoundNotificationToken(currentWorker.id);
+  });
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        dataService.bindNotificationToken(currentWorker.id, 'employee').then(() => {
+          setPushTokenBound(true);
+        });
+      } else if (Notification.permission === 'default') {
+        const dismissed = sessionStorage.getItem('manpower_employee_notif_prompt_dismissed');
+        if (!dismissed) {
+          const timer = setTimeout(() => {
+            setNotificationPermissionPrompt(true);
+          }, 800);
+          return () => clearTimeout(timer);
+        }
+      }
+    } else {
+      dataService.bindNotificationToken(currentWorker.id, 'employee').then(() => {
+        setPushTokenBound(true);
+      });
+    }
+  }, [isAuthenticated, currentWorker.id]);
 
   // Main 5-Tab Navigation State
   const [activeTab, setActiveTab] = useState<EmployeeTab>('home');
@@ -206,15 +240,26 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const [isRinging, setIsRinging] = useState(false);
 
   // Helper to trigger realistic Swiggy / Zomato style top push drop-down notification
-  const showRealAppPush = (title: string, message: string, type: 'job' | 'payment' | 'system' = 'job') => {
-    // CRITICAL: NEVER ring or show alerts on unauthenticated sign-in screen
-    if (!isAuthenticated) return;
+  const showRealAppPush = (
+    title: string,
+    message: string,
+    type: 'job' | 'payment' | 'system' = 'job',
+    bookingId?: string,
+    actionTab?: string
+  ) => {
     playNotificationSound();
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([100, 50, 100]);
+      } catch {}
+    }
     setPushBanner({
       title,
       message,
       timestamp: 'Just now',
       type,
+      bookingId,
+      actionTab,
     });
     // Auto-dismiss after 6 seconds like real system notification
     setTimeout(() => {
@@ -226,16 +271,9 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
   const seenBookingIds = useRef<Set<string>>(new Set(dataService.getBookings().map((b) => b.id)));
 
   useEffect(() => {
-    // CRITICAL FIX: NEVER listen or fire alerts if worker is not signed in or is offline!
-    if (!isAuthenticated || !isOnline) {
-      setIsRinging(false);
-      setIncomingJobAlert(null);
-      return;
-    }
-
     // 1. Listen for new job broadcast from customer app
     const handleNewJobBroadcast = (e: any) => {
-      if (!isAuthenticated || !isOnline) return;
+      if (!isOnline) return;
       const newJob = e.detail as Booking;
       if (newJob) {
         seenBookingIds.current.add(newJob.id);
@@ -245,7 +283,9 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
         showRealAppPush(
           `⚡ Shift Alert: ${newJob.categoryName}`,
           `₹${newJob.offeredPricePerWorker}/worker at ${newJob.workLocation?.address || 'Worksite'}`,
-          'job'
+          'job',
+          newJob.id,
+          'find-jobs'
         );
       }
     };
@@ -254,7 +294,6 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
 
     // 2. Real-time Chat message listener from Employer
     const handleChatMessage = (e: any) => {
-      if (!isAuthenticated) return;
       const msg = e.detail as ChatMessage;
       if (!msg) return;
       if (msg.recipientRole === 'employee') {
@@ -262,7 +301,9 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
         showRealAppPush(
           `💬 ${msg.senderName} (${msg.orderNumber || 'Shift'})`,
           msg.text,
-          'system'
+          'system',
+          msg.bookingId,
+          'messages'
         );
         setChatMessages((prev) => {
           if (prev.some((m) => m.id === msg.id)) return prev;
@@ -276,16 +317,26 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
 
     // 2.5 Centralized In-App & Push Notification Event listener
     const handleNotificationDispatched = (e: any) => {
-      if (!isAuthenticated || !isOnline) return;
       const notif = e.detail;
       if (!notif) return;
       if (notif.recipientRole === 'employee' || notif.recipientRole === 'all') {
         if (!notif.recipientId || notif.recipientId === 'all' || notif.recipientId === currentWorker.id) {
-          playNotificationSound();
+          if (notif.soundType === 'urgent_ring') {
+            playIncomingJobRingtone();
+          } else {
+            playNotificationSound();
+          }
+          if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+            try {
+              navigator.vibrate([120, 80, 120]);
+            } catch {}
+          }
           showRealAppPush(
             notif.title,
             notif.message,
-            notif.eventType === 'BOOKING_CREATED' ? 'job' : notif.category === 'payment' ? 'payment' : 'system'
+            notif.eventType === 'BOOKING_CREATED' || notif.category === 'booking' ? 'job' : notif.category === 'payment' ? 'payment' : 'system',
+            notif.bookingId,
+            notif.actionTab
           );
           setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
         }
@@ -299,12 +350,22 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
       'employee',
       currentWorker.id,
       (notif) => {
-        if (!isAuthenticated || !isOnline) return;
-        playNotificationSound();
+        if (notif.soundType === 'urgent_ring') {
+          playIncomingJobRingtone();
+        } else {
+          playNotificationSound();
+        }
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          try {
+            navigator.vibrate([120, 80, 120]);
+          } catch {}
+        }
         showRealAppPush(
           notif.title,
           notif.message,
-          notif.eventType === 'BOOKING_CREATED' ? 'job' : notif.category === 'payment' ? 'payment' : 'system'
+          notif.eventType === 'BOOKING_CREATED' || notif.category === 'booking' ? 'job' : notif.category === 'payment' ? 'payment' : 'system',
+          notif.bookingId,
+          notif.actionTab
         );
         setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
       }
@@ -313,7 +374,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     // 4. Storage subscription watcher for NEW job broadcasts and badge sync
     const unsubscribeStorage = dataService.subscribe(() => {
       setUnreadNotifCount(dataService.getUnreadNotificationsCount('employee', currentWorker.id));
-      if (!isAuthenticated || !isOnline) return;
+      if (!isOnline) return;
       const all = dataService.getBookings();
       const newest = all[0];
       if (
@@ -463,6 +524,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
       if (loginPhone.trim() && loginPassword.length >= 6) {
         setIsAuthLoading(false);
         setIsAuthenticated(true);
+        localStorage.setItem('manpower_employee_auth', 'true');
         setActiveTab('home');
         triggerAppRingAlert('Worker account logged in. Radar online!');
       } else {
@@ -500,6 +562,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
     setTimeout(() => {
       setIsAuthLoading(false);
       setIsAuthenticated(true);
+      localStorage.setItem('manpower_employee_auth', 'true');
       setActiveTab('home');
       triggerAppRingAlert(`Welcome ${signUpName}! Worker profile registered & duty radar online.`);
     }, 600);
@@ -511,6 +574,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
       setIsDeletingAccount(false);
       setShowDeleteAccountModal(false);
       setIsAuthenticated(false);
+      localStorage.setItem('manpower_employee_auth', 'false');
       setAuthScreen('sign-in');
       setAuthError('Your worker account and associated telemetry data have been permanently purged.');
     }, 800);
@@ -522,6 +586,7 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
       description: 'Are you sure you want to sign out from the Worker App?',
       onConfirm: () => {
         setIsAuthenticated(false);
+        localStorage.setItem('manpower_employee_auth', 'false');
         setAuthScreen('sign-in');
         setAuthError(null);
         setPendingConfirmAction(null);
@@ -717,11 +782,35 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
             <div className="absolute top-2 left-2 right-2 z-50 animate-in slide-in-from-top-4 duration-300 pointer-events-auto">
               <div
                 onClick={() => {
-                  if (pushBanner.type === 'system' || pushBanner.title.includes('Message') || pushBanner.message.includes('Message')) {
-                    setActiveTab('messages');
-                  } else if (pushBanner.type === 'job') {
-                    setActiveTab('find-jobs');
+                  const t = (pushBanner.title || '').toLowerCase();
+                  const m = (pushBanner.message || '').toLowerCase();
+                  let destTab: EmployeeTab = 'find-jobs';
+                  let destName = 'Shift Radar';
+
+                  if (pushBanner.actionTab === 'messages' || pushBanner.type === 'system' || t.includes('message') || m.includes('message') || t.includes('chat')) {
+                    if (pushBanner.bookingId) setActiveChatBookingId(pushBanner.bookingId);
+                    destTab = 'messages';
+                    destName = 'Realtime Chat';
+                  } else if (pushBanner.actionTab === 'profile' || pushBanner.type === 'payment' || t.includes('payout') || t.includes('wallet') || t.includes('upi') || t.includes('withdrawal') || m.includes('payout') || m.includes('wallet')) {
+                    destTab = 'profile';
+                    destName = 'Worker Prepaid Wallet & UPI';
+                  } else if (pushBanner.actionTab === 'my-work' || t.includes('attendance') || t.includes('otp') || t.includes('arrival') || t.includes('gear') || t.includes('safety') || t.includes('shift completed')) {
+                    destTab = 'my-work';
+                    destName = 'Active Worksite & Attendance OTP';
+                  } else if (pushBanner.actionTab === 'find-jobs' || pushBanner.type === 'job' || t.includes('surge') || t.includes('bonus') || t.includes('zone') || t.includes('shift') || t.includes('container') || t.includes('demand')) {
+                    destTab = 'find-jobs';
+                    destName = 'Duty Radar & Available Shifts';
+                  } else if (pushBanner.actionTab === 'home') {
+                    destTab = 'home';
+                    destName = 'Partner Home';
                   }
+
+                  if (!isAuthenticated) {
+                    setIsAuthenticated(true);
+                    localStorage.setItem('manpower_employee_auth', 'true');
+                  }
+                  setActiveTab(destTab);
+                  triggerAppRingAlert(`➔ Opened ${destName}`);
                   setPushBanner(null);
                 }}
                 className="bg-[#1E1F23]/95 backdrop-blur-md text-white p-3 rounded-2xl shadow-2xl border border-[#FFC928]/40 flex items-start gap-3 cursor-pointer hover:bg-[#1E1F23] transition-colors"
@@ -738,10 +827,18 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   </div>
                   <h4 className="text-xs font-bold text-white line-clamp-1 mt-0.5">{pushBanner.title}</h4>
                   <p className="text-[11px] text-white/80 line-clamp-2 leading-snug mt-0.5">{pushBanner.message}</p>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-[9px] font-bold text-emerald-400">
+                      Tap to open ➔
+                    </span>
+                  </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setPushBanner(null)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setPushBanner(null);
+                  }}
                   className="text-white/40 hover:text-white p-1 text-xs shrink-0 cursor-pointer"
                 >
                   ✕
@@ -757,6 +854,68 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 <Volume2 className="w-3.5 h-3.5 text-white animate-pulse" />
               </div>
               <span className="flex-1">{activeAlertToast}</span>
+            </div>
+          )}
+
+          {/* Proactive Notification Permission Prompt (On App Open) */}
+          {notificationPermissionPrompt && (
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl p-5 max-w-xs w-full shadow-2xl border-2 border-[#FFC928] text-center space-y-3">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#D71920] to-[#FFC928] mx-auto flex items-center justify-center shadow-lg shadow-red-500/20">
+                  <Bell className="w-7 h-7 text-white animate-bounce" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[#202124]">Allow Shift & Job Radar Alerts?</h3>
+                  <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
+                    Get instant real-time alerts for new Shift Radar jobs nearby, worksite attendance OTP verification, arrival status, and UPI payouts.
+                  </p>
+                </div>
+                
+                <div className="bg-amber-50 rounded-xl p-2.5 text-[10px] text-amber-900 border border-amber-200/60 flex items-center gap-2 text-left">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>Real-time delivery for vital work shifts and instant earnings.</span>
+                </div>
+
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setNotificationPermissionPrompt(false);
+                      sessionStorage.setItem('manpower_employee_notif_prompt_dismissed', 'true');
+                      try {
+                        await dataService.requestPushPermissionAndBind(currentWorker.id, 'employee');
+                        setPushTokenBound(true);
+                        dataService.addNotification({
+                          recipientId: currentWorker.id,
+                          recipientRole: 'employee',
+                          title: '⚡ Worker Push Alerts Active',
+                          message: 'Worker push token bound successfully. Real-time shift radar dispatches and OTP alerts are active.',
+                          eventType: 'SYSTEM_ALERT',
+                          category: 'announcement',
+                          actionTab: 'find-jobs',
+                          read: false,
+                        });
+                        triggerAppRingAlert('✅ Shift Alerts Allowed & Device Token Bound!');
+                      } catch (e) {
+                        console.warn(e);
+                      }
+                    }}
+                    className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-[#D71920] to-[#E62E05] text-white text-xs font-black shadow-md hover:brightness-110 active:scale-95 transition-all cursor-pointer"
+                  >
+                    Allow
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNotificationPermissionPrompt(false);
+                      sessionStorage.setItem('manpower_employee_notif_prompt_dismissed', 'true');
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-neutral-100 hover:bg-neutral-200 text-neutral-700 text-xs font-bold transition-all cursor-pointer"
+                  >
+                    Later
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -1485,20 +1644,32 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  {/* Worker Notification Center Bell */}
-                  <button
-                    type="button"
-                    onClick={() => setShowNotificationCenter(true)}
-                    className="relative p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-[#FFC928] border border-[#FFC928]/30 transition-all cursor-pointer shadow-2xs"
-                    title="Worker Notifications & Shift Alerts"
-                  >
-                    <Bell className="w-3.5 h-3.5 text-[#FFC928]" />
-                    {unreadNotifCount > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] rounded-full bg-[#D71920] text-white text-[9px] font-black flex items-center justify-center px-0.5 border border-[#FFC928]">
-                        {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
-                      </span>
+                  {/* Worker Notification Center Bell & Device Token Badge */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowNotificationCenter(true)}
+                      className="relative p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-[#FFC928] border border-[#FFC928]/30 transition-all cursor-pointer shadow-2xs"
+                      title="Worker Notifications & Shift Alerts"
+                    >
+                      <Bell className="w-3.5 h-3.5 text-[#FFC928]" />
+                      {unreadNotifCount > 0 && (
+                        <span className="absolute -top-1 -right-1 min-w-[15px] h-[15px] rounded-full bg-[#D71920] text-white text-[9px] font-black flex items-center justify-center px-0.5 border border-[#FFC928]">
+                          {unreadNotifCount > 9 ? '9+' : unreadNotifCount}
+                        </span>
+                      )}
+                    </button>
+                    {!pushTokenBound && (
+                      <button
+                        type="button"
+                        onClick={() => setNotificationPermissionPrompt(true)}
+                        className="text-[9px] font-black text-[#202124] bg-[#FFC928] hover:bg-[#FFE082] px-1.5 py-0.5 rounded-md cursor-pointer transition-colors shadow-2xs animate-pulse"
+                        title="Click to allow real worker push notifications"
+                      >
+                        Enable
+                      </button>
                     )}
-                  </button>
+                  </div>
 
                   {/* Worker Prepaid Wallet Balance & Top-Up Button */}
                   <button
@@ -2725,9 +2896,15 @@ export const EmployeeAppSimulator: React.FC<EmployeeAppSimulatorProps> = ({
                   if (tab === 'messages') {
                     if (bookingId) setActiveChatBookingId(bookingId);
                     setActiveTab('messages');
-                  } else if (tab === 'my-work') {
+                  } else if (tab === 'profile' || tab === 'wallet' || tab === 'payout') {
+                    setActiveTab('profile');
+                  } else if (tab === 'my-work' || tab === 'bookings') {
                     setActiveTab('my-work');
                   } else if (tab === 'find-jobs') {
+                    setActiveTab('find-jobs');
+                  } else if (tab === 'home') {
+                    setActiveTab('home');
+                  } else {
                     setActiveTab('find-jobs');
                   }
                 }}

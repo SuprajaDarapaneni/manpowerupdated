@@ -202,7 +202,7 @@ export const DualAppsPreview: React.FC<DualAppsPreviewProps> = ({
             <span className="text-xs text-[#686868]">Customer & Employee Live Walkthrough</span>
           </div>
           <h1 className="text-lg font-bold text-[#202124] mt-1">
-            End-to-End Operational Lifecycle Simulator
+            End-to-End Operational Live Experience
           </h1>
           <p className="text-xs text-[#686868] mt-0.5 max-w-2xl">
             Watch the full 10 steps in action: Employer Request ➔ Employee Ring Alert ➔ Accept ➔ Reach Worksite ➔ Start OTP ➔ Work Hold/Resume ➔ Work End ➔ Payment ➔ Commission ➔ Final Report.

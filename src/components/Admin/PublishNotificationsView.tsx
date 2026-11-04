@@ -30,6 +30,8 @@ interface TemplateItem {
   category: 'booking' | 'payment' | 'announcement' | 'chat';
   soundType: 'chime' | 'urgent_ring';
   badge: string;
+  actionTab: 'find-jobs' | 'my-work' | 'profile' | 'messages' | 'home' | 'bookings';
+  targetDestination: string;
 }
 
 const NOTIFICATION_TEMPLATES: TemplateItem[] = [
@@ -42,6 +44,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'booking',
     soundType: 'urgent_ring',
     badge: 'High Demand',
+    actionTab: 'find-jobs',
+    targetDestination: 'Shift Radar & Surge Shifts',
   },
   {
     id: 'emp-payout',
@@ -51,6 +55,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'payment',
     soundType: 'chime',
     badge: 'Wallet Payout',
+    actionTab: 'profile',
+    targetDestination: 'Worker Wallet & Instant UPI Payout',
   },
   {
     id: 'emp-attendance',
@@ -60,6 +66,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'booking',
     soundType: 'chime',
     badge: 'Attendance Rule',
+    actionTab: 'my-work',
+    targetDestination: 'Worksite Shift & Attendance Timer',
   },
   {
     id: 'emp-safety',
@@ -69,6 +77,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'announcement',
     soundType: 'chime',
     badge: 'Safety First',
+    actionTab: 'my-work',
+    targetDestination: 'Worksite Guidelines & Safety Gear',
   },
   {
     id: 'emp-zones',
@@ -78,6 +88,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'booking',
     soundType: 'urgent_ring',
     badge: 'New Zone',
+    actionTab: 'find-jobs',
+    targetDestination: 'Duty Radar & Available Orders',
   },
 
   // Customer / Employer Templates
@@ -89,6 +101,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'booking',
     soundType: 'chime',
     badge: 'Instant Manpower',
+    actionTab: 'home',
+    targetDestination: 'Post Job & Labor Radar',
   },
   {
     id: 'cust-upi',
@@ -98,6 +112,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'payment',
     soundType: 'chime',
     badge: 'Payment Feature',
+    actionTab: 'profile',
+    targetDestination: 'Online Payment Gateway & Wallet Recharge',
   },
   {
     id: 'cust-safety',
@@ -107,6 +123,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'announcement',
     soundType: 'chime',
     badge: 'Safety Assurance',
+    actionTab: 'bookings',
+    targetDestination: 'Active Bookings & OTP Verification',
   },
   {
     id: 'cust-monsoon',
@@ -116,6 +134,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'booking',
     soundType: 'chime',
     badge: 'Specialized Labor',
+    actionTab: 'home',
+    targetDestination: 'Post Job (Specialized Helpers)',
   },
   {
     id: 'cust-offer',
@@ -125,6 +145,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'announcement',
     soundType: 'chime',
     badge: 'Promo Offer',
+    actionTab: 'home',
+    targetDestination: 'Post Job (10% Discount Applied)',
   },
 
   // Both / Universal Templates
@@ -136,6 +158,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'announcement',
     soundType: 'chime',
     badge: 'System Notice',
+    actionTab: 'home',
+    targetDestination: 'Platform Home & Real-Time Tracking',
   },
   {
     id: 'all-festive',
@@ -145,6 +169,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'announcement',
     soundType: 'urgent_ring',
     badge: 'Festive Surge',
+    actionTab: 'find-jobs',
+    targetDestination: 'Duty Radar & Festive Shifts',
   },
   {
     id: 'all-support',
@@ -154,6 +180,8 @@ const NOTIFICATION_TEMPLATES: TemplateItem[] = [
     category: 'announcement',
     soundType: 'chime',
     badge: 'Helpline',
+    actionTab: 'profile',
+    targetDestination: '24/7 Helpline & WhatsApp Support',
   },
 ];
 
@@ -163,6 +191,8 @@ export const PublishNotificationsView: React.FC = () => {
   const [message, setMessage] = useState('');
   const [category, setCategory] = useState<'booking' | 'payment' | 'announcement' | 'chat'>('announcement');
   const [soundType, setSoundType] = useState<'chime' | 'urgent_ring'>('chime');
+  const [actionTab, setActionTab] = useState<'find-jobs' | 'my-work' | 'profile' | 'messages' | 'home' | 'bookings'>('home');
+  const [targetDestination, setTargetDestination] = useState<string>('Home Screen');
   const [isSending, setIsSending] = useState(false);
   const [sendSuccessMsg, setSendSuccessMsg] = useState<string | null>(null);
 
@@ -177,6 +207,8 @@ export const PublishNotificationsView: React.FC = () => {
     setMessage(tmpl.message);
     setCategory(tmpl.category);
     setSoundType(tmpl.soundType);
+    setActionTab(tmpl.actionTab);
+    setTargetDestination(tmpl.targetDestination);
 
     if (tmpl.soundType === 'urgent_ring') {
       playIncomingJobRingtone();
@@ -195,16 +227,26 @@ export const PublishNotificationsView: React.FC = () => {
     setIsSending(true);
 
     setTimeout(() => {
-      // Dispatch notification via dataService (which saves locally, mirrors to Firebase, and emits window event)
+      // Dispatch notification via dataService with destination actionTab
       const newNotif = dataService.addNotification({
         recipientId: 'all',
         recipientRole: selectedTarget,
         title: title.trim(),
         message: message.trim(),
-        eventType: 'ADMIN_ANNOUNCEMENT',
+        eventType:
+          category === 'payment'
+            ? 'PAYMENT_RECEIVED'
+            : category === 'chat'
+            ? 'CHAT_MESSAGE_RECEIVED'
+            : actionTab === 'my-work' || actionTab === 'bookings'
+            ? 'START_OTP_VERIFIED'
+            : actionTab === 'find-jobs'
+            ? 'BOOKING_CREATED'
+            : 'ADMIN_ANNOUNCEMENT',
         category,
         soundType,
         read: false,
+        actionTab,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
 
@@ -225,7 +267,7 @@ export const PublishNotificationsView: React.FC = () => {
           ? 'All Employers & Customers'
           : 'All Workers & Employees';
 
-      setSendSuccessMsg(`Notification successfully published and broadcasted to ${targetLabel}! Device push banners triggered.`);
+      setSendSuccessMsg(`Notification successfully published and broadcasted to ${targetLabel}! Device push banners and destination routing (➔ ${targetDestination}) triggered.`);
 
       // Clear input fields
       setTitle('');
@@ -496,9 +538,118 @@ export const PublishNotificationsView: React.FC = () => {
               </div>
             </div>
 
+            {/* Step 3.5: Destination Screen Target (Reacts on Tap) */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-bold text-slate-700">
+                  Tap Destination Screen <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  ➔ Opens: {targetDestination}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionTab('find-jobs');
+                    setTargetDestination('Shift Radar & Available Shifts');
+                  }}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    actionTab === 'find-jobs'
+                      ? 'border-[#D71920] bg-red-50/50 ring-2 ring-[#D71920]/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-slate-50'
+                  }`}
+                >
+                  <span className="text-xs font-bold text-[#202124] block">🔍 Shift Radar</span>
+                  <span className="text-[10px] text-slate-500">Find Jobs / Bidding</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionTab('my-work');
+                    setTargetDestination('Active Worksite & Attendance OTP');
+                  }}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    actionTab === 'my-work'
+                      ? 'border-[#D71920] bg-red-50/50 ring-2 ring-[#D71920]/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-slate-50'
+                  }`}
+                >
+                  <span className="text-xs font-bold text-[#202124] block">⏱️ Active Worksite</span>
+                  <span className="text-[10px] text-slate-500">Shift Timer & OTPs</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionTab('profile');
+                    setTargetDestination('Prepaid Wallet & UPI Payouts');
+                  }}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    actionTab === 'profile'
+                      ? 'border-[#D71920] bg-red-50/50 ring-2 ring-[#D71920]/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-slate-50'
+                  }`}
+                >
+                  <span className="text-xs font-bold text-[#202124] block">💳 Wallet & UPI</span>
+                  <span className="text-[10px] text-slate-500">Top-Up & Withdrawal</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionTab('home');
+                    setTargetDestination('Post Job / Home Dashboard');
+                  }}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    actionTab === 'home'
+                      ? 'border-[#D71920] bg-red-50/50 ring-2 ring-[#D71920]/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-slate-50'
+                  }`}
+                >
+                  <span className="text-xs font-bold text-[#202124] block">📝 Post Job / Home</span>
+                  <span className="text-[10px] text-slate-500">Employer Dispatch</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionTab('bookings');
+                    setTargetDestination('Customer Bookings & Orders');
+                  }}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    actionTab === 'bookings'
+                      ? 'border-[#D71920] bg-red-50/50 ring-2 ring-[#D71920]/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-slate-50'
+                  }`}
+                >
+                  <span className="text-xs font-bold text-[#202124] block">📋 Active Bookings</span>
+                  <span className="text-[10px] text-slate-500">Employer Shift Orders</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActionTab('messages');
+                    setTargetDestination('Realtime Chat & Support');
+                  }}
+                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    actionTab === 'messages'
+                      ? 'border-[#D71920] bg-red-50/50 ring-2 ring-[#D71920]/20'
+                      : 'border-slate-200 hover:border-slate-300 bg-slate-50'
+                  }`}
+                >
+                  <span className="text-xs font-bold text-[#202124] block">💬 Chat & Support</span>
+                  <span className="text-[10px] text-slate-500">Live Messages</span>
+                </button>
+              </div>
+            </div>
+
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-[11px] text-slate-400">
-                Audience: <strong className="text-slate-700 capitalize">{selectedTarget}</strong>
+              <span className="text-[11px] text-slate-500">
+                Audience: <strong className="text-slate-800 capitalize">{selectedTarget}</strong> &bull; Target: <strong className="text-emerald-700">{targetDestination}</strong>
               </span>
 
               <button
@@ -520,16 +671,16 @@ export const PublishNotificationsView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <Smartphone className="w-4 h-4 text-[#FFC928]" />
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
-                  Live Device Preview
+                  Live Device Push Preview
                 </span>
               </div>
               <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">
-                FCM REAL-TIME
+                REAL-TIME SYNC
               </span>
             </div>
 
             <p className="text-[11px] text-slate-400">
-              This is how the push notification banner appears at the top of the user&apos;s phone screen when published:
+              When clicked by worker or customer, app instantly navigates to <strong className="text-[#FFC928]">{targetDestination}</strong>:
             </p>
 
             {/* Mobile Push Toast Mockup */}
@@ -557,7 +708,7 @@ export const PublishNotificationsView: React.FC = () => {
 
               <div>
                 <h5 className="text-xs font-bold text-white leading-tight">
-                  {title || '🔥 High Demand Surge: 1.5x Wage Rate Active'}
+                  {title || '🔥 Demand Surge Bonus: 1.5x Wage Rate Active'}
                 </h5>
                 <p className="text-[11px] text-slate-300 mt-1 leading-snug">
                   {message || 'Earn up to 1.5x overtime wage on all warehouse and loading shifts today in Baikampady.'}
@@ -569,7 +720,9 @@ export const PublishNotificationsView: React.FC = () => {
                   <Volume2 className="w-3 h-3" />
                   <span>{soundType === 'urgent_ring' ? 'Urgent Ringtone' : 'Gentle Chime'}</span>
                 </span>
-                <span className="text-emerald-400 font-bold">Tap to Open</span>
+                <span className="text-emerald-400 font-bold bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-500/30">
+                  Tap opens ➔ {targetDestination}
+                </span>
               </div>
             </div>
 

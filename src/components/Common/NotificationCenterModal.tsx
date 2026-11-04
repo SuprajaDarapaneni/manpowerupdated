@@ -73,7 +73,31 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
     if (!notif.read) {
       dataService.markNotificationRead(notif.id);
     }
-    const targetTab = notif.actionTab || (notif.category === 'chat' || notif.eventType.includes('CHAT') ? 'messages' : 'bookings');
+
+    // Resolve exact destination tab based on audience role and notification parameters
+    let targetTab = notif.actionTab;
+    const t = (notif.title || '').toLowerCase();
+    const m = (notif.message || '').toLowerCase();
+
+    if (!targetTab) {
+      if (notif.category === 'chat' || notif.eventType.includes('CHAT') || t.includes('message') || m.includes('message')) {
+        targetTab = 'messages';
+      } else if (notif.category === 'payment' || notif.eventType.includes('PAYMENT') || notif.eventType.includes('PAYOUT') || t.includes('wallet') || t.includes('payout') || t.includes('upi')) {
+        targetTab = 'profile';
+      } else if (t.includes('attendance') || t.includes('otp') || t.includes('arrival') || t.includes('gear') || t.includes('safety') || t.includes('shift timer')) {
+        targetTab = effectiveRole === 'employee' ? 'my-work' : 'bookings';
+      } else if (t.includes('surge') || t.includes('bonus') || t.includes('zone') || t.includes('demand') || t.includes('dispatch') || t.includes('offer')) {
+        targetTab = effectiveRole === 'employee' ? 'find-jobs' : 'home';
+      } else {
+        targetTab = effectiveRole === 'employee' ? 'find-jobs' : 'bookings';
+      }
+    } else {
+      // Role-specific mapping adjustments
+      if (effectiveRole === 'employee' && (targetTab === 'bookings' || targetTab === 'home')) {
+        targetTab = t.includes('attendance') || t.includes('otp') || t.includes('work') ? 'my-work' : 'find-jobs';
+      }
+    }
+
     if (onNavigate) {
       onNavigate(targetTab, notif.bookingId);
       onClose();
@@ -81,6 +105,20 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
       onNavigateAction(notif.bookingId, targetTab);
       onClose();
     }
+  };
+
+  const getDestinationLabel = (notif: AppNotification) => {
+    const t = (notif.title || '').toLowerCase();
+    const m = (notif.message || '').toLowerCase();
+    const tab = notif.actionTab;
+
+    if (tab === 'messages' || notif.category === 'chat' || t.includes('message')) return 'Live Chat';
+    if (tab === 'profile' || notif.category === 'payment' || t.includes('wallet') || t.includes('payout') || t.includes('upi')) return 'Wallet & Payouts';
+    if (tab === 'my-work' || t.includes('attendance') || t.includes('otp') || t.includes('shift')) return 'Worksite Shift & OTP';
+    if (tab === 'find-jobs' || t.includes('surge') || t.includes('bonus') || t.includes('zone')) return 'Duty Radar / Shifts';
+    if (tab === 'bookings') return 'Active Bookings';
+    if (tab === 'home') return 'Home & Post Job';
+    return effectiveRole === 'employee' ? 'Duty Radar' : 'Bookings';
   };
 
   const getCategoryIcon = (notif: AppNotification) => {
@@ -235,17 +273,16 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                     </span>
                   </div>
                   <p className="text-[11px] text-slate-600 leading-snug line-clamp-2">{notif.message}</p>
-                  {notif.orderNumber && (
-                    <div className="mt-1.5 flex items-center gap-1.5">
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    {notif.orderNumber && (
                       <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 bg-slate-100 text-slate-700 rounded">
-                        {notif.orderNumber}
+                        #{notif.orderNumber}
                       </span>
-                      <span className="text-[9px] font-bold text-[#D71920] flex items-center gap-0.5 group-hover:underline">
-                        <span>View Details</span>
-                        <ArrowRight className="w-2.5 h-2.5" />
-                      </span>
-                    </div>
-                  )}
+                    )}
+                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-0.5">
+                      <span>➔ Opens {getDestinationLabel(notif)}</span>
+                    </span>
+                  </div>
                 </div>
                 {!notif.read && (
                   <span className="w-2 h-2 rounded-full bg-[#D71920] shrink-0 mt-2" title="Unread" />

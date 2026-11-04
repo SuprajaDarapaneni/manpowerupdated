@@ -606,18 +606,26 @@ export interface AppNotification {
   message: string;
   eventType:
     | 'BOOKING_CREATED'
+    | 'BOOKING_CONFIRMED'
     | 'MATCHING_STARTED'
     | 'BID_RECEIVED'
     | 'BID_ACCEPTED'
-    | 'CAPACITY_REACHED'
+    | 'WORKER_BID_SUBMITTED'
+    | 'CUSTOMER_ACCEPTED_BID'
+    | 'WORKER_ACCEPTED_JOB'
+    | 'WORKER_TRAVELLING'
     | 'WORKER_ARRIVED'
+    | 'WORKER_ARRIVED_GPS'
+    | 'CAPACITY_REACHED'
     | 'START_OTP_VERIFIED'
     | 'WORK_STARTED'
     | 'END_OTP_VERIFIED'
     | 'WORK_COMPLETED'
     | 'PAYMENT_RECEIVED'
     | 'PAYMENT_FAILED'
+    | 'WALLET_RECHARGED'
     | 'PAYOUT_REQUESTED'
+    | 'PAYOUT_APPROVED'
     | 'PAYOUT_CREDITED'
     | 'PAYOUT_REJECTED'
     | 'BOOKING_CANCELLED'
@@ -625,13 +633,14 @@ export interface AppNotification {
     | 'DISPUTE_OPENED'
     | 'DISPUTE_RESOLVED'
     | 'CHAT_MESSAGE_RECEIVED'
-    | 'ADMIN_ANNOUNCEMENT';
+    | 'ADMIN_ANNOUNCEMENT'
+    | (string & {});
   category?: 'booking' | 'payment' | 'chat' | 'announcement' | 'system';
   bookingId?: string;
   orderNumber?: string;
   read: boolean;
-  timestamp: string;
-  soundType: 'chime' | 'urgent_ring' | 'silent';
+  timestamp?: string;
+  soundType?: 'chime' | 'urgent_ring' | 'silent';
   actionUrl?: string;
   actionTab?: string;
 }

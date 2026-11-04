@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'services/local_asset_server.dart';
@@ -40,6 +41,16 @@ class _ManPowerLinkWorkerAppState extends State<ManPowerLinkWorkerApp> {
 
   Future<void> _startApp() async {
     try {
+      // Proactively request device location permission for real GPS on duty
+      try {
+        LocationPermission permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          await Geolocator.requestPermission();
+        }
+      } catch (e) {
+        debugPrint('Geolocation permission warning: $e');
+      }
+
       final port = await _server.start();
 
       final controller = WebViewController()

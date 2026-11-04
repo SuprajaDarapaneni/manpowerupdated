@@ -64,6 +64,13 @@ class _ManPowerLinkCustomerAppState extends State<ManPowerLinkCustomerApp> {
         debugPrint('Geolocation permission warning: $e');
       }
 
+      // Proactively request notification permission and bind FCM push token on app start
+      try {
+        await FCMService().initialize();
+      } catch (e) {
+        debugPrint('FCM initialization warning: $e');
+      }
+
       final port = await _server.start();
 
       final controller = WebViewController()

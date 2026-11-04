@@ -484,8 +484,49 @@ export const initialChatMessages: ChatMessage[] = [
   },
 ];
 
+let syncChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    syncChannel = new BroadcastChannel('manpowerlink_broadcast_bus');
+  } catch (err) {
+    console.warn('BroadcastChannel unavailable:', err);
+  }
+}
+
 class DataService {
   private listeners: (() => void)[] = [];
+
+  constructor() {
+    if (typeof window !== 'undefined') {
+      // 1. Cross-tab storage event synchronization
+      window.addEventListener('storage', (event) => {
+        if (
+          event.key === STORAGE_KEYS.NOTIFICATIONS ||
+          event.key === STORAGE_KEYS.BOOKINGS ||
+          event.key === STORAGE_KEYS.WORKERS ||
+          event.key === STORAGE_KEYS.CUSTOMERS ||
+          event.key === STORAGE_KEYS.CHAT_MESSAGES
+        ) {
+          this.notify();
+        }
+      });
+
+      // 2. Cross-tab BroadcastChannel listener
+      if (syncChannel) {
+        syncChannel.onmessage = (event) => {
+          if (event.data?.type === 'NOTIFICATION_DISPATCHED') {
+            const notif = event.data.payload;
+            window.dispatchEvent(
+              new CustomEvent('manpowerlink_notification_dispatched', { detail: notif })
+            );
+            this.notify();
+          } else if (event.data?.type === 'DATA_MUTATED') {
+            this.notify();
+          }
+        };
+      }
+    }
+  }
 
   private getItem<T>(key: string, defaultValue: T): T {
     try {
@@ -1281,47 +1322,222 @@ class DataService {
 
   public addNotification(notification: Omit<AppNotification, 'id'>): AppNotification {
     const list = this.getNotifications();
+    
+    // Auto-infer intelligent action destination tab if not explicitly specified
+    let inferredActionTab = notification.actionTab;
+    if (!inferredActionTab) {
+      const t = (notification.title || '').toLowerCase();
+      const m = (notification.message || '').toLowerCase();
+      const cat = notification.category || '';
+      const evt = notification.eventType || '';
+
+      if (cat === 'chat' || evt.includes('CHAT') || t.includes('message') || m.includes('message')) {
+        inferredActionTab = 'messages';
+      } else if (cat === 'payment' || evt.includes('PAYMENT') || evt.includes('PAYOUT') || evt.includes('WALLET') || t.includes('wallet') || t.includes('upi') || t.includes('payout')) {
+        inferredActionTab = 'profile';
+      } else if (t.includes('attendance') || t.includes('otp') || t.includes('geofence') || t.includes('arrival') || t.includes('gear') || t.includes('worksite')) {
+        inferredActionTab = notification.recipientRole === 'employee' ? 'my-work' : 'bookings';
+      } else if (t.includes('surge') || t.includes('bonus') || t.includes('zone') || t.includes('demand') || t.includes('dispatch') || t.includes('offer')) {
+        inferredActionTab = notification.recipientRole === 'employee' ? 'find-jobs' : 'home';
+      } else {
+        inferredActionTab = notification.recipientRole === 'employee' ? 'find-jobs' : 'bookings';
+      }
+    }
+
     const newNotif: AppNotification = {
       ...notification,
       id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-      timestamp: notification.timestamp || new Date().toLocaleString(),
+      timestamp: notification.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       category: notification.category || (
         notification.eventType.includes('CHAT') ? 'chat' :
         notification.eventType.includes('PAYMENT') || notification.eventType.includes('PAYOUT') ? 'payment' :
         notification.eventType === 'ADMIN_ANNOUNCEMENT' ? 'announcement' : 'booking'
       ),
+      soundType: notification.soundType || 'chime',
+      actionTab: inferredActionTab,
     };
     this.setNotifications([newNotif, ...list]);
 
-    // Mirror to Firebase Firestore in real-time
-    dispatchFirebaseNotification({
-      recipientId: newNotif.recipientId,
-      recipientRole: newNotif.recipientRole,
-      title: newNotif.title,
-      message: newNotif.message,
-      eventType: newNotif.eventType,
-      bookingId: newNotif.bookingId,
-      orderNumber: newNotif.orderNumber,
-      read: false,
-      timestamp: newNotif.timestamp,
-      soundType: newNotif.soundType,
-    }).catch((err) => console.warn('Firebase notification sync warning:', err));
+    // 1. Cross-tab BroadcastChannel broadcast for instantaneous delivery across separate tabs/windows
+    if (syncChannel) {
+      try {
+        syncChannel.postMessage({
+          type: 'NOTIFICATION_DISPATCHED',
+          payload: newNotif,
+        });
+      } catch (e) {
+        console.warn('BroadcastChannel sync error:', e);
+      }
+    }
 
-    // Instant cross-component event broadcast for all active simulators & tabs
+    // 2. Instant local window event broadcast
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('manpowerlink_notification_dispatched', { detail: newNotif })
       );
     }
 
-    // Play appropriate sound chime or urgent ringtone
+    // 3. Mirror to Firebase Firestore in real-time
+    const fbPayload: any = {
+      recipientId: newNotif.recipientId,
+      recipientRole: newNotif.recipientRole,
+      title: newNotif.title,
+      message: newNotif.message,
+      eventType: newNotif.eventType,
+      read: false,
+      timestamp: new Date().toISOString(),
+      soundType: newNotif.soundType || 'chime',
+      actionTab: newNotif.actionTab || 'home',
+      category: newNotif.category || 'booking',
+    };
+    if (newNotif.bookingId) fbPayload.bookingId = newNotif.bookingId;
+    if (newNotif.orderNumber) fbPayload.orderNumber = newNotif.orderNumber;
+
+    dispatchFirebaseNotification(fbPayload).catch((err) => console.warn('Firebase notification sync warning:', err));
+
+    // 4. Mirror to Node.js Backend Push API Hub (for Mobile Apps / FCM / Webhooks)
+    if (typeof window !== 'undefined') {
+      const backendPayload = {
+        target:
+          newNotif.recipientRole === 'all'
+            ? 'all'
+            : newNotif.recipientRole === 'customer'
+            ? 'all_customers'
+            : 'all_employees',
+        recipientRole: newNotif.recipientRole,
+        recipientId: newNotif.recipientId,
+        eventType: newNotif.eventType,
+        title: newNotif.title,
+        body: newNotif.message,
+        data: {
+          type: newNotif.eventType,
+          bookingId: newNotif.bookingId,
+          orderNumber: newNotif.orderNumber,
+          category: newNotif.category,
+          actionTab: newNotif.actionTab,
+          soundType: newNotif.soundType,
+        },
+      };
+
+      const sendToBackend = async (url: string) => {
+        try {
+          await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(backendPayload),
+          });
+        } catch {
+          // offline backend fallback
+        }
+      };
+
+      sendToBackend('/api/notifications/send');
+      if (window.location && window.location.port !== '5000') {
+        sendToBackend('http://localhost:5000/api/notifications/send');
+      }
+    }
+
+    // 5. Play audio chime or urgent ringtone & trigger device vibration
     if (newNotif.soundType === 'urgent_ring') {
       playIncomingJobRingtone();
     } else {
       playNotificationSound();
     }
 
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([100, 50, 100]);
+      } catch {}
+    }
+
+    // 6. Trigger Native Web / OS Push Notification if granted
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const sysNotif = new Notification(newNotif.title, {
+          body: newNotif.message,
+          icon: '/favicon.svg',
+          badge: '/favicon.svg',
+          tag: newNotif.id,
+          data: {
+            id: newNotif.id,
+            actionTab: newNotif.actionTab,
+            bookingId: newNotif.bookingId,
+            recipientRole: newNotif.recipientRole,
+          },
+        });
+        sysNotif.onclick = () => {
+          window.focus();
+          window.dispatchEvent(
+            new CustomEvent('manpowerlink_notification_clicked', { detail: newNotif })
+          );
+        };
+      } catch (err) {
+        console.warn('Native notification display warning:', err);
+      }
+    }
+
     return newNotif;
+  }
+
+  // ==========================================
+  // Device & Push Notification Token Management
+  // ==========================================
+  public async bindNotificationToken(
+    userId: string,
+    role: 'customer' | 'employee' | 'admin',
+    customToken?: string
+  ): Promise<{ token: string; boundAt: string; status: 'active'; role: string; userId: string }> {
+    const existing = this.getBoundNotificationToken(userId);
+    const token = customToken || existing?.token || `device_token_${role}_${userId}_${Math.random().toString(36).substring(2, 10)}`;
+    const record = {
+      token,
+      boundAt: new Date().toISOString(),
+      status: 'active' as const,
+      userId,
+      role,
+    };
+    this.setItem(`manpower_push_token_${userId}`, record);
+    this.setItem(`manpower_push_token_${role}`, record);
+
+    if (typeof window !== 'undefined') {
+      try {
+        fetch('/api/notifications/bind-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record),
+        }).catch(() => {});
+      } catch {}
+    }
+
+    return record;
+  }
+
+  public getBoundNotificationToken(userId: string): { token: string; boundAt: string; status: 'active'; role: string; userId: string } | null {
+    return this.getItem<{ token: string; boundAt: string; status: 'active'; role: string; userId: string } | null>(
+      `manpower_push_token_${userId}`,
+      null
+    );
+  }
+
+  public async requestPushPermissionAndBind(
+    userId: string,
+    role: 'customer' | 'employee' | 'admin'
+  ): Promise<'granted' | 'denied' | 'default'> {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      await this.bindNotificationToken(userId, role);
+      return 'granted';
+    }
+
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        await this.bindNotificationToken(userId, role);
+      }
+      return permission;
+    } catch {
+      await this.bindNotificationToken(userId, role);
+      return 'granted';
+    }
   }
 
   public markNotificationRead(id: string): void {
