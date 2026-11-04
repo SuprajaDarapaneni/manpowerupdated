@@ -13,3 +13,4 @@ class WorkerTheme {
   static const Color warningOrange = Color(0xFFE65100);
   static const Color errorRed = Color(0xFFC62828);
 }
+

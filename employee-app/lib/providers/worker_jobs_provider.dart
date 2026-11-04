@@ -175,3 +175,4 @@ final workerJobsProvider =
     StateNotifierProvider<WorkerJobsNotifier, WorkerJobsState>((ref) {
   return WorkerJobsNotifier();
 });
+
